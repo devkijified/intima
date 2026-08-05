@@ -32,20 +32,20 @@ export default async function AdminLayout({
       <header className="border-b bg-white shadow-sm">
         <div className="mx-auto max-w-7xl px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/admin" className="text-2xl font-bold text-brand">
+            <Link href="/admin" className="text-2xl font-bold text-[#AC244D]">
               Intima Admin
             </Link>
             <nav className="flex items-center space-x-6">
-              <Link href="/admin" className="text-gray-600 hover:text-brand">
+              <Link href="/admin" className="text-gray-600 hover:text-[#AC244D] transition-colors">
                 <LayoutDashboard className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/users" className="text-gray-600 hover:text-brand">
+              <Link href="/admin/users" className="text-gray-600 hover:text-[#AC244D] transition-colors">
                 <Users className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/verifications" className="text-gray-600 hover:text-brand">
+              <Link href="/admin/verifications" className="text-gray-600 hover:text-[#AC244D] transition-colors">
                 <UserCheck className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/live" className="text-gray-600 hover:text-brand">
+              <Link href="/admin/models" className="text-gray-600 hover:text-[#AC244D] transition-colors">
                 <Video className="inline h-5 w-5" />
               </Link>
               <Button variant="ghost" size="sm">
