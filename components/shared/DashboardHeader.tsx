@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, User, Settings, Video, Calendar, LayoutDashboard } from 'lucide-react'
+import { LogOut, User, Calendar, LayoutDashboard } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 
@@ -23,36 +23,20 @@ export function DashboardHeader() {
             Intima
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/dashboard" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <LayoutDashboard className="inline-block h-5 w-5" />
-              <span className="ml-2">Dashboard</span>
+          <nav className="flex items-center space-x-6">
+            <Link href="/dashboard" className="text-gray-600 hover:text-[#AC244D]">
+              <LayoutDashboard className="inline h-5 w-5" />
             </Link>
-            <Link href="/models/browse" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <User className="inline-block h-5 w-5" />
-              <span className="ml-2">Browse</span>
+            <Link href="/models/browse" className="text-gray-600 hover:text-[#AC244D]">
+              <User className="inline h-5 w-5" />
             </Link>
-            <Link href="/bookings" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <Calendar className="inline-block h-5 w-5" />
-              <span className="ml-2">Bookings</span>
-            </Link>
-            <Link href="/profile" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <Settings className="inline-block h-5 w-5" />
-              <span className="ml-2">Profile</span>
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <Link href="/models/live">
-              <Button variant="default" size="sm" className="bg-[#AC244D] hover:bg-[#8F1D40]">
-                <Video className="mr-2 h-4 w-4" />
-                Go Live
-              </Button>
+            <Link href="/bookings" className="text-gray-600 hover:text-[#AC244D]">
+              <Calendar className="inline h-5 w-5" />
             </Link>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
-              <LogOut className="h-5 w-5 text-gray-600" />
+              <LogOut className="h-5 w-5" />
             </Button>
-          </div>
+          </nav>
         </div>
       </div>
     </header>
