@@ -63,7 +63,6 @@ export default function LiveStreamPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Video Player */}
       <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-white">
@@ -73,13 +72,11 @@ export default function LiveStreamPage() {
           </div>
         </div>
         
-        {/* Live Badge */}
         <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full">
           <div className="h-2 w-2 bg-white rounded-full animate-pulse"></div>
           <span className="text-white text-sm font-medium">LIVE</span>
         </div>
 
-        {/* Stream Info Overlay */}
         <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold">
@@ -101,7 +98,6 @@ export default function LiveStreamPage() {
         </div>
       </div>
 
-      {/* Stream Actions */}
       <div className="mt-6 flex flex-wrap gap-4">
         <Button className="bg-[#AC244D] hover:bg-[#8F1D40] flex-1">
           <Heart className="mr-2 h-4 w-4" />
@@ -113,7 +109,6 @@ export default function LiveStreamPage() {
         </Button>
       </div>
 
-      {/* Stream Details */}
       <Card className="mt-6">
         <CardContent className="p-6">
           <h2 className="text-xl font-bold text-gray-900">
