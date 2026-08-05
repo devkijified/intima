@@ -13,19 +13,6 @@ export function formatPrice(price: number) {
   }).format(price)
 }
 
-export function formatDate(date: string) {
-  return new Intl.DateTimeFormat('en-NG', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(date))
-}
-
-export function truncateText(text: string, length: number) {
-  if (text.length <= length) return text
-  return text.slice(0, length) + '...'
-}
-
 export function getInitials(name: string) {
   return name
     .split(' ')
