@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
-import { Users, Star, Eye, Video } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { Eye, Star, Video, Calendar } from 'lucide-react'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -21,14 +21,12 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Get model profile
       const { data: model } = await supabase
         .from('model_profiles')
         .select('view_count')
         .eq('user_id', user.id)
         .single()
 
-      // Get reviews
       const { data: reviews } = await supabase
         .from('reviews')
         .select('id')
@@ -55,26 +53,10 @@ export default function DashboardPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={<Eye className="h-6 w-6 text-brand" />}
-          title="Profile Views"
-          value={stats.profileViews}
-        />
-        <StatCard
-          icon={<Star className="h-6 w-6 text-brand" />}
-          title="Reviews"
-          value={stats.reviews}
-        />
-        <StatCard
-          icon={<Video className="h-6 w-6 text-brand" />}
-          title="Live Shows"
-          value={stats.liveShows}
-        />
-        <StatCard
-          icon={<Users className="h-6 w-6 text-brand" />}
-          title="Bookings"
-          value={stats.bookings}
-        />
+        <StatCard icon={<Eye className="h-6 w-6 text-[#AC244D]" />} title="Profile Views" value={stats.profileViews} />
+        <StatCard icon={<Star className="h-6 w-6 text-[#AC244D]" />} title="Reviews" value={stats.reviews} />
+        <StatCard icon={<Video className="h-6 w-6 text-[#AC244D]" />} title="Live Shows" value={stats.liveShows} />
+        <StatCard icon={<Calendar className="h-6 w-6 text-[#AC244D]" />} title="Bookings" value={stats.bookings} />
       </div>
 
       <div className="mt-8">
@@ -83,15 +65,9 @@ export default function DashboardPage() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="flex gap-4 flex-wrap">
-            <button className="rounded-lg bg-brand px-4 py-2 text-white hover:bg-brand-dark">
-              Go Live
-            </button>
-            <button className="rounded-lg border-2 border-brand px-4 py-2 text-brand hover:bg-brand hover:text-white">
-              Edit Profile
-            </button>
-            <button className="rounded-lg border-2 border-gray-300 px-4 py-2 text-gray-600 hover:bg-gray-100">
-              View Bookings
-            </button>
+            <Button className="bg-[#AC244D] hover:bg-[#8F1D40]">Go Live</Button>
+            <Button variant="outline">Edit Profile</Button>
+            <Button variant="outline">View Bookings</Button>
           </CardContent>
         </Card>
       </div>
@@ -107,7 +83,7 @@ function StatCard({ icon, title, value }: { icon: React.ReactNode; title: string
           <p className="text-sm text-gray-600">{title}</p>
           <p className="text-2xl font-bold text-gray-900">{value}</p>
         </div>
-        <div className="rounded-full bg-brand-muted p-3">{icon}</div>
+        <div className="rounded-full bg-pink-50 p-3">{icon}</div>
       </CardContent>
     </Card>
   )
