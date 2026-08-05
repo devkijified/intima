@@ -19,24 +19,20 @@ export default function AdminPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        // Get total users
         const { count: usersCount } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })
 
-        // Get total models
         const { count: modelsCount } = await supabase
           .from('model_profiles')
           .select('*', { count: 'exact', head: true })
 
-        // Get pending verifications
         const { count: pendingCount } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })
           .eq('is_verified', false)
           .eq('role', 'model')
 
-        // Get total reviews
         const { count: reviewsCount } = await supabase
           .from('reviews')
           .select('*', { count: 'exact', head: true })
@@ -66,26 +62,10 @@ export default function AdminPage() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <StatCard
-          icon={<Users className="h-6 w-6 text-brand" />}
-          title="Total Users"
-          value={stats.totalUsers}
-        />
-        <StatCard
-          icon={<UserCheck className="h-6 w-6 text-brand" />}
-          title="Total Models"
-          value={stats.totalModels}
-        />
-        <StatCard
-          icon={<UserX className="h-6 w-6 text-yellow-500" />}
-          title="Pending Verifications"
-          value={stats.pendingVerifications}
-        />
-        <StatCard
-          icon={<Star className="h-6 w-6 text-brand" />}
-          title="Total Reviews"
-          value={stats.totalReviews}
-        />
+        <StatCard icon={<Users className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
+        <StatCard icon={<UserCheck className="h-6 w-6 text-[#AC244D]" />} title="Total Models" value={stats.totalModels} />
+        <StatCard icon={<UserX className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
+        <StatCard icon={<Star className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -130,7 +110,7 @@ function StatCard({ icon, title, value }: { icon: React.ReactNode; title: string
           <p className="text-sm text-gray-600">{title}</p>
           <p className="text-2xl font-bold text-gray-900">{value}</p>
         </div>
-        <div className="rounded-full bg-brand-muted p-3">{icon}</div>
+        <div className="rounded-full bg-pink-50 p-3">{icon}</div>
       </CardContent>
     </Card>
   )
