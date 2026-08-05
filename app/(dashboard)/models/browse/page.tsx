@@ -18,7 +18,7 @@ interface Model {
   rating_avg: number
   review_count: number
   is_available: boolean
-  user_id: string
+  profile_id: string
   profiles: {
     avatar_url: string
   }
@@ -42,7 +42,7 @@ export default function BrowseModelsPage() {
         .from('model_profiles')
         .select(`
           *,
-          profiles:user_id (
+          profiles:profile_id (
             avatar_url
           )
         `)
@@ -86,12 +86,10 @@ export default function BrowseModelsPage() {
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Filters Sidebar */}
         <div className="lg:w-72">
           <ModelFilters filters={filters} setFilters={setFilters} />
         </div>
 
-        {/* Results */}
         <div className="flex-1">
           <div className="mb-4">
             <div className="relative">
