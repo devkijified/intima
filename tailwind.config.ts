@@ -11,13 +11,10 @@ const config: Config = {
       colors: {
         brand: {
           DEFAULT: '#AC244D',
-          light: '#D43A6B',
           dark: '#8F1D40',
+          light: '#D43A6B',
           muted: '#FCE8EE',
         },
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
     },
   },
