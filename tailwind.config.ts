@@ -16,6 +16,9 @@ const config: Config = {
           muted: '#FCE8EE',
         },
       },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [],
