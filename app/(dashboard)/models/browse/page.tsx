@@ -98,4 +98,29 @@ export default function BrowseModelsPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name..."
+                className="pl-10"
+              />
+            </div>
+            <p className="mt-2 text-sm text-gray-600">
+              {models.length} models found
+            </p>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            {models.map((model) => (
+              <ModelCard key={model.id} model={model} />
+            ))}
+          </div>
+
+          {models.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-gray-600">No models found matching your criteria</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
