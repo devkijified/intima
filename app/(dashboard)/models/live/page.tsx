@@ -26,7 +26,6 @@ export default function GoLivePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
 
-      // Get model profile
       const { data: model, error: modelError } = await supabase
         .from('model_profiles')
         .select('id')
@@ -35,7 +34,6 @@ export default function GoLivePage() {
 
       if (modelError) throw new Error('Model profile not found')
 
-      // Create live session
       const { data: session, error: sessionError } = await supabase
         .from('live_sessions')
         .insert({
@@ -53,7 +51,6 @@ export default function GoLivePage() {
 
       if (sessionError) throw sessionError
 
-      // Redirect to stream page
       router.push(`/models/live/${session.id}`)
     } catch (err: any) {
       setError(err.message || 'Failed to start stream')
