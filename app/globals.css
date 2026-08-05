@@ -4,16 +4,16 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 255 255 255;
+    --foreground: 17 24 39;
   }
 
   * {
-    @apply border-border;
+    @apply m-0 p-0 box-border;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-white text-gray-900 antialiased;
   }
 }
 
