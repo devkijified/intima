@@ -14,27 +14,49 @@ export default function DashboardPage() {
     bookings: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [modelId, setModelId] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
     async function fetchStats() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        setLoading(false)
+        return
+      }
 
-      const { data: model } = await supabase
+      // Get model profile
+      const { data: model, error: modelError } = await supabase
         .from('model_profiles')
-        .select('view_count')
-        .eq('user_id', user.id)
+        .select('id, view_count')
+        .eq('profile_id', user.id)
         .single()
 
-      const { data: reviews } = await supabase
-        .from('reviews')
-        .select('id')
-        .eq('model_id', model?.id)
+      if (modelError) {
+        console.error('Error fetching model:', modelError)
+        setLoading(false)
+        return
+      }
+
+      // Store model ID for later use
+      setModelId(model?.id || null)
+
+      // Get reviews count
+      let reviewsCount = 0
+      if (model?.id) {
+        const { count, error: reviewsError } = await supabase
+          .from('reviews')
+          .select('*', { count: 'exact', head: true })
+          .eq('model_id', model.id)
+
+        if (!reviewsError) {
+          reviewsCount = count || 0
+        }
+      }
 
       setStats({
         profileViews: model?.view_count || 0,
-        reviews: reviews?.length || 0,
+        reviews: reviewsCount,
         liveShows: 0,
         bookings: 0,
       })
