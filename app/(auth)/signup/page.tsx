@@ -19,7 +19,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const router = useRouter()
   const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +42,6 @@ export default function SignupPage() {
       if (authError) throw authError
 
       if (authData.user) {
-        // Create profile
         await supabase
           .from('profiles')
           .insert({
@@ -55,7 +53,6 @@ export default function SignupPage() {
             is_active: true,
           })
 
-        // If model, create model profile
         if (formData.role === 'model') {
           await supabase
             .from('model_profiles')
