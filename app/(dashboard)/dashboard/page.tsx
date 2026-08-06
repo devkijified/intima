@@ -27,14 +27,13 @@ export default function DashboardPage() {
         return
       }
 
-      // 1. Get role and full_name from Auth Metadata first (as seen in your raw_user_meta_data)
       const metaRole = user.user_metadata?.role || user.app_metadata?.role
       const metaName = user.user_metadata?.full_name
 
-      let role = metaRole
+      let role = metaRole || 'client'
       let name = metaName || user.email?.split('@')[0] || 'Member'
 
-      // 2. Check public.profiles table as a secondary source of truth
+      // Check public.profiles table
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
@@ -46,16 +45,36 @@ export default function DashboardPage() {
         if (profile.role) role = profile.role
       }
 
-      setUserRole(role || 'client')
+      setUserRole(role)
       setUserName(name)
 
       if (role === 'model') {
-        // 3. Fetch model_profiles record using profile_id
-        const { data: model } = await supabase
+        // Check if model_profiles record exists
+        let { data: model } = await supabase
           .from('model_profiles')
           .select('id, view_count, is_available')
           .eq('profile_id', user.id)
           .single()
+
+        // If companion profile doesn't exist yet, automatically create one so they aren't blocked
+        if (!model) {
+          const { data: newModel, error: insertError } = await supabase
+            .from('model_profiles')
+            .insert([
+              {
+                profile_id: user.id,
+                display_name: name,
+                city: 'Lagos', // Default fallback city
+                is_available: true,
+              }
+            ])
+            .select('id, view_count, is_available')
+            .single()
+
+          if (!insertError && newModel) {
+            model = newModel
+          }
+        }
 
         if (model) {
           setModelId(model.id)
@@ -77,8 +96,6 @@ export default function DashboardPage() {
             reviews: reviewsCount || 0,
             bookings: bookingsCount || 0,
           })
-        } else {
-          console.warn('User has role "model", but no matching row found in model_profiles table.')
         }
       } else {
         const { count: clientBookingsCount } = await supabase
@@ -100,10 +117,7 @@ export default function DashboardPage() {
   }, [supabase])
 
   const handleToggleAvailability = async () => {
-    if (!modelId) {
-      alert('Model profile record not found in database. Please complete your profile setup first.')
-      return
-    }
+    if (!modelId) return
 
     const newStatus = !isAvailable
     setUpdatingStatus(true)
