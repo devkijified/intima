@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, User, Calendar, LayoutDashboard } from 'lucide-react'
+import { LogOut, User, Settings, Video, Calendar, LayoutDashboard } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 
@@ -13,30 +13,47 @@ export function DashboardHeader() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
+    router.refresh()
   }
 
   return (
-    <header className="border-b bg-white shadow-sm">
+    <header className="border-b bg-white shadow-sm sticky top-0 z-50">
       <div className="mx-auto max-w-7xl px-4 py-4">
         <div className="flex items-center justify-between">
           <Link href="/dashboard" className="text-2xl font-bold text-[#AC244D]">
             Intima
           </Link>
 
-          <nav className="flex items-center space-x-6">
-            <Link href="/dashboard" className="text-gray-600 hover:text-[#AC244D]">
-              <LayoutDashboard className="inline h-5 w-5" />
+          <nav className="hidden md:flex items-center space-x-6">
+            <Link href="/dashboard" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <LayoutDashboard className="inline-block h-5 w-5" />
+              <span className="ml-2">Dashboard</span>
             </Link>
-            <Link href="/models/browse" className="text-gray-600 hover:text-[#AC244D]">
-              <User className="inline h-5 w-5" />
+            <Link href="/models/browse" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <User className="inline-block h-5 w-5" />
+              <span className="ml-2">Browse</span>
             </Link>
-            <Link href="/bookings" className="text-gray-600 hover:text-[#AC244D]">
-              <Calendar className="inline h-5 w-5" />
+            <Link href="/bookings" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <Calendar className="inline-block h-5 w-5" />
+              <span className="ml-2">Bookings</span>
             </Link>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <Link href="/profile" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <Settings className="inline-block h-5 w-5" />
+              <span className="ml-2">Profile</span>
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-4">
+            <Link href="/models/live">
+              <Button variant="default" size="sm" className="bg-[#AC244D] hover:bg-[#8F1D40]">
+                <Video className="mr-2 h-4 w-4" />
+                Go Live
+              </Button>
+            </Link>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-600 hover:text-[#AC244D]">
               <LogOut className="h-5 w-5" />
             </Button>
-          </nav>
+          </div>
         </div>
       </div>
     </header>
