@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'  // ✅ IMPORT THIS
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -103,20 +104,24 @@ export default function DashboardPage() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <Button className="bg-[#AC244D] hover:bg-[#8F1D40] w-full">
-              <Video className="mr-2 h-4 w-4" />
-              Go Live
-            </Button>
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/profile">
+            <Link href="/models/live" className="w-full">
+              <Button className="bg-[#AC244D] hover:bg-[#8F1D40] w-full">
+                <Video className="mr-2 h-4 w-4" />
+                Go Live
+              </Button>
+            </Link>
+            <Link href="/profile" className="w-full">
+              <Button variant="outline" className="w-full">
                 <User className="mr-2 h-4 w-4" />
                 Edit Profile
-              </Link>
-            </Button>
-            <Button variant="outline" className="w-full">
-              <Calendar className="mr-2 h-4 w-4" />
-              View Bookings
-            </Button>
+              </Button>
+            </Link>
+            <Link href="/bookings" className="w-full">
+              <Button variant="outline" className="w-full">
+                <Calendar className="mr-2 h-4 w-4" />
+                View Bookings
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
