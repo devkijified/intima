@@ -33,12 +33,29 @@ export default function DashboardPage() {
       let role = metaRole || 'client'
       let name = metaName || user.email?.split('@')[0] || 'Member'
 
-      // Check public.profiles table safely
-      const { data: profile } = await supabase
+      // 1. Check or create the parent record in public.profiles first (satisfies foreign key)
+      let { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
         .eq('id', user.id)
         .maybeSingle()
+
+      if (!profile) {
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .upsert([
+            {
+              id: user.id,
+              full_name: name,
+              role: role,
+              is_active: true,
+            }
+          ], { onConflict: 'id' })
+          .select('full_name, role')
+          .maybeSingle()
+
+        if (newProfile) profile = newProfile
+      }
 
       if (profile) {
         if (profile.full_name) name = profile.full_name
@@ -49,46 +66,29 @@ export default function DashboardPage() {
       setUserName(name)
 
       if (role === 'model') {
-        // 1. Try fetching existing model profile
-        let { data: model, error: fetchError } = await supabase
+        // 2. Fetch existing model profile safely
+        let { data: model } = await supabase
           .from('model_profiles')
           .select('id, view_count, is_available')
           .eq('profile_id', user.id)
           .maybeSingle()
 
-        if (fetchError) {
-          console.error('Error fetching model_profile:', fetchError.message)
-        }
-
-        // 2. If it doesn't exist, try creating it via insert
+        // 3. If companion record doesn't exist yet, insert it safely
         if (!model) {
-          const { data: newModel, error: insertError } = await supabase
+          const { data: newModel } = await supabase
             .from('model_profiles')
-            .insert([
+            .upsert([
               {
                 profile_id: user.id,
                 display_name: name,
                 city: 'Lagos',
                 is_available: true,
               }
-            ])
+            ], { onConflict: 'profile_id' })
             .select('id, view_count, is_available')
             .maybeSingle()
 
-          if (insertError) {
-            console.error('Error inserting model_profile (Check RLS policies):', insertError.message)
-            
-            // Fallback: Try a standard fetch again in case a parallel request created it
-            const { data: retryModel } = await supabase
-              .from('model_profiles')
-              .select('id, view_count, is_available')
-              .eq('profile_id', user.id)
-              .maybeSingle()
-              
-            if (retryModel) model = retryModel
-          } else if (newModel) {
-            model = newModel
-          }
+          if (newModel) model = newModel
         }
 
         if (model) {
