@@ -33,12 +33,12 @@ export default function DashboardPage() {
       let role = metaRole || 'client'
       let name = metaName || user.email?.split('@')[0] || 'Member'
 
-      // Check public.profiles table
+      // Use maybeSingle() instead of single() to prevent 406 errors if profile doesn't exist yet
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
       if (profile) {
         if (profile.full_name) name = profile.full_name
@@ -49,29 +49,32 @@ export default function DashboardPage() {
       setUserName(name)
 
       if (role === 'model') {
-        // Check if model_profiles record exists
+        // Fetch existing model profile safely
         let { data: model } = await supabase
           .from('model_profiles')
           .select('id, view_count, is_available')
           .eq('profile_id', user.id)
-          .single()
+          .maybeSingle()
 
-        // If companion profile doesn't exist yet, automatically create one so they aren't blocked
+        // If companion profile record doesn't exist, safely upsert it to prevent 409 conflicts
         if (!model) {
-          const { data: newModel, error: insertError } = await supabase
+          const { data: newModel } = await supabase
             .from('model_profiles')
-            .insert([
-              {
-                profile_id: user.id,
-                display_name: name,
-                city: 'Lagos', // Default fallback city
-                is_available: true,
-              }
-            ])
+            .upsert(
+              [
+                {
+                  profile_id: user.id,
+                  display_name: name,
+                  city: 'Lagos',
+                  is_available: true,
+                }
+              ],
+              { onConflict: 'profile_id' }
+            )
             .select('id, view_count, is_available')
-            .single()
+            .maybeSingle()
 
-          if (!insertError && newModel) {
+          if (newModel) {
             model = newModel
           }
         }
@@ -117,7 +120,10 @@ export default function DashboardPage() {
   }, [supabase])
 
   const handleToggleAvailability = async () => {
-    if (!modelId) return
+    if (!modelId) {
+      alert('Model profile reference is missing. Please refresh the page.')
+      return
+    }
 
     const newStatus = !isAvailable
     setUpdatingStatus(true)
