@@ -18,6 +18,7 @@ export default function SignupPage() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -43,7 +44,7 @@ export default function SignupPage() {
 
       if (authData.user) {
         // Create profile
-        const { error: profileError } = await supabase
+        await supabase
           .from('profiles')
           .insert({
             id: authData.user.id,
@@ -54,13 +55,9 @@ export default function SignupPage() {
             is_active: true,
           })
 
-        if (profileError) {
-          console.error('Profile error:', profileError)
-        }
-
         // If model, create model profile
         if (formData.role === 'model') {
-          const { error: modelError } = await supabase
+          await supabase
             .from('model_profiles')
             .insert({
               profile_id: authData.user.id,
@@ -68,20 +65,37 @@ export default function SignupPage() {
               city: 'Lagos',
               state: 'Lagos',
             })
-
-          if (modelError) {
-            console.error('Model profile error:', modelError)
-          }
         }
 
-        // Redirect to login
-        window.location.href = '/login?success=Account created! Please sign in.'
+        setSuccess(true)
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during signup')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (success) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl text-center text-green-600">✅ Account Created!</CardTitle>
+            <CardDescription className="text-center">
+              Your account has been created successfully.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Link href="/login" className="w-full">
+              <Button className="w-full bg-[#AC244D] hover:bg-[#8F1D40]">
+                Sign In Now
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -143,11 +157,11 @@ export default function SignupPage() {
             {error && <p className="text-sm text-red-500">{error}</p>}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full bg-[#AC244D] hover:bg-[#8F1D40]" disabled={loading}>
               {loading ? 'Creating...' : 'Create Account'}
             </Button>
             <p className="text-sm text-gray-600">
-              Already have an account? <Link href="/login" className="text-[#AC244D]">Sign in</Link>
+              Already have an account? <Link href="/login" className="text-[#AC244D] hover:underline">Sign in</Link>
             </p>
           </CardFooter>
         </form>
