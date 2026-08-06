@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, User, Settings, Video, Calendar, LayoutDashboard } from 'lucide-react'
+import { LogOut, User, Settings, Video, Calendar, LayoutDashboard, Compass } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 
@@ -16,41 +16,65 @@ export function DashboardHeader() {
   }
 
   return (
-    <header className="border-b bg-white shadow-sm sticky top-0 z-50">
-      <div className="mx-auto max-w-7xl px-4 py-4">
+    <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50 shadow-2xl">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="text-2xl font-bold text-[#AC244D]">
-            Intima
+          <Link href="/dashboard" className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+            <span className="bg-gradient-to-r from-[#AC244D] to-[#D43A6B] bg-clip-text text-transparent font-serif">
+              Intima
+            </span>
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/dashboard" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <LayoutDashboard className="inline-block h-5 w-5" />
-              <span className="ml-2">Dashboard</span>
+          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 bg-slate-900/60 border border-slate-800/80 px-3 py-1.5 rounded-full backdrop-blur-md">
+            <Link 
+              href="/dashboard" 
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
+            >
+              <LayoutDashboard className="h-4 w-4 text-[#AC244D]" />
+              <span>Dashboard</span>
             </Link>
-            <Link href="/models/browse" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <User className="inline-block h-5 w-5" />
-              <span className="ml-2">Browse</span>
+            
+            <Link 
+              href="/models/browse" 
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
+            >
+              <Compass className="h-4 w-4 text-[#AC244D]" />
+              <span>Browse</span>
             </Link>
-            <Link href="/bookings" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <Calendar className="inline-block h-5 w-5" />
-              <span className="ml-2">Bookings</span>
+
+            <Link 
+              href="/bookings" 
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
+            >
+              <Calendar className="h-4 w-4 text-[#AC244D]" />
+              <span>Bookings</span>
             </Link>
-            <Link href="/profile" className="text-gray-600 hover:text-[#AC244D] transition-colors">
-              <Settings className="inline-block h-5 w-5" />
-              <span className="ml-2">Profile</span>
+
+            <Link 
+              href="/profile" 
+              className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
+            >
+              <Settings className="h-4 w-4 text-[#AC244D]" />
+              <span>Profile</span>
             </Link>
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/models/live">
-              <Button variant="default" size="sm" className="bg-[#AC244D] hover:bg-[#8F1D40]">
-                <Video className="mr-2 h-4 w-4" />
+              <Button size="sm" className="bg-[#AC244D] hover:bg-[#8F1D40] text-white shadow-lg shadow-[#AC244D]/25 rounded-xl px-4 py-2.5 font-medium transition-all">
+                <Video className="mr-2 h-4 w-4 animate-pulse" />
                 Go Live
               </Button>
             </Link>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-600 hover:text-[#AC244D]">
-              <LogOut className="h-5 w-5" />
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleLogout} 
+              className="text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl px-3 py-2.5 transition-colors"
+              title="Log out"
+            >
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
