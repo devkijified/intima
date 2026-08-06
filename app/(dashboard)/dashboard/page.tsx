@@ -25,7 +25,7 @@ export default function DashboardPage() {
     async function fetchStats() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.push('/login')
+        window.location.href = '/login'
         return
       }
 
@@ -67,7 +67,7 @@ export default function DashboardPage() {
     }
 
     fetchStats()
-  }, [supabase, router])
+  }, [supabase])
 
   if (loading) {
     return (
