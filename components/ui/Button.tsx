@@ -26,10 +26,20 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    if (asChild) {
+      // If asChild is true, we need to clone the child with the button styles
+      // This is a simplified version - for production, consider using Slot from @radix-ui/react-slot
+      return React.cloneElement(props.children as React.ReactElement, {
+        className: cn(buttonVariants({ variant, size, className })),
+        ref,
+      })
+    }
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
