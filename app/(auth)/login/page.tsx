@@ -30,17 +30,28 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.user) {
-        const { data: profile } = await supabase
+        // Check user role
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role')
           .eq('id', data.user.id)
           .single()
 
+        if (profileError) {
+          console.error('Profile fetch error:', profileError)
+          // Still redirect even if profile fetch fails
+          router.push('/dashboard')
+          router.refresh()
+          return
+        }
+
+        // Redirect based on role
         if (profile?.role === 'admin' || profile?.role === 'super_admin') {
           router.push('/admin')
         } else {
           router.push('/dashboard')
         }
+        router.refresh() // Force refresh to update server components
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
@@ -53,7 +64,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <div className="mb-4 text-3xl font-bold text-brand">Intima</div>
+          <div className="mb-4 text-3xl font-bold text-[#AC244D]">Intima</div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
           <CardDescription>
             Sign in to your account to continue
@@ -88,12 +99,16 @@ export default function LoginPage() {
             )}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full bg-[#AC244D] hover:bg-[#8F1D40]" 
+              disabled={loading}
+            >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
-              <Link href="/signup" className="text-brand hover:underline">
+              <Link href="/signup" className="text-[#AC244D] hover:underline">
                 Sign up
               </Link>
             </p>
