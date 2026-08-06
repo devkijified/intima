@@ -30,9 +30,8 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.user) {
-        // Use router.push with refresh
-        router.push('/dashboard')
-        router.refresh()
+        // Use window.location for hard navigation
+        window.location.href = '/dashboard'
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
