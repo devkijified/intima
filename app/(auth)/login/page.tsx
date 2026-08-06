@@ -13,20 +13,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [checking, setChecking] = useState(true)
+  const [isChecking, setIsChecking] = useState(true)
   const router = useRouter()
   const supabase = createClient()
 
+  // Check if already logged in - but DON'T redirect automatically
   useEffect(() => {
     async function checkSession() {
       const { data: { session } } = await supabase.auth.getSession()
+      setIsChecking(false)
+      // If already logged in, redirect to dashboard
       if (session) {
-        router.replace('/dashboard')
+        window.location.href = '/dashboard'
       }
-      setChecking(false)
     }
     checkSession()
-  }, [supabase, router])
+  }, [supabase])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,8 +44,8 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.user) {
-        // Use replace to prevent back button issues
-        router.replace('/dashboard')
+        // Force hard navigation
+        window.location.href = '/dashboard'
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
@@ -52,12 +54,13 @@ export default function LoginPage() {
     }
   }
 
-  if (checking) {
+  // Show loading while checking session
+  if (isChecking) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#AC244D] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Checking session...</p>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
     )
