@@ -28,36 +28,20 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // If trying to access login/signup while logged in, redirect to dashboard
-  if (session && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
+  const path = request.nextUrl.pathname
+
+  // Public routes that don't need auth
+  const publicRoutes = ['/', '/login', '/signup']
+  const isPublicRoute = publicRoutes.includes(path)
+
+  // If logged in and trying to access login/signup, redirect to dashboard
+  if (session && (path === '/login' || path === '/signup')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Protected routes - require session
-  const protectedRoutes = ['/dashboard', '/models', '/profile', '/bookings']
-  const isProtectedRoute = protectedRoutes.some(route => 
-    request.nextUrl.pathname.startsWith(route)
-  )
-
-  if (isProtectedRoute && !session) {
+  // If not logged in and trying to access protected route, redirect to login
+  if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  // Admin routes
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
   }
 
   return response
@@ -65,12 +49,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    '/',
+    '/login',
+    '/signup',
     '/dashboard/:path*',
     '/models/:path*',
     '/profile/:path*',
     '/bookings/:path*',
     '/admin/:path*',
-    '/login',
-    '/signup',
   ],
 }
