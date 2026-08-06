@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
 @layer base {
   :root {
     --primary: #AC244D;
@@ -20,6 +22,7 @@
 
   body {
     @apply bg-cream text-charcoal antialiased;
+    font-family: 'Plus Jakarta Sans', sans-serif;
   }
 
   h1, h2, h3, h4, h5 {
@@ -100,5 +103,8 @@
 @layer utilities {
   .font-serif {
     font-family: 'Playfair Display', Georgia, serif;
+  }
+  .font-sans {
+    font-family: 'Plus Jakarta Sans', sans-serif;
   }
 }
