@@ -25,15 +25,23 @@ export default function DashboardLayout({
         return
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+      // 1. Check user metadata first (where Supabase stores signup metadata like role)
+      let role = user.user_metadata?.role || user.app_metadata?.role
 
-      if (profile?.role) {
-        setUserRole(profile.role)
+      // 2. Fallback to public.profiles if not in metadata
+      if (!role) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        
+        if (profile?.role) {
+          role = profile.role
+        }
       }
+
+      setUserRole(role || 'client')
       setLoading(false)
     }
 
@@ -58,17 +66,13 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
-      {/* Tryst-Inspired Minimal Sticky Navigation Header */}
       <header className="border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3.5">
           <div className="flex items-center justify-between">
-            
-            {/* Brand Logo */}
             <Link href="/dashboard" className="text-2xl font-serif tracking-tight text-[#AC244D]">
               Intima
             </Link>
 
-            {/* Navigation Links */}
             <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 bg-white/60 border border-neutral-200/80 px-3 py-1.5 rounded-full shadow-xs">
               <Link 
                 href="/dashboard" 
@@ -133,7 +137,6 @@ export default function DashboardLayout({
               )}
             </nav>
 
-            {/* Right Action Icons / Logout */}
             <div className="flex items-center gap-3">
               {isModel && (
                 <Link 
@@ -153,12 +156,10 @@ export default function DashboardLayout({
                 <LogOut className="h-4 w-4" />
               </button>
             </div>
-
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
         {children}
       </main>
