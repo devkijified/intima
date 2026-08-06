@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, MessageSquare, Video, Wallet } from 'lucide-react'
+import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2 } from 'lucide-react'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -12,8 +12,10 @@ export default function DashboardPage() {
     bookings: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
   const [userName, setUserName] = useState('')
   const [userRole, setUserRole] = useState<string>('client')
+  const [modelId, setModelId] = useState<string | null>(null)
   const [isAvailable, setIsAvailable] = useState(true)
   const supabase = createClient()
 
@@ -25,7 +27,6 @@ export default function DashboardPage() {
         return
       }
 
-      // 1. Extract name and role from metadata or profiles table
       const metaRole = user.user_metadata?.role || user.app_metadata?.role
       const metaName = user.user_metadata?.full_name
 
@@ -54,6 +55,7 @@ export default function DashboardPage() {
           .single()
 
         if (model) {
+          setModelId(model.id)
           setIsAvailable(model.is_available ?? true)
 
           const { count: reviewsCount } = await supabase
@@ -91,6 +93,29 @@ export default function DashboardPage() {
 
     fetchUserData()
   }, [supabase])
+
+  // Function to toggle status and update Supabase database
+  const handleToggleAvailability = async () => {
+    if (!modelId) return
+    const newStatus = !isAvailable
+    setUpdatingStatus(true)
+
+    // Optimistically update UI
+    setIsAvailable(newStatus)
+
+    const { error } = await supabase
+      .from('model_profiles')
+      .update({ is_available: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', modelId)
+
+    if (error) {
+      console.error('Failed to update availability status:', error.message)
+      // Revert state if update failed
+      setIsAvailable(!newStatus)
+    }
+
+    setUpdatingStatus(false)
+  }
 
   if (loading) {
     return (
@@ -130,12 +155,17 @@ export default function DashboardPage() {
             <div className="flex items-center bg-white border border-neutral-200/85 rounded-full px-4 py-2 shadow-xs">
               <span className="text-xs font-medium text-neutral-600 mr-3">Status:</span>
               <button 
-                onClick={() => setIsAvailable(!isAvailable)}
+                onClick={handleToggleAvailability}
+                disabled={updatingStatus}
                 className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
                   isAvailable ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-600'
-                }`}
+                } ${updatingStatus ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
-                <span className={`h-1.5 w-1.5 rounded-full ${isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
+                {updatingStatus ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-neutral-500" />
+                ) : (
+                  <span className={`h-1.5 w-1.5 rounded-full ${isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
+                )}
                 {isAvailable ? 'Available Now' : 'Offline'}
               </button>
             </div>
