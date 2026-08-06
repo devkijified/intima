@@ -25,19 +25,28 @@ export default function DashboardPage() {
         return
       }
 
-      // Fetch profile role and name directly from public.profiles
+      // 1. Extract name and role from metadata or profiles table
+      const metaRole = user.user_metadata?.role || user.app_metadata?.role
+      const metaName = user.user_metadata?.full_name
+
+      let role = metaRole
+      let name = metaName || user.email?.split('@')[0] || 'Member'
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
         .eq('id', user.id)
         .single()
 
-      const role = profile?.role || 'client'
-      setUserName(profile?.full_name || user.email?.split('@')[0] || 'Member')
-      setUserRole(role)
+      if (profile) {
+        if (profile.full_name) name = profile.full_name
+        if (profile.role) role = profile.role
+      }
+
+      setUserRole(role || 'client')
+      setUserName(name)
 
       if (role === 'model') {
-        // Fetch model profile metrics
         const { data: model } = await supabase
           .from('model_profiles')
           .select('id, view_count, is_available')
@@ -65,7 +74,6 @@ export default function DashboardPage() {
           })
         }
       } else {
-        // Fetch client booking count
         const { count: clientBookingsCount } = await supabase
           .from('bookings')
           .select('*', { count: 'exact', head: true })
@@ -117,7 +125,6 @@ export default function DashboardPage() {
           </h1>
         </div>
 
-        {/* Action Toggle */}
         <div>
           {isModel ? (
             <div className="flex items-center bg-white border border-neutral-200/85 rounded-full px-4 py-2 shadow-xs">
