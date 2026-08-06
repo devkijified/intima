@@ -14,18 +14,6 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
-  // Verify user has a profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('id', session.user.id)
-    .single()
-
-  if (!profile) {
-    // If no profile, redirect to signup
-    redirect('/signup')
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardHeader />
