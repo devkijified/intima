@@ -19,6 +19,7 @@ interface ModelProfile {
   rating_avg: number
   review_count: number
   is_available: boolean
+  profile_id: string
   profiles: {
     full_name: string
     avatar_url: string
@@ -38,7 +39,7 @@ export default function ModelDetailPage() {
         .from('model_profiles')
         .select(`
           *,
-          profiles:user_id (
+          profiles:profile_id (
             full_name,
             avatar_url,
             phone
