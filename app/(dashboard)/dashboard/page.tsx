@@ -25,7 +25,7 @@ export default function DashboardPage() {
     async function fetchStats() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.replace('/login')
+        router.push('/login')
         return
       }
 
