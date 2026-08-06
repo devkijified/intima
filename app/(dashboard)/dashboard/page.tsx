@@ -27,12 +27,14 @@ export default function DashboardPage() {
         return
       }
 
+      // 1. Get role and full_name from Auth Metadata first (as seen in your raw_user_meta_data)
       const metaRole = user.user_metadata?.role || user.app_metadata?.role
       const metaName = user.user_metadata?.full_name
 
       let role = metaRole
       let name = metaName || user.email?.split('@')[0] || 'Member'
 
+      // 2. Check public.profiles table as a secondary source of truth
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
@@ -48,6 +50,7 @@ export default function DashboardPage() {
       setUserName(name)
 
       if (role === 'model') {
+        // 3. Fetch model_profiles record using profile_id
         const { data: model } = await supabase
           .from('model_profiles')
           .select('id, view_count, is_available')
@@ -74,6 +77,8 @@ export default function DashboardPage() {
             reviews: reviewsCount || 0,
             bookings: bookingsCount || 0,
           })
+        } else {
+          console.warn('User has role "model", but no matching row found in model_profiles table.')
         }
       } else {
         const { count: clientBookingsCount } = await supabase
@@ -94,13 +99,14 @@ export default function DashboardPage() {
     fetchUserData()
   }, [supabase])
 
-  // Function to toggle status and update Supabase database
   const handleToggleAvailability = async () => {
-    if (!modelId) return
+    if (!modelId) {
+      alert('Model profile record not found in database. Please complete your profile setup first.')
+      return
+    }
+
     const newStatus = !isAvailable
     setUpdatingStatus(true)
-
-    // Optimistically update UI
     setIsAvailable(newStatus)
 
     const { error } = await supabase
@@ -110,8 +116,7 @@ export default function DashboardPage() {
 
     if (error) {
       console.error('Failed to update availability status:', error.message)
-      // Revert state if update failed
-      setIsAvailable(!newStatus)
+      setIsAvailable(!newStatus) // Revert on failure
     }
 
     setUpdatingStatus(false)
@@ -138,7 +143,7 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs uppercase tracking-widest font-semibold text-[#AC244D]">
-              {isModel ? 'Companion Account' : 'VIP Member Account'}
+              {isModel ? 'Companion Control Panel' : 'VIP Member Account'}
             </span>
             <span className="text-neutral-300">•</span>
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
