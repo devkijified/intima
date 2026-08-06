@@ -13,16 +13,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(true)
   const router = useRouter()
   const supabase = createClient()
 
-  // Check if already logged in
   useEffect(() => {
     async function checkSession() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        router.push('/dashboard')
+        router.replace('/dashboard')
       }
+      setChecking(false)
     }
     checkSession()
   }, [supabase, router])
@@ -41,14 +42,25 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.user) {
-        // Force a hard navigation to dashboard
-        window.location.href = '/dashboard'
+        // Use replace to prevent back button issues
+        router.replace('/dashboard')
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#AC244D] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking session...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
