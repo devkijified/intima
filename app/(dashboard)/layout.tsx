@@ -10,6 +10,7 @@ export default async function DashboardLayout({
   const supabase = createClient()
   const { data: { session } } = await supabase.auth.getSession()
 
+  // If no session, redirect to login
   if (!session) {
     redirect('/login')
   }
