@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,17 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Check if already logged in
+  useEffect(() => {
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/dashboard')
+      }
+    }
+    checkSession()
+  }, [supabase, router])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -30,28 +41,8 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.user) {
-        // Check user role
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.user.id)
-          .single()
-
-        if (profileError) {
-          console.error('Profile fetch error:', profileError)
-          // Still redirect even if profile fetch fails
-          router.push('/dashboard')
-          router.refresh()
-          return
-        }
-
-        // Redirect based on role
-        if (profile?.role === 'admin' || profile?.role === 'super_admin') {
-          router.push('/admin')
-        } else {
-          router.push('/dashboard')
-        }
-        router.refresh() // Force refresh to update server components
+        // Force a hard navigation to dashboard
+        window.location.href = '/dashboard'
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
