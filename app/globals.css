@@ -4,7 +4,6 @@
 
 @layer base {
   :root {
-    /* Colors */
     --primary: #AC244D;
     --primary-dark: #8F1D40;
     --primary-light: #D43A6B;
@@ -13,10 +12,6 @@
     --secondary-light: #E8D49E;
     --cream: #FDF9F6;
     --charcoal: #1A1A1A;
-    
-    /* Fonts */
-    --font-serif: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   * {
@@ -25,28 +20,13 @@
 
   body {
     @apply bg-cream text-charcoal antialiased;
-    font-family: var(--font-sans);
   }
 
-  /* Headings use serif font */
   h1, h2, h3, h4, h5 {
-    font-family: var(--font-serif);
-    @apply tracking-tight;
+    font-family: 'Playfair Display', Georgia, serif;
   }
 
-  h1 {
-    @apply text-5xl md:text-7xl font-bold leading-tight;
-  }
-
-  h2 {
-    @apply text-3xl md:text-5xl font-semibold leading-tight;
-  }
-
-  h3 {
-    @apply text-2xl md:text-3xl font-semibold;
-  }
-
-  /* Luxury Scrollbar */
+  /* Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
   }
@@ -54,10 +34,10 @@
     @apply bg-cream;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-primary rounded-full;
+    @apply bg-[#AC244D] rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-primary-dark;
+    @apply bg-[#8F1D40];
   }
 }
 
@@ -69,53 +49,39 @@
 
   /* Luxury Button */
   .btn-luxury {
-    @apply bg-primary text-white px-8 py-3 rounded-full font-medium 
-           transition-all duration-300 hover:bg-primary-dark 
-           hover:shadow-lg hover:shadow-primary/30 hover:scale-105;
-    font-family: var(--font-sans);
+    @apply bg-[#AC244D] text-white px-8 py-3 rounded-full font-medium 
+           transition-all duration-300 hover:bg-[#8F1D40] 
+           hover:shadow-lg hover:shadow-[#AC244D]/30 hover:scale-105;
   }
 
   .btn-outline-luxury {
-    @apply border-2 border-primary text-primary px-8 py-3 rounded-full font-medium 
-           transition-all duration-300 hover:bg-primary hover:text-white 
-           hover:shadow-lg hover:shadow-primary/20;
-    font-family: var(--font-sans);
+    @apply border-2 border-[#AC244D] text-[#AC244D] px-8 py-3 rounded-full font-medium 
+           transition-all duration-300 hover:bg-[#AC244D] hover:text-white 
+           hover:shadow-lg hover:shadow-[#AC244D]/20;
   }
 
   /* Gold Accent */
   .gold-accent {
-    @apply bg-gradient-to-r from-secondary to-secondary-light;
+    @apply bg-gradient-to-r from-[#C9A84C] to-[#E8D49E];
   }
 
   .gold-text {
-    @apply bg-gradient-to-r from-secondary to-secondary-light bg-clip-text text-transparent;
-  }
-
-  /* Luxury Text Styles */
-  .text-luxury {
-    font-family: var(--font-serif);
-    @apply tracking-wide;
-  }
-
-  .text-luxury-sm {
-    font-family: var(--font-serif);
-    @apply tracking-wider text-sm uppercase;
+    @apply bg-gradient-to-r from-[#C9A84C] to-[#E8D49E] bg-clip-text text-transparent;
   }
 
   /* Verification Badge */
   .verified-badge {
-    @apply inline-flex items-center gap-1 bg-primary/10 text-primary 
+    @apply inline-flex items-center gap-1 bg-[#AC244D]/10 text-[#AC244D] 
            px-3 py-1 rounded-full text-xs font-medium;
-    font-family: var(--font-sans);
   }
   .verified-badge::before {
     content: '✓';
-    @apply text-primary font-bold;
+    @apply text-[#AC244D] font-bold;
   }
 
   /* Status Indicators */
   .status-available {
-    @apply inline-flex items-center gap-1 text-green-600 bg-green-50 px-3 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 text-green-600 bg-green-50 px-3 py-1 rounded-full text-xs;
   }
   .status-available::before {
     content: '';
@@ -123,7 +89,7 @@
   }
 
   .status-busy {
-    @apply inline-flex items-center gap-1 text-red-600 bg-red-50 px-3 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 text-red-600 bg-red-50 px-3 py-1 rounded-full text-xs;
   }
   .status-busy::before {
     content: '';
@@ -133,10 +99,6 @@
 
 @layer utilities {
   .font-serif {
-    font-family: var(--font-serif);
-  }
-  
-  .font-sans {
-    font-family: var(--font-sans);
+    font-family: 'Playfair Display', Georgia, serif;
   }
 }
