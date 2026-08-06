@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    /* Colors */
     --primary: #AC244D;
     --primary-dark: #8F1D40;
     --primary-light: #D43A6B;
@@ -12,6 +13,10 @@
     --secondary-light: #E8D49E;
     --cream: #FDF9F6;
     --charcoal: #1A1A1A;
+    
+    /* Fonts */
+    --font-serif: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   * {
@@ -20,11 +25,25 @@
 
   body {
     @apply bg-cream text-charcoal antialiased;
-    font-family: 'Inter', 'Playfair Display', system-ui, sans-serif;
+    font-family: var(--font-sans);
   }
 
+  /* Headings use serif font */
   h1, h2, h3, h4, h5 {
-    font-family: 'Playfair Display', serif;
+    font-family: var(--font-serif);
+    @apply tracking-tight;
+  }
+
+  h1 {
+    @apply text-5xl md:text-7xl font-bold leading-tight;
+  }
+
+  h2 {
+    @apply text-3xl md:text-5xl font-semibold leading-tight;
+  }
+
+  h3 {
+    @apply text-2xl md:text-3xl font-semibold;
   }
 
   /* Luxury Scrollbar */
@@ -53,12 +72,14 @@
     @apply bg-primary text-white px-8 py-3 rounded-full font-medium 
            transition-all duration-300 hover:bg-primary-dark 
            hover:shadow-lg hover:shadow-primary/30 hover:scale-105;
+    font-family: var(--font-sans);
   }
 
   .btn-outline-luxury {
     @apply border-2 border-primary text-primary px-8 py-3 rounded-full font-medium 
            transition-all duration-300 hover:bg-primary hover:text-white 
            hover:shadow-lg hover:shadow-primary/20;
+    font-family: var(--font-sans);
   }
 
   /* Gold Accent */
@@ -70,12 +91,23 @@
     @apply bg-gradient-to-r from-secondary to-secondary-light bg-clip-text text-transparent;
   }
 
+  /* Luxury Text Styles */
+  .text-luxury {
+    font-family: var(--font-serif);
+    @apply tracking-wide;
+  }
+
+  .text-luxury-sm {
+    font-family: var(--font-serif);
+    @apply tracking-wider text-sm uppercase;
+  }
+
   /* Verification Badge */
   .verified-badge {
     @apply inline-flex items-center gap-1 bg-primary/10 text-primary 
            px-3 py-1 rounded-full text-xs font-medium;
+    font-family: var(--font-sans);
   }
-
   .verified-badge::before {
     content: '✓';
     @apply text-primary font-bold;
@@ -83,7 +115,7 @@
 
   /* Status Indicators */
   .status-available {
-    @apply inline-flex items-center gap-1 text-green-600 bg-green-50 px-3 py-1 rounded-full text-xs;
+    @apply inline-flex items-center gap-1 text-green-600 bg-green-50 px-3 py-1 rounded-full text-xs font-medium;
   }
   .status-available::before {
     content: '';
@@ -91,10 +123,20 @@
   }
 
   .status-busy {
-    @apply inline-flex items-center gap-1 text-red-600 bg-red-50 px-3 py-1 rounded-full text-xs;
+    @apply inline-flex items-center gap-1 text-red-600 bg-red-50 px-3 py-1 rounded-full text-xs font-medium;
   }
   .status-busy::before {
     content: '';
     @apply w-2 h-2 bg-red-500 rounded-full;
+  }
+}
+
+@layer utilities {
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+  
+  .font-sans {
+    font-family: var(--font-sans);
   }
 }
