@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { ModelCard } from '@/components/models/ModelCard'
 import { ModelFilters } from '@/components/models/ModelFilters'
 import { Input } from '@/components/ui/Input'
-import { Search, Sparkles } from 'lucide-react'
+import { Search, Sparkles, Filter, Grid, List } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 
 interface Model {
   id: string
@@ -18,16 +19,21 @@ interface Model {
   rating_avg: number
   review_count: number
   is_available: boolean
+  is_verified: boolean
+  is_new: boolean
   profile_id: string
   profiles: {
     avatar_url: string
   }
+  specialties: string[]
 }
 
 export default function BrowseModelsPage() {
   const [models, setModels] = useState<Model[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
   const [filters, setFilters] = useState({
     city: '',
     minRate: '',
@@ -71,7 +77,14 @@ export default function BrowseModelsPage() {
       if (error) {
         console.error('Error fetching models:', error)
       } else {
-        setModels(data || [])
+        // Add some mock data for demo purposes
+        const enhancedData = data?.map((model: any) => ({
+          ...model,
+          is_verified: Math.random() > 0.3,
+          is_new: Math.random() > 0.7,
+          specialties: ['Massage', 'Dinner Date', 'Travel Companion'].slice(0, Math.floor(Math.random() * 3) + 1),
+        })) || []
+        setModels(enhancedData)
       }
       setLoading(false)
     }
@@ -90,7 +103,7 @@ export default function BrowseModelsPage() {
   return (
     <div className="space-y-6">
       
-      {/* Category Header inspired by Tryst Available Now view */}
+      {/* Category Header - Tryst inspired */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-200/80 pb-6 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -114,8 +127,8 @@ export default function BrowseModelsPage() {
 
       <div className="flex flex-col gap-8 lg:flex-row">
         
-        {/* Filters Sidebar */}
-        <div className="lg:w-72 shrink-0">
+        {/* Filters Sidebar - Desktop */}
+        <div className="hidden lg:block lg:w-72 shrink-0">
           <div className="sticky top-6">
             <ModelFilters filters={filters} setFilters={setFilters} />
           </div>
@@ -124,9 +137,9 @@ export default function BrowseModelsPage() {
         {/* Main Grid Area */}
         <div className="flex-1 space-y-6">
           
-          {/* Search Toolbar */}
+          {/* Search and Controls Toolbar */}
           <div className="bg-white p-4 border border-neutral-200/85 rounded-2xl shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full">
+            <div className="relative w-full sm:max-w-sm">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               <Input
                 value={search}
@@ -135,10 +148,67 @@ export default function BrowseModelsPage() {
                 className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white transition-all rounded-xl"
               />
             </div>
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Mobile Filter Toggle */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="lg:hidden"
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+              </Button>
+
+              {/* View Toggle */}
+              <div className="flex border border-neutral-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 transition-colors ${
+                    viewMode === 'grid' 
+                      ? 'bg-primary text-white' 
+                      : 'bg-white text-neutral-400 hover:text-neutral-600'
+                  }`}
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 transition-colors ${
+                    viewMode === 'list' 
+                      ? 'bg-primary text-white' 
+                      : 'bg-white text-neutral-400 hover:text-neutral-600'
+                  }`}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Filters */}
+          {showMobileFilters && (
+            <div className="lg:hidden bg-white p-4 rounded-2xl border border-neutral-200/85">
+              <ModelFilters filters={filters} setFilters={setFilters} />
+            </div>
+          )}
+
+          {/* Results Count */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-neutral-500">
+              Showing <span className="font-semibold text-neutral-900">{models.length}</span> companions
+            </p>
           </div>
 
           {/* Grid Layout */}
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`
+            grid gap-6 
+            ${viewMode === 'grid' 
+              ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3' 
+              : 'grid-cols-1'
+            }
+          `}>
             {models.map((model) => (
               <ModelCard key={model.id} model={model} />
             ))}
@@ -152,6 +222,15 @@ export default function BrowseModelsPage() {
               <p className="text-sm text-neutral-500 max-w-sm mx-auto">
                 No active profiles match your specific filters or availability criteria right now. Try loosening your filters.
               </p>
+            </div>
+          )}
+
+          {/* Load More */}
+          {models.length > 0 && models.length >= 12 && (
+            <div className="text-center pt-4">
+              <Button variant="outline" className="px-8">
+                Load More
+              </Button>
             </div>
           )}
 
