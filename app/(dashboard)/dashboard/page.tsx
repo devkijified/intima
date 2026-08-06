@@ -1,81 +1,95 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { Eye, Star, Video, Calendar, User, ShieldCheck, Sparkles, ArrowUpRight, Radio, Heart } from 'lucide-react'
+import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, MessageSquare, Video, Wallet } from 'lucide-react'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
     profileViews: 0,
     reviews: 0,
-    liveShows: 0,
     bookings: 0,
   })
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
-  const [userRole, setUserRole] = useState('')
-  const [isOnline, setIsOnline] = useState(true)
-  const router = useRouter()
+  const [userRole, setUserRole] = useState<string>('client')
+  const [isAvailable, setIsAvailable] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchUserData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         window.location.href = '/login'
         return
       }
 
-      // Get user profile
+      // Fetch profile role and name directly from public.profiles
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
         .eq('id', user.id)
         .single()
 
-      if (profile) {
-        setUserName(profile.full_name || user.email?.split('@')[0] || 'User')
-        setUserRole(profile.role || 'client')
-      }
+      const role = profile?.role || 'client'
+      setUserName(profile?.full_name || user.email?.split('@')[0] || 'Member')
+      setUserRole(role)
 
-      // Get model profile if user is a model
-      const { data: model } = await supabase
-        .from('model_profiles')
-        .select('id, view_count')
-        .eq('profile_id', user.id)
-        .single()
+      if (role === 'model') {
+        // Fetch model profile metrics
+        const { data: model } = await supabase
+          .from('model_profiles')
+          .select('id, view_count, is_available')
+          .eq('profile_id', user.id)
+          .single()
 
-      let reviewsCount = 0
-      if (model?.id) {
-        const { count } = await supabase
-          .from('reviews')
+        if (model) {
+          setIsAvailable(model.is_available ?? true)
+
+          const { count: reviewsCount } = await supabase
+            .from('reviews')
+            .select('*', { count: 'exact', head: true })
+            .eq('model_id', model.id)
+
+          const { count: bookingsCount } = await supabase
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .eq('model_id', model.id)
+            .eq('status', 'pending')
+
+          setStats({
+            profileViews: model.view_count || 0,
+            reviews: reviewsCount || 0,
+            bookings: bookingsCount || 0,
+          })
+        }
+      } else {
+        // Fetch client booking count
+        const { count: clientBookingsCount } = await supabase
+          .from('bookings')
           .select('*', { count: 'exact', head: true })
-          .eq('model_id', model.id)
-        reviewsCount = count || 0
+          .eq('client_id', user.id)
+
+        setStats({
+          profileViews: 0,
+          reviews: 0,
+          bookings: clientBookingsCount || 0,
+        })
       }
 
-      setStats({
-        profileViews: model?.view_count || 0,
-        reviews: reviewsCount,
-        liveShows: 0,
-        bookings: 0,
-      })
       setLoading(false)
     }
 
-    fetchStats()
+    fetchUserData()
   }, [supabase])
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center bg-slate-950">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#AC244D] mx-auto"></div>
-          <p className="mt-4 text-slate-400 font-medium tracking-wide">Loading your sanctuary...</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[#AC244D] border-t-transparent"></div>
+          <p className="mt-3 text-sm font-medium text-neutral-500 tracking-wide font-sans">Loading your dashboard...</p>
         </div>
       </div>
     )
@@ -84,174 +98,178 @@ export default function DashboardPage() {
   const isModel = userRole === 'model'
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900 to-[#AC244D]/20 p-8 border border-slate-800 shadow-2xl">
-        <div className="absolute -right-10 -top-10 h-64 w-64 rounded-full bg-[#AC244D]/10 blur-3xl pointer-events-none" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#AC244D]/20 text-[#AC244D] border border-[#AC244D]/30">
-                <Sparkles className="h-3 w-3" /> {isModel ? 'Verified Companion' : 'VIP Member'}
-              </span>
-              {isModel && (
-                <button 
-                  onClick={() => setIsOnline(!isOnline)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                    isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                  {isOnline ? 'Online & Available' : 'Offline'}
-                </button>
-              )}
-            </div>
-            <h1 className="text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
-              Welcome back, {userName}
-            </h1>
-            <p className="text-slate-400 mt-1 max-w-xl text-sm lg:text-base">
-              {isModel 
-                ? 'Your platform presence is active. Check your live requests and client connections below.' 
-                : 'Explore verified independent companions, book private sessions, and curate your experiences.'}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isModel ? (
-              <Link href="/models/live">
-                <Button className="bg-[#AC244D] hover:bg-[#8F1D40] text-white shadow-lg shadow-[#AC244D]/25 rounded-xl px-5 py-6">
-                  <Radio className="mr-2 h-4 w-4 animate-pulse" />
-                  Start Live Show
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/models">
-                <Button className="bg-[#AC244D] hover:bg-[#8F1D40] text-white shadow-lg shadow-[#AC244D]/25 rounded-xl px-5 py-6">
-                  <Heart className="mr-2 h-4 w-4" />
-                  Explore Companions
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
+    <div className="max-w-5xl mx-auto space-y-8 font-sans">
       
-      {/* Stats Grid */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard 
-          icon={<Eye className="h-5 w-5 text-[#AC244D]" />} 
-          title="Profile Views" 
-          value={stats.profileViews} 
-          trend="+12% this week"
-        />
-        <StatCard 
-          icon={<Star className="h-5 w-5 text-[#AC244D]" />} 
-          title="Reviews & Ratings" 
-          value={stats.reviews} 
-          trend="4.9 Overall"
-        />
-        <StatCard 
-          icon={<Video className="h-5 w-5 text-[#AC244D]" />} 
-          title="Live Shows" 
-          value={stats.liveShows} 
-          trend="0 scheduled"
-        />
-        <StatCard 
-          icon={<Calendar className="h-5 w-5 text-[#AC244D]" />} 
-          title="Bookings" 
-          value={stats.bookings} 
-          trend="Active requests"
-        />
-      </div>
+      {/* Top Welcome Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-neutral-200/80 pb-6 gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs uppercase tracking-widest font-semibold text-[#AC244D]">
+              {isModel ? 'Companion Account' : 'VIP Member Account'}
+            </span>
+            <span className="text-neutral-300">•</span>
+            <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
+              <ShieldCheck className="h-3.5 w-3.5 text-[#AC244D]" /> Securely Verified
+            </span>
+          </div>
+          <h1 className="text-3xl font-serif font-normal text-neutral-900 tracking-tight">
+            Welcome back, {userName}
+          </h1>
+        </div>
 
-      {/* Action Sections */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Quick Actions */}
-        <Card className="md:col-span-1 bg-slate-900/60 border-slate-800/80 backdrop-blur-xl rounded-2xl shadow-xl">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-white text-lg font-semibold flex items-center gap-2">
-              Quick Shortcuts
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <Link href="/profile" className="w-full group">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 transition-all text-white">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[#AC244D]/10 text-[#AC244D]">
-                    <User className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Edit Profile & Gallery</span>
-                </div>
-                <ArrowUpRight className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
-              </div>
-            </Link>
-
-            <Link href="/bookings" className="w-full group">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 transition-all text-white">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[#AC244D]/10 text-[#AC244D]">
-                    <Calendar className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Manage Bookings</span>
-                </div>
-                <ArrowUpRight className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
-              </div>
-            </Link>
-
-            <Link href="/safety" className="w-full group">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 transition-all text-white">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <ShieldCheck className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Verification Center</span>
-                </div>
-                <ArrowUpRight className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
-              </div>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity Feed */}
-        <Card className="md:col-span-2 bg-slate-900/60 border-slate-800/80 backdrop-blur-xl rounded-2xl shadow-xl">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-white text-lg font-semibold">Recent Activity & Logs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-800 rounded-xl bg-slate-950/30">
-              <div className="rounded-full bg-slate-800/80 p-4 mb-3 text-slate-400">
-                <Calendar className="h-6 w-6" />
-              </div>
-              <p className="text-slate-300 font-medium">No recent platform activities yet</p>
-              <p className="text-slate-500 text-xs mt-1 max-w-xs">
-                {isModel 
-                  ? 'Your upcoming sessions, reviews, and client chats will show up here.' 
-                  : 'Start exploring verified profiles to book your first experience.'}
-              </p>
+        {/* Action Toggle */}
+        <div>
+          {isModel ? (
+            <div className="flex items-center bg-white border border-neutral-200/85 rounded-full px-4 py-2 shadow-xs">
+              <span className="text-xs font-medium text-neutral-600 mr-3">Status:</span>
+              <button 
+                onClick={() => setIsAvailable(!isAvailable)}
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
+                  isAvailable ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-600'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${isAvailable ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
+                {isAvailable ? 'Available Now' : 'Offline'}
+              </button>
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <Link 
+              href="/models/browse" 
+              className="inline-flex items-center justify-center bg-[#AC244D] hover:bg-[#8F1D40] text-white text-sm font-medium px-5 py-2.5 rounded-full transition-all shadow-xs"
+            >
+              Browse Companions
+            </Link>
+          )}
+        </div>
       </div>
-    </div>
-  )
-}
 
-function StatCard({ icon, title, value, trend }: { icon: React.ReactNode; title: string; value: number; trend: string }) {
-  return (
-    <Card className="bg-slate-900/60 border-slate-800/80 backdrop-blur-xl rounded-2xl shadow-lg hover:border-slate-700 transition-all">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-slate-400">{title}</p>
-          <div className="rounded-xl bg-[#AC244D]/10 p-2.5 border border-[#AC244D]/20">{icon}</div>
+      {/* CONDITIONAL CONTENT */}
+      {isModel ? (
+        /* ================= COMPANION VIEW ================= */
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Profile Views</span>
+                <Eye className="h-4 w-4 text-[#AC244D]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">{stats.profileViews}</p>
+              <p className="text-xs text-neutral-400 mt-1">Total public directory visits</p>
+            </div>
+
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Reviews</span>
+                <Star className="h-4 w-4 text-[#AC244D]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">{stats.reviews}</p>
+              <p className="text-xs text-neutral-400 mt-1">Verified client feedback</p>
+            </div>
+
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Pending Bookings</span>
+                <Calendar className="h-4 w-4 text-[#AC244D]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
+              <p className="text-xs text-neutral-400 mt-1">Requires your response</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <h3 className="font-serif text-lg text-neutral-900 mb-4">Quick Management</h3>
+              <div className="space-y-2">
+                <Link href="/profile" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Edit Public Listing & Photos</span>
+                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                </Link>
+                <Link href="/models/live" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Broadcast Live Show</span>
+                  <Video className="h-4 w-4 text-[#AC244D]" />
+                </Link>
+              </div>
+            </div>
+
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <h3 className="font-serif text-lg text-neutral-900 mb-4">Bookings & Earnings</h3>
+              <div className="space-y-2">
+                <Link href="/bookings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Manage Bookings</span>
+                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                </Link>
+                <Link href="/wallet" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Wallet & Payouts</span>
+                  <Wallet className="h-4 w-4 text-[#AC244D]" />
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="mt-4 flex items-baseline justify-between">
-          <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
-          <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-            {trend}
-          </span>
+      ) : (
+        /* ================= CLIENT VIEW ================= */
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Bookings</span>
+                <Calendar className="h-4 w-4 text-[#AC244D]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
+              <p className="text-xs text-neutral-400 mt-1">Confirmed appointments</p>
+            </div>
+
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Wallet Balance</span>
+                <Wallet className="h-4 w-4 text-[#AC244D]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">₦0</p>
+              <p className="text-xs text-neutral-400 mt-1">Available funds</p>
+            </div>
+
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Saved</span>
+                <Sparkles className="h-4 w-4 text-[#AC244D]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">0</p>
+              <p className="text-xs text-neutral-400 mt-1">Favorite companions</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <h3 className="font-serif text-lg text-neutral-900 mb-4">Explore Intima</h3>
+              <div className="space-y-2">
+                <Link href="/models/browse" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Browse All Verified Companions</span>
+                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                </Link>
+                <Link href="/bookings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">View Booking History</span>
+                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                </Link>
+              </div>
+            </div>
+
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+              <h3 className="font-serif text-lg text-neutral-900 mb-4">Account Settings</h3>
+              <div className="space-y-2">
+                <Link href="/profile" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Edit Profile & Contact Info</span>
+                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                </Link>
+                <Link href="/wallet" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Fund Wallet / Payments</span>
+                  <Wallet className="h-4 w-4 text-[#AC244D]" />
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+    </div>
   )
 }
