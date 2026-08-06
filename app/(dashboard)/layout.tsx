@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, Star, Calendar, UserCheck, ShieldCheck, ArrowUpRight, Sparkles, Sliders, MessageSquare } from 'lucide-react'
+import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, MessageSquare } from 'lucide-react'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -13,7 +13,7 @@ export default function DashboardPage() {
   })
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
-  const [userRole, setUserRole] = useState<'model' | 'client'>('client')
+  const [userRole, setUserRole] = useState<string>('client')
   const [isAvailable, setIsAvailable] = useState(true)
   const supabase = createClient()
 
@@ -25,38 +25,61 @@ export default function DashboardPage() {
         return
       }
 
+      // Fetch role and profile details from public.profiles
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, role')
         .eq('id', user.id)
         .single()
 
-      const role = (profile?.role as 'model' | 'client') || 'client'
+      const role = profile?.role || 'client'
       setUserName(profile?.full_name || user.email?.split('@')[0] || 'Member')
       setUserRole(role)
 
       if (role === 'model') {
+        // Fetch model_profiles record linked to this user
         const { data: model } = await supabase
           .from('model_profiles')
-          .select('id, view_count')
+          .select('id, view_count, is_available')
           .eq('profile_id', user.id)
           .single()
 
-        let reviewsCount = 0
-        if (model?.id) {
-          const { count } = await supabase
+        if (model) {
+          setIsAvailable(model.is_available ?? true)
+
+          // Fetch reviews count for this model
+          const { count: reviewsCount } = await supabase
             .from('reviews')
             .select('*', { count: 'exact', head: true })
             .eq('model_id', model.id)
-          reviewsCount = count || 0
+
+          // Fetch pending bookings count for this model
+          const { count: bookingsCount } = await supabase
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .eq('model_id', model.id)
+            .eq('status', 'pending')
+
+          setStats({
+            profileViews: model.view_count || 0,
+            reviews: reviewsCount || 0,
+            bookings: bookingsCount || 0,
+          })
         }
+      } else {
+        // Fetch client booking counts
+        const { count: clientBookingsCount } = await supabase
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('client_id', user.id)
 
         setStats({
-          profileViews: model?.view_count || 0,
-          reviews: reviewsCount,
-          bookings: 0,
+          profileViews: 0,
+          reviews: 0,
+          bookings: clientBookingsCount || 0,
         })
       }
+
       setLoading(false)
     }
 
@@ -126,7 +149,6 @@ export default function DashboardPage() {
       {isModel ? (
         /* ================= COMPANION / MODEL VIEW ================= */
         <div className="space-y-8">
-          {/* Stats Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-5 shadow-sm">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
@@ -156,7 +178,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Management Shortcuts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-sm">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Profile Management</h3>
@@ -167,10 +188,6 @@ export default function DashboardPage() {
                 </Link>
                 <Link href="/profile/rates" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
                   <span className="text-sm font-medium">Manage Rates & Services</span>
-                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
-                </Link>
-                <Link href="/profile/verification" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
-                  <span className="text-sm font-medium">Verification Status & Badges</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
               </div>
@@ -194,14 +211,13 @@ export default function DashboardPage() {
       ) : (
         /* ================= CLIENT VIEW ================= */
         <div className="space-y-8">
-          {/* Quick Info Grid for Clients */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-5 shadow-sm">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Active Bookings</span>
                 <Calendar className="h-4 w-4 text-[#AC244D]" />
               </div>
-              <p className="text-3xl font-serif text-neutral-900">0</p>
+              <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
               <p className="text-xs text-neutral-400 mt-1">Confirmed appointments</p>
             </div>
 
@@ -224,7 +240,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Client Navigation Options */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-sm">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Explore Intima</h3>
