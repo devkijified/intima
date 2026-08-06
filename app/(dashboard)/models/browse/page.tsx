@@ -46,7 +46,12 @@ export default function BrowseModelsPage() {
             avatar_url
           )
         `)
-        .eq('is_available', true)
+
+      if (filters.availability === 'available') {
+        query = query.eq('is_available', true)
+      } else if (filters.availability === 'offline') {
+        query = query.eq('is_available', false)
+      }
 
       if (search) {
         query = query.ilike('display_name', `%${search}%`)
