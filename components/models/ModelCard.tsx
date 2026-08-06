@@ -16,6 +16,7 @@ interface ModelCardProps {
     rating_avg: number
     review_count: number
     is_available: boolean
+    profile_id: string
     profiles: {
       avatar_url: string
     }
