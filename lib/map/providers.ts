@@ -25,6 +25,11 @@ export interface MapProvider {
   rating: number | null;
   reviewCount: number;
   ratePerHour: number | null; // naira, null = "rate on request"
+  // Rate card in naira, shown before any connection fee is paid.
+  // null = not listed yet (the sheet says so instead of hiding).
+  rateShortTime: number | null;
+  rateOvernight: number | null;
+  rateWeekend: number | null;
   avatar: string;
   userId: string | null; // null for mock/preview pins
 }
@@ -38,6 +43,9 @@ interface MapProviderRow {
   area_lat: number;
   area_lng: number;
   is_available: boolean | null;
+  rate_short_time_ngn: number | null;
+  rate_overnight_ngn: number | null;
+  rate_weekend_ngn: number | null;
 }
 
 export function mockToMapProvider(m: MockProvider): MapProvider {
@@ -54,6 +62,9 @@ export function mockToMapProvider(m: MockProvider): MapProvider {
     rating: m.rating,
     reviewCount: m.reviewCount,
     ratePerHour: m.ratePerHour,
+    rateShortTime: m.rateShortTime,
+    rateOvernight: m.rateOvernight,
+    rateWeekend: m.rateWeekend,
     avatar: m.avatar,
     userId: m.userId,
   };
@@ -80,6 +91,9 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     rating: null,
     reviewCount: 0,
     ratePerHour: null,
+    rateShortTime: row.rate_short_time_ngn,
+    rateOvernight: row.rate_overnight_ngn,
+    rateWeekend: row.rate_weekend_ngn,
     avatar: row.avatar_url || `https://i.pravatar.cc/300?img=${hashToImg(row.provider_id)}`,
     userId: row.provider_id,
   };
@@ -95,7 +109,7 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available',
+        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn',
       )
       .limit(300);
     if (error) throw error;

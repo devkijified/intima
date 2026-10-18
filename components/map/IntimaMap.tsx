@@ -29,6 +29,8 @@ interface Filters {
   verifiedOnly: boolean;
   availableNow: boolean;
   city: string;
+  /** Max short-time rate in naira. null = Any budget. */
+  budget: number | null;
 }
 
 interface ToastState {
@@ -38,6 +40,14 @@ interface ToastState {
 }
 
 const CHECK_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+
+/** Budget bands filter pins by the short-time rate. */
+const BUDGET_OPTIONS: Array<{ label: string; value: number | null }> = [
+  { label: 'Any', value: null },
+  { label: '≤ ₦50k', value: 50000 },
+  { label: '≤ ₦100k', value: 100000 },
+  { label: '≤ ₦200k', value: 200000 },
+];
 
 /** Escape for use inside an HTML attribute in the pin markup. */
 function escAttr(value: string): string {
@@ -108,6 +118,7 @@ export default function IntimaMap() {
     verifiedOnly: false,
     availableNow: false,
     city: '',
+    budget: null,
   });
 
   const showToast = (t: ToastState) => {
@@ -152,7 +163,13 @@ export default function IntimaMap() {
         (p) =>
           (!filters.verifiedOnly || p.verified) &&
           (!filters.availableNow || p.available) &&
-          (!filters.city || p.city === filters.city),
+          (!filters.city || p.city === filters.city) &&
+          // Pins with no listed short-time rate stay visible under every
+          // budget: an unlisted rate is not proof of an unaffordable one,
+          // and the sheet says "Rates not listed yet" so the client knows.
+          (filters.budget === null ||
+            p.rateShortTime === null ||
+            p.rateShortTime <= filters.budget),
       ),
     [providers, filters],
   );
@@ -369,6 +386,20 @@ export default function IntimaMap() {
             <span className="h-2 w-2 rounded-full bg-green-400" />
             Available now
           </button>
+          {BUDGET_OPTIONS.map((opt) => (
+            <button
+              key={opt.label}
+              onClick={() => setFilters((f) => ({ ...f, budget: opt.value }))}
+              aria-label={`Budget ${opt.label}`}
+              className={`rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-colors ${
+                filters.budget === opt.value
+                  ? 'bg-[#C9A84C] text-charcoal shadow-lg'
+                  : 'bg-black/55 text-white hover:bg-black/75'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
           {providersReady && (
             <span className="ml-auto rounded-full bg-black/45 px-2.5 py-1 text-xs text-white/85 backdrop-blur-sm">
               {filtered.length} nearby
@@ -425,7 +456,7 @@ export default function IntimaMap() {
                     <p className="flex items-center gap-1 text-sm text-neutral-500">
                       <MapPin className="h-3.5 w-3.5" />
                       {p.area}, {p.city}
-                      {p.ratePerHour !== null && ` · ${formatPrice(p.ratePerHour)}/hr`}
+                      {p.rateShortTime !== null && ` · ${formatPrice(p.rateShortTime)} short time`}
                     </p>
                   </div>
                   {p.available && (

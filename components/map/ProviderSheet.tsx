@@ -1,7 +1,7 @@
 'use client';
 
 import { BadgeCheck, MapPin, Phone, Star, Video, X } from 'lucide-react';
-import { formatPrice } from '@/lib/utils/helpers';
+import { RateCard } from '@/components/rates/RateCard';
 import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderSheetProps {
@@ -89,17 +89,18 @@ export function ProviderSheet({
             )}
           </div>
 
-          <p className="mt-2 text-sm text-neutral-500">
-            {provider.ratePerHour !== null ? (
-              <>
-                {formatPrice(provider.ratePerHour)}
-                <span className="text-xs"> per hour</span>
-              </>
-            ) : (
-              <span className="text-xs">Rate on request</span>
-            )}
-            <span className="mx-2 text-neutral-300">|</span>
-            <span className="text-xs">Area location only, never an exact address</span>
+          {/* Rates sit ABOVE the fee CTA: nobody pays the connection fee blind. */}
+          <div className="mt-3">
+            <RateCard
+              rates={{
+                shortTime: provider.rateShortTime,
+                overnight: provider.rateOvernight,
+                weekend: provider.rateWeekend,
+              }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-neutral-500">
+            Area location only, never an exact address
           </p>
 
           {/* Primary CTA: see, then order. */}

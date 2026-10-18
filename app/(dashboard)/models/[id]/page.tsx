@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Star, MapPin, Calendar, Phone, Video, UserPlus, CheckCircle2 } from 'lucide-react'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
+import { RateCard } from '@/components/rates/RateCard'
 import { useCall } from '@/components/calls/CallProvider'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 
@@ -26,6 +27,9 @@ interface ModelProfile {
     full_name: string
     avatar_url: string
     phone: string
+    rate_short_time_ngn: number | null
+    rate_overnight_ngn: number | null
+    rate_weekend_ngn: number | null
   }
 }
 
@@ -49,7 +53,10 @@ export default function ModelDetailPage() {
           profiles:profile_id (
             full_name,
             avatar_url,
-            phone
+            phone,
+            rate_short_time_ngn,
+            rate_overnight_ngn,
+            rate_weekend_ngn
           )
         `)
         .eq('id', params.id)
@@ -135,7 +142,18 @@ export default function ModelDetailPage() {
                 </div>
               </div>
               <p className="mt-4 text-gray-600">{model.bio}</p>
-              
+
+              {/* Rates before the fee CTA: nobody pays the connection fee blind. */}
+              <div className="mt-4 max-w-md">
+                <RateCard
+                  rates={{
+                    shortTime: model.profiles?.rate_short_time_ngn ?? null,
+                    overnight: model.profiles?.rate_overnight_ngn ?? null,
+                    weekend: model.profiles?.rate_weekend_ngn ?? null,
+                  }}
+                />
+              </div>
+
               <div className="mt-6 flex flex-wrap gap-3">
                 <Button className="bg-[#AC244D] hover:bg-[#8F1D40]">
                   <Calendar className="mr-2 h-4 w-4" />
