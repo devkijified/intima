@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, ChevronRight, MapPin } from 'lucide-react';
+import { BadgeCheck, MapPin } from 'lucide-react';
 import { formatPrice } from '@/lib/utils/helpers';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import type { MapProvider } from '@/lib/map/providers';
@@ -11,9 +11,10 @@ interface ProviderListCardProps {
 }
 
 /**
- * First-class list card: photo, name with verified check, area, short-time
- * rate, a preview of service offerings, and availability. Tapping opens the
- * same bottom sheet as a map pin, so selection stays synced across views.
+ * Vertical provider card for the grid list view: photo on top with
+ * verified/available overlays, then name, area, rate and a service
+ * preview. Tapping opens the same bottom sheet as a map pin, so
+ * selection stays synced across views.
  */
 export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) {
   const nameLine =
@@ -23,67 +24,66 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
     <li>
       <button
         onClick={() => onSelect(provider)}
-        className="group flex w-full items-center gap-3.5 rounded-3xl bg-white p-3 text-left shadow-[0_2px_16px_rgba(26,26,26,0.07)] ring-1 ring-black/[0.04] transition-all duration-150 active:scale-[0.98]"
+        className="group flex w-full flex-col overflow-hidden rounded-3xl bg-white text-left ring-1 ring-black/[0.04] transition-all duration-150 active:scale-[0.98]"
+        style={{ boxShadow: '0 2px 16px rgba(26,26,26,0.07)' }}
       >
-        <img
-          src={provider.avatar}
-          alt={provider.displayName}
-          loading="lazy"
-          className="h-24 w-24 shrink-0 rounded-2xl object-cover"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 font-display text-[17px] font-semibold text-charcoal">
-            <span className="truncate">{nameLine}</span>
-            {provider.verified && (
-              <BadgeCheck className="h-4 w-4 shrink-0 fill-[#AC244D] text-white" />
-            )}
+        <div className="relative aspect-[3/4] w-full overflow-hidden bg-neutral-100">
+          <img
+            src={provider.avatar}
+            alt={provider.displayName}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-300 group-active:scale-105"
+          />
+          {provider.verified && (
+            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-[#AC244D] px-2 py-1 text-[10px] font-semibold text-white">
+              <BadgeCheck className="h-3 w-3" />
+              Verified
+            </span>
+          )}
+          {provider.available && (
+            <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+              Available
+            </span>
+          )}
+        </div>
+        <div className="flex flex-1 flex-col p-3">
+          <p className="truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">
+            {nameLine}
           </p>
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
-            <MapPin className="h-3 w-3" />
-            {provider.area}, {provider.city}
+          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-500">
+            <MapPin className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {provider.area}, {provider.city}
+            </span>
           </p>
           {provider.rateShortTime !== null ? (
-            <p className="mt-1 text-sm font-bold text-[#AC244D]">
+            <p className="mt-1.5 text-[13px] font-bold text-[#AC244D]">
               {formatPrice(provider.rateShortTime)}{' '}
               <span className="font-medium text-neutral-400">short time</span>
             </p>
           ) : (
-            <p className="mt-1 text-xs text-neutral-400">Rates not listed yet</p>
+            <p className="mt-1.5 text-[11px] text-neutral-400">Rates not listed yet</p>
           )}
-          <div className="mt-1.5">
-            <ServiceChips services={provider.services} previewLimit={3} />
+          <div className="mt-2">
+            <ServiceChips services={provider.services} previewLimit={2} />
           </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end justify-between self-stretch py-1">
-          {provider.available ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              Available
-            </span>
-          ) : (
-            <span />
-          )}
-          <ChevronRight className="h-5 w-5 text-neutral-300 transition-transform group-active:translate-x-0.5" />
         </div>
       </button>
     </li>
   );
 }
 
-/** Shimmer placeholder while providers load in list view. */
+/** Shimmer placeholder matching the card shape while providers load. */
 export function ProviderListSkeleton() {
   return (
     <li aria-hidden="true">
-      <div className="flex gap-3.5 rounded-3xl bg-white p-3 ring-1 ring-black/[0.04]">
-        <div className="h-24 w-24 shrink-0 animate-pulse rounded-2xl bg-neutral-100" />
-        <div className="flex-1 space-y-2.5 py-1.5">
+      <div className="overflow-hidden rounded-3xl bg-white ring-1 ring-black/[0.04]">
+        <div className="aspect-[3/4] w-full animate-pulse bg-neutral-100" />
+        <div className="space-y-2 p-3">
           <div className="h-4 w-2/3 animate-pulse rounded-full bg-neutral-100" />
           <div className="h-3 w-1/2 animate-pulse rounded-full bg-neutral-100" />
           <div className="h-3 w-1/3 animate-pulse rounded-full bg-neutral-100" />
-          <div className="flex gap-1.5 pt-1">
-            <div className="h-5 w-16 animate-pulse rounded-full bg-neutral-100" />
-            <div className="h-5 w-20 animate-pulse rounded-full bg-neutral-100" />
-          </div>
         </div>
       </div>
     </li>

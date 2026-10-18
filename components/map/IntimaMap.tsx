@@ -549,13 +549,13 @@ export default function IntimaMap() {
             )}
           </div>
           {!providersReady ? (
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[0, 1, 2, 3].map((i) => (
                 <ProviderListSkeleton key={i} />
               ))}
             </ul>
           ) : filtered.length > 0 ? (
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {filtered.map((p) => (
                 <ProviderListCard key={p.id} provider={p} onSelect={setSelected} />
               ))}
