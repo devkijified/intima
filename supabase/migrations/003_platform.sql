@@ -12,6 +12,21 @@
 --      Dashboard > Storage (see commented block at the end of this file).
 
 -- ============================================================
+-- admin_users: who may use the admin panel and write settings.
+-- No INSERT policy on purpose: the first row is added by hand
+-- in the SQL editor (service role bypasses RLS).
+--
+-- NOTE: the table must be created BEFORE the is_admin() helper
+-- below, because PostgreSQL validates a SQL function's body at
+-- creation time and the function reads this table.
+-- ============================================================
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_users enable row level security;
+
+-- ============================================================
 -- Helper: admin check. Security definer so it bypasses RLS and
 -- avoids recursive policy lookups.
 -- ============================================================
@@ -24,16 +39,6 @@ as $$
   select exists (select 1 from public.admin_users where user_id = auth.uid());
 $$;
 
--- ============================================================
--- admin_users: who may use the admin panel and write settings.
--- No INSERT policy on purpose: the first row is added by hand
--- in the SQL editor (service role bypasses RLS).
--- ============================================================
-create table if not exists public.admin_users (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  created_at timestamptz not null default now()
-);
-alter table public.admin_users enable row level security;
 drop policy if exists admin_users_select on public.admin_users;
 create policy admin_users_select on public.admin_users
   for select using (public.is_admin());
