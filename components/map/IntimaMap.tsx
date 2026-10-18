@@ -179,6 +179,7 @@ export default function IntimaMap() {
   useEffect(() => {
     let cancelled = false;
     let map: MLMap | null = null;
+    let loadTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function init() {
       try {
@@ -197,9 +198,19 @@ export default function IntimaMap() {
             setMapReady(true);
           }
         });
+        // MapLibre fires 'error' for transient tile/sprite/font hiccups as
+        // well as fatal style failures. Only the latter kills the map: once
+        // the style has loaded (mapRef set), failed tiles are retried by the
+        // renderer and the map stays up. On flaky connections a single slow
+        // tile must not nuke the whole map into the list fallback.
         map.on('error', () => {
-          if (!cancelled) setMapFailed(true);
+          if (!cancelled && !mapRef.current) setMapFailed(true);
         });
+        // Backstop: a hanging connection that never resolves the style
+        // (no load, no error) still degrades to the list after 15 seconds.
+        loadTimer = setTimeout(() => {
+          if (!cancelled && !mapRef.current) setMapFailed(true);
+        }, 15000);
       } catch {
         if (!cancelled) setMapFailed(true);
       }
@@ -208,6 +219,7 @@ export default function IntimaMap() {
     init();
     return () => {
       cancelled = true;
+      if (loadTimer) clearTimeout(loadTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map?.remove();
