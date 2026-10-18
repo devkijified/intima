@@ -30,9 +30,11 @@ const config: Config = {
         charcoal: '#1A1A1A',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        serif: ['Playfair Display', 'Georgia', 'serif'],
-        cormorant: ['Cormorant Garamond', 'Georgia', 'serif'],
+        // One pairing: Inter for UI text, Fraunces for display. The CSS
+        // variables are set on <html> by next/font in app/layout.tsx.
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-fraunces)', 'Georgia', 'serif'],
+        display: ['var(--font-fraunces)', 'Georgia', 'serif'],
       },
     },
   },

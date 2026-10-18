@@ -10,17 +10,20 @@ import {
   AlertTriangle,
   BadgeCheck,
   ChevronDown,
+  List,
   Loader2,
-  MapPin,
+  Map as MapIcon,
+  SearchX,
   X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MAP_CITIES } from '@/lib/map/mockProviders';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
+import { SERVICE_CATALOG } from '@/lib/services';
 import { ProviderSheet } from './ProviderSheet';
+import { ProviderListCard, ProviderListSkeleton } from './ProviderListCard';
 import { useCall } from '@/components/calls/CallProvider';
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal';
-import { formatPrice } from '@/lib/utils/helpers';
 
 const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
@@ -31,6 +34,8 @@ interface Filters {
   city: string;
   /** Max short-time rate in naira. null = Any budget. */
   budget: number | null;
+  /** Selected service catalog ids. Empty = no service filter. AND logic. */
+  services: string[];
 }
 
 interface ToastState {
@@ -93,10 +98,21 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
   return el;
 }
 
+const EMPTY_FILTERS: Filters = {
+  verifiedOnly: false,
+  availableNow: false,
+  city: '',
+  budget: null,
+  services: [],
+};
+
 /**
- * The Intima landing experience: a full-screen, guest-accessible discovery
- * map. See first, order second. Guests browse everything; signup happens at
+ * The Intima landing experience: full-screen, guest-accessible discovery.
+ * See first, order second. Guests browse everything; signup happens at
  * order time (request connection or call), never before.
+ *
+ * Two first-class views share every filter: the map, and a rich list.
+ * Selection is synced: both open the same bottom sheet.
  */
 export default function IntimaMap() {
   const router = useRouter();
@@ -111,15 +127,11 @@ export default function IntimaMap() {
   const [providersReady, setProvidersReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  const [view, setView] = useState<'map' | 'list'>('map');
   const [selected, setSelected] = useState<MapProvider | null>(null);
   const [connectionTarget, setConnectionTarget] = useState<MapProvider | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [filters, setFilters] = useState<Filters>({
-    verifiedOnly: false,
-    availableNow: false,
-    city: '',
-    budget: null,
-  });
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
   const showToast = (t: ToastState) => {
     setToast(t);
@@ -169,7 +181,10 @@ export default function IntimaMap() {
           // and the sheet says "Rates not listed yet" so the client knows.
           (filters.budget === null ||
             p.rateShortTime === null ||
-            p.rateShortTime <= filters.budget),
+            p.rateShortTime <= filters.budget) &&
+          // Services use AND logic: she must offer everything selected.
+          (filters.services.length === 0 ||
+            filters.services.every((s) => p.services.includes(s))),
       ),
     [providers, filters],
   );
@@ -252,6 +267,16 @@ export default function IntimaMap() {
   const toggle = (key: 'verifiedOnly' | 'availableNow') =>
     setFilters((f) => ({ ...f, [key]: !f[key] }));
 
+  const toggleService = (id: string) =>
+    setFilters((f) => ({
+      ...f,
+      services: f.services.includes(id)
+        ? f.services.filter((s) => s !== id)
+        : [...f.services, id],
+    }));
+
+  const clearFilters = () => setFilters(EMPTY_FILTERS);
+
   const goSignup = () => router.push('/signup?next=/');
 
   // Primary CTA: see, then order. Guests sign up at order time.
@@ -313,10 +338,13 @@ export default function IntimaMap() {
   // notice). They disable only for logged-in users on preview pins.
   const callsDisabled = !!session && !!selected && !selected.userId;
 
+  // A dead map forces the list; the toggle hides to avoid a dead control.
+  const showList = view === 'list' || mapFailed;
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#111118]" style={{ height: '100dvh' }}>
       <div ref={containerRef} className="absolute inset-0" />
-      {!mapReady && !mapFailed && (
+      {!mapReady && !mapFailed && view === 'map' && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#111118] text-neutral-400">
           <Loader2 className="h-8 w-8 animate-spin text-[#AC244D]" />
           <p className="text-sm">Loading the map…</p>
@@ -326,8 +354,8 @@ export default function IntimaMap() {
       {/* Slim floating header: wordmark, city select, auth actions. No marketing copy. */}
       <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-3 sm:px-5 sm:pt-4">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 rounded-full bg-black/55 py-1.5 pl-4 pr-1.5 backdrop-blur-md">
-            <span className="font-serif text-xl tracking-tight text-white">Intima</span>
+          <div className="flex items-center gap-2 rounded-full bg-black/55 py-1.5 pl-4 pr-1.5 backdrop-blur-md ring-1 ring-white/10">
+            <span className="font-display text-xl font-semibold tracking-tight text-white">Intima</span>
             <div className="relative">
               <select
                 value={filters.city}
@@ -351,7 +379,7 @@ export default function IntimaMap() {
             {session ? (
               <Link
                 href="/dashboard"
-                className="rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-colors hover:bg-[#8F1D40]"
+                className="rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
               >
                 Dashboard
               </Link>
@@ -359,13 +387,13 @@ export default function IntimaMap() {
               <>
                 <Link
                   href="/login"
-                  className="rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-black/75"
+                  className="rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95"
                 >
                   Log in
                 </Link>
                 <Link
                   href="/signup"
-                  className="rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-colors hover:bg-[#8F1D40]"
+                  className="rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
                 >
                   Sign up
                 </Link>
@@ -374,14 +402,44 @@ export default function IntimaMap() {
           </div>
         </div>
 
-        {/* Filter chips */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        {/* View toggle + quick filters */}
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {!mapFailed && (
+            <div
+              className="flex shrink-0 items-center rounded-full bg-black/55 p-1 ring-1 ring-white/10 backdrop-blur-md"
+              role="tablist"
+              aria-label="Discovery view"
+            >
+              {(
+                [
+                  { value: 'map', label: 'Map', Icon: MapIcon },
+                  { value: 'list', label: 'List', Icon: List },
+                ] as const
+              ).map(({ value, label, Icon }) => (
+                <button
+                  key={value}
+                  role="tab"
+                  aria-selected={view === value}
+                  onClick={() => setView(value)}
+                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                    view === value
+                      ? 'bg-white text-charcoal shadow'
+                      : 'text-white/75 hover:text-white'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => toggle('verifiedOnly')}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-colors ${
+            aria-pressed={filters.verifiedOnly}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
               filters.verifiedOnly
                 ? 'bg-[#AC244D] text-white shadow-lg'
-                : 'bg-black/55 text-white hover:bg-black/75'
+                : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
             }`}
           >
             <BadgeCheck className="h-4 w-4" />
@@ -389,40 +447,73 @@ export default function IntimaMap() {
           </button>
           <button
             onClick={() => toggle('availableNow')}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-colors ${
+            aria-pressed={filters.availableNow}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
               filters.availableNow
                 ? 'bg-green-600 text-white shadow-lg'
-                : 'bg-black/55 text-white hover:bg-black/75'
+                : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
             }`}
           >
             <span className="h-2 w-2 rounded-full bg-green-400" />
             Available now
           </button>
+          {providersReady && (
+            <span className="ml-auto shrink-0 rounded-full bg-black/45 px-2.5 py-1 text-xs text-white/85 backdrop-blur-sm">
+              {filtered.length} nearby
+            </span>
+          )}
+        </div>
+
+        {/* Budget filter */}
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="shrink-0 pl-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+            Budget
+          </span>
           {BUDGET_OPTIONS.map((opt) => (
             <button
               key={opt.label}
               onClick={() => setFilters((f) => ({ ...f, budget: opt.value }))}
               aria-label={`Budget ${opt.label}`}
-              className={`rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-colors ${
+              aria-pressed={filters.budget === opt.value}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
                 filters.budget === opt.value
                   ? 'bg-[#C9A84C] text-charcoal shadow-lg'
-                  : 'bg-black/55 text-white hover:bg-black/75'
+                  : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
               }`}
             >
               {opt.label}
             </button>
           ))}
-          {providersReady && (
-            <span className="ml-auto rounded-full bg-black/45 px-2.5 py-1 text-xs text-white/85 backdrop-blur-sm">
-              {filtered.length} nearby
-            </span>
-          )}
+        </div>
+
+        {/* Services filter: multi-select, AND logic, live-updating. */}
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="shrink-0 pl-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+            Services
+          </span>
+          {SERVICE_CATALOG.map((s) => {
+            const active = filters.services.includes(s.id);
+            return (
+              <button
+                key={s.id}
+                onClick={() => toggleService(s.id)}
+                aria-pressed={active}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-all active:scale-95 ${
+                  active
+                    ? 'bg-[#C9A84C] text-charcoal shadow-lg'
+                    : 'bg-black/55 text-white/90 ring-1 ring-white/10 hover:bg-black/75'
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Legend */}
-      {mapReady && !mapFailed && (
-        <div className="absolute bottom-4 left-3 z-10 rounded-xl bg-black/60 px-3 py-2 text-xs text-white backdrop-blur-sm">
+      {mapReady && !mapFailed && view === 'map' && (
+        <div className="absolute bottom-4 left-3 z-10 rounded-xl bg-black/60 px-3 py-2 text-xs text-white ring-1 ring-white/10 backdrop-blur-sm">
           <p className="flex items-center gap-2">
             <BadgeCheck className="h-3.5 w-3.5" />
             Verified
@@ -434,56 +525,59 @@ export default function IntimaMap() {
         </div>
       )}
 
-      {/* Honest fallback: full-screen list when tiles fail. */}
-      {mapFailed && (
-        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-8 pt-36">
-          <div className="mb-4 flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>
-              The live map could not load on this connection, so here are the
-              companions as a list instead. Nothing is broken, the map simply
-              needs a stronger connection.
-            </p>
+      {/* First-class list view. Also the graceful fallback when tiles fail. */}
+      {showList && (
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[196px]">
+          {mapFailed && (
+            <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <p>
+                The live map could not load on this connection, so here are the
+                companions as a list instead. Nothing is broken, the map simply
+                needs a stronger connection.
+              </p>
+            </div>
+          )}
+          <div className="mb-3 flex items-baseline justify-between px-1">
+            <h2 className="font-display text-[22px] font-semibold tracking-tight text-charcoal">
+              Companions
+            </h2>
+            {providersReady && (
+              <p className="text-xs font-medium text-neutral-500">
+                {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+              </p>
+            )}
           </div>
-          <ul className="divide-y divide-neutral-100 rounded-2xl bg-white px-4">
-            {filtered.map((p) => (
-              <li key={p.id}>
-                <button
-                  onClick={() => setSelected(p)}
-                  className="flex w-full items-center gap-3 py-3 text-left"
-                >
-                  <img
-                    src={p.avatar}
-                    alt={p.displayName}
-                    loading="lazy"
-                    className="h-14 w-14 rounded-full object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 font-medium text-charcoal">
-                      {p.age !== null ? `${p.displayName}, ${p.age}` : p.displayName}
-                      {p.verified && (
-                        <BadgeCheck className="h-4 w-4 fill-[#AC244D] text-white" />
-                      )}
-                    </p>
-                    <p className="flex items-center gap-1 text-sm text-neutral-500">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {p.area}, {p.city}
-                      {p.rateShortTime !== null && ` · ${formatPrice(p.rateShortTime)} short time`}
-                    </p>
-                  </div>
-                  {p.available && (
-                    <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
-                      Available
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-          {providersReady && filtered.length === 0 && (
-            <p className="py-8 text-center text-sm text-neutral-500">
-              No companions match these filters right now.
-            </p>
+          {!providersReady ? (
+            <ul className="space-y-3">
+              {[0, 1, 2, 3].map((i) => (
+                <ProviderListSkeleton key={i} />
+              ))}
+            </ul>
+          ) : filtered.length > 0 ? (
+            <ul className="space-y-3">
+              {filtered.map((p) => (
+                <ProviderListCard key={p.id} provider={p} onSelect={setSelected} />
+              ))}
+            </ul>
+          ) : (
+            <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-black/[0.04]">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#AC244D]/10">
+                <SearchX className="h-6 w-6 text-[#AC244D]" />
+              </div>
+              <h3 className="font-display text-lg font-semibold text-charcoal">
+                No providers match
+              </h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                Try widening your budget or clearing a filter.
+              </p>
+              <button
+                onClick={clearFilters}
+                className="mt-4 rounded-full bg-[#AC244D] px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#8F1D40] active:scale-95"
+              >
+                Clear filters
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -523,7 +617,7 @@ export default function IntimaMap() {
                   toast.onAction?.();
                   setToast(null);
                 }}
-                className="rounded-full bg-[#AC244D] px-4 py-1.5 font-medium transition-colors hover:bg-[#8F1D40]"
+                className="rounded-full bg-[#AC244D] px-4 py-1.5 font-medium transition-all hover:bg-[#8F1D40] active:scale-95"
               >
                 {toast.actionLabel}
               </button>

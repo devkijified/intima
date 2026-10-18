@@ -1,23 +1,24 @@
 import type { Metadata } from 'next'
-import { Inter, Playfair_Display, Cormorant_Garamond } from 'next/font/google'
+import { Fraunces, Inter } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { CallProvider } from '@/components/calls/CallProvider'
 
-const inter = Inter({ 
+// One pairing for the whole product: Fraunces for display (wordmark,
+// headings, prices, sheet titles) and Inter for everything else. Loaded
+// once via next/font, latin subset, display=swap, no CSS @imports.
+const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
 })
 
-const playfair = Playfair_Display({ 
+const fraunces = Fraunces({
   subsets: ['latin'],
-  variable: '--font-playfair',
-})
-
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  variable: '--font-cormorant',
-  weight: ['400', '600', '700'],
+  variable: '--font-fraunces',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -31,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${playfair.variable} ${cormorant.variable}`}>
+    <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
       <body>
         {/* AgeGate still blocks everything until verified. CallProvider sits
             inside it so voice/video calls work on every route, including the

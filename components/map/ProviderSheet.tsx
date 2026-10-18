@@ -2,6 +2,7 @@
 
 import { BadgeCheck, MapPin, Phone, Star, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
+import { ServiceChips } from '@/components/services/ServiceChips';
 import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderSheetProps {
@@ -87,6 +88,11 @@ export function ProviderSheet({
                 <span className="text-xs text-neutral-500">({provider.reviewCount})</span>
               </div>
             )}
+          </div>
+
+          {/* What she offers: the determiners, grouped by category. */}
+          <div className="mt-3 border-t border-[#C9A84C]/25 pt-3">
+            <ServiceChips services={provider.services} />
           </div>
 
           {/* Rates sit ABOVE the fee CTA: nobody pays the connection fee blind. */}
