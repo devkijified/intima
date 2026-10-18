@@ -13,10 +13,12 @@ import {
   MessageCircle,
   Camera,
   Phone,
-  Video
+  Video,
+  UserPlus
 } from 'lucide-react'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
 import { useCall } from '@/components/calls/CallProvider'
+import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { useState } from 'react'
 
 interface ModelCardProps {
@@ -48,6 +50,7 @@ interface ModelCardProps {
 export function ModelCard({ model }: ModelCardProps) {
   const [isLiked, setIsLiked] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [showConnectModal, setShowConnectModal] = useState(false)
   const { startCall } = useCall()
   const canCall = Boolean(model.userId)
   const callsDisabledCopy = 'Available after verification launch'
@@ -245,6 +248,19 @@ export function ModelCard({ model }: ModelCardProps) {
               >
                 <Video className="w-4 h-4" />
               </button>
+              <button
+                disabled={!canCall}
+                title={canCall ? 'Request a connection' : callsDisabledCopy}
+                aria-label={canCall ? `Request connection with ${model.display_name}` : callsDisabledCopy}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (model.userId) setShowConnectModal(true)
+                }}
+                className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:text-neutral-500"
+              >
+                <UserPlus className="w-4 h-4" />
+              </button>
             </div>
             <button 
               className="text-sm font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1"
@@ -259,6 +275,22 @@ export function ModelCard({ model }: ModelCardProps) {
           </div>
         </div>
       </Card>
+      {showConnectModal && model.userId && (
+        <span
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+        >
+          <RequestConnectionModal
+            providerId={model.userId}
+            providerName={model.display_name}
+            providerAvatarUrl={model.profiles?.avatar_url}
+            onClose={() => setShowConnectModal(false)}
+            onConnected={() => setShowConnectModal(false)}
+          />
+        </span>
+      )}
     </Link>
   )
 }

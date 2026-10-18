@@ -5,9 +5,10 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Star, MapPin, Calendar, Phone, Video } from 'lucide-react'
+import { Star, MapPin, Calendar, Phone, Video, UserPlus, CheckCircle2 } from 'lucide-react'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
 import { useCall } from '@/components/calls/CallProvider'
+import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 
 interface ModelProfile {
   id: string
@@ -32,6 +33,8 @@ export default function ModelDetailPage() {
   const params = useParams()
   const [model, setModel] = useState<ModelProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showConnectModal, setShowConnectModal] = useState(false)
+  const [connected, setConnected] = useState(false)
   const supabase = createClient()
   const { startCall } = useCall()
   const canCall = Boolean(model?.profile_id)
@@ -60,6 +63,31 @@ export default function ModelDetailPage() {
 
     fetchModel()
   }, [params.id, supabase])
+
+  useEffect(() => {
+    async function checkConnection() {
+      if (!model?.profile_id) return
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+        const { data, error } = await supabase
+          .from('connections')
+          .select('id')
+          .eq('client_id', user.id)
+          .eq('provider_id', model.profile_id)
+          .eq('status', 'active')
+          .maybeSingle()
+        // Fail open: on any error we still show the request button.
+        if (!error && data) setConnected(true)
+      } catch {
+        /* fail open to the request button */
+      }
+    }
+
+    checkConnection()
+  }, [model?.profile_id, supabase])
 
   if (loading) {
     return <div className="text-center py-10">Loading model profile...</div>
@@ -113,6 +141,22 @@ export default function ModelDetailPage() {
                   <Calendar className="mr-2 h-4 w-4" />
                   Book Now
                 </Button>
+                {connected ? (
+                  <Button variant="outline" disabled className="border-green-300 text-green-700">
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Connected
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled={!canCall}
+                    title={canCall ? 'Request a connection' : callsDisabledCopy}
+                    onClick={() => setShowConnectModal(true)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Request connection
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   disabled={!canCall}
@@ -144,6 +188,18 @@ export default function ModelDetailPage() {
           </div>
         </CardContent>
       </Card>
+      {showConnectModal && model.profile_id && (
+        <RequestConnectionModal
+          providerId={model.profile_id}
+          providerName={model.display_name}
+          providerAvatarUrl={model.profiles?.avatar_url}
+          onClose={() => setShowConnectModal(false)}
+          onConnected={() => {
+            setConnected(true)
+            setShowConnectModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }

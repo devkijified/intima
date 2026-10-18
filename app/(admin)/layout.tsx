@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Users, UserCheck, Video, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 
 export default async function AdminLayout({
@@ -16,14 +16,14 @@ export default async function AdminLayout({
     redirect('/login')
   }
 
-  // Check if user is admin
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', session.user.id)
-    .single()
+  // Admin if: row in admin_users, or profile role is admin / super_admin.
+  const [{ data: adminRow }, { data: profile }] = await Promise.all([
+    supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).maybeSingle(),
+    supabase.from('profiles').select('role').eq('id', session.user.id).single(),
+  ])
 
-  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+  const roleIsAdmin = !!profile && ['admin', 'super_admin'].includes(profile.role)
+  if (!adminRow && !roleIsAdmin) {
     redirect('/dashboard')
   }
 
@@ -36,17 +36,23 @@ export default async function AdminLayout({
               Intima Admin
             </Link>
             <nav className="flex items-center space-x-6">
-              <Link href="/admin" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <Link href="/admin" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Dashboard">
                 <LayoutDashboard className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/users" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <Link href="/admin/users" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Users">
                 <Users className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/verifications" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <Link href="/admin/verifications" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Verifications">
                 <UserCheck className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/models" className="text-gray-600 hover:text-[#AC244D] transition-colors">
+              <Link href="/admin/reports" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Reports">
+                <Flag className="inline h-5 w-5" />
+              </Link>
+              <Link href="/admin/models" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Models">
                 <Video className="inline h-5 w-5" />
+              </Link>
+              <Link href="/admin/settings" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Settings">
+                <Settings className="inline h-5 w-5" />
               </Link>
               <Button variant="ghost" size="sm">
                 <LogOut className="h-5 w-5 text-gray-600" />

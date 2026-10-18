@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, ShieldAlert } from 'lucide-react'
 
 interface AgeVerificationModalProps {
   isOpen: boolean
@@ -47,7 +47,10 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
 
         <div className="space-y-4">
           <div className="bg-primary-muted p-4 rounded-xl text-sm text-gray-700">
-            <p className="font-medium">🔞 Age Restriction</p>
+            <p className="font-medium flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-primary" />
+              Age Restriction
+            </p>
             <p>This platform is strictly for adults aged 18 and above.</p>
           </div>
 
