@@ -8,6 +8,16 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
 
+/**
+ * Returns the validated `?next=` redirect target, or null.
+ * Only same-origin absolute paths are accepted (no protocol-relative URLs).
+ */
+function getNextParam(): string | null {
+  if (typeof window === 'undefined') return null
+  const next = new URLSearchParams(window.location.search).get('next')
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null
+}
+
 export default function SignupPage() {
   const [formData, setFormData] = useState({
     email: '',
@@ -19,6 +29,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [nextParam] = useState<string | null>(() => getNextParam())
   const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,6 +75,12 @@ export default function SignupPage() {
             })
         }
 
+        // Guests who signed up to order go straight back to where they were.
+        if (nextParam) {
+          window.location.href = nextParam
+          return
+        }
+
         setSuccess(true)
       }
     } catch (err: any) {
@@ -84,7 +101,7 @@ export default function SignupPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <Link href="/login" className="w-full">
+            <Link href={nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : '/login'} className="w-full">
               <Button className="w-full bg-[#AC244D] hover:bg-[#8F1D40]">
                 Sign In Now
               </Button>
@@ -158,7 +175,7 @@ export default function SignupPage() {
               {loading ? 'Creating...' : 'Create Account'}
             </Button>
             <p className="text-sm text-gray-600">
-              Already have an account? <Link href="/login" className="text-[#AC244D] hover:underline">Sign in</Link>
+              Already have an account? <Link href={nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : '/login'} className="text-[#AC244D] hover:underline">Sign in</Link>
             </p>
           </CardFooter>
         </form>

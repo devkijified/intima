@@ -1,0 +1,108 @@
+// Unified provider shape for the Intima Map.
+//
+// Two sources feed the map:
+//  1. The public `map_providers` database view (supabase/migrations/004_map_public.sql),
+//     which exposes only stranger-safe columns for providers who opted in
+//     (show_on_map = true). Works logged out.
+//  2. The local mock providers as a fallback when the view is unreachable or
+//     empty (e.g. before the migration is run, or offline).
+//
+// Privacy: coordinates are AREA level only, never exact addresses.
+
+import { createClient } from '@/lib/supabase/client';
+import { MOCK_PROVIDERS, type MockProvider } from './mockProviders';
+
+export interface MapProvider {
+  id: string;
+  displayName: string;
+  age: number | null;
+  city: string;
+  area: string;
+  lat: number;
+  lng: number;
+  verified: boolean;
+  available: boolean;
+  rating: number | null;
+  reviewCount: number;
+  ratePerHour: number | null; // naira, null = "rate on request"
+  avatar: string;
+  userId: string | null; // null for mock/preview pins
+}
+
+interface MapProviderRow {
+  provider_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  is_verified: boolean | null;
+  city: string;
+  area_lat: number;
+  area_lng: number;
+  is_available: boolean | null;
+}
+
+export function mockToMapProvider(m: MockProvider): MapProvider {
+  return {
+    id: m.id,
+    displayName: m.displayName,
+    age: m.age,
+    city: m.city,
+    area: m.area,
+    lat: m.lat,
+    lng: m.lng,
+    verified: m.verified,
+    available: m.available,
+    rating: m.rating,
+    reviewCount: m.reviewCount,
+    ratePerHour: m.ratePerHour,
+    avatar: m.avatar,
+    userId: m.userId,
+  };
+}
+
+/** Deterministic placeholder avatar index so a provider keeps the same face. */
+function hashToImg(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 997;
+  return (h % 70) + 1;
+}
+
+function rowToMapProvider(row: MapProviderRow): MapProvider {
+  return {
+    id: `db-${row.provider_id}`,
+    displayName: row.display_name || 'Intima companion',
+    age: null,
+    city: row.city,
+    area: 'Approximate area',
+    lat: row.area_lat,
+    lng: row.area_lng,
+    verified: row.is_verified === true,
+    available: row.is_available === true,
+    rating: null,
+    reviewCount: 0,
+    ratePerHour: null,
+    avatar: row.avatar_url || `https://i.pravatar.cc/300?img=${hashToImg(row.provider_id)}`,
+    userId: row.provider_id,
+  };
+}
+
+/**
+ * Load map pins. Tries the public database view first; falls back to the
+ * local mock providers on any error or when the table is still empty.
+ */
+export async function fetchMapProviders(): Promise<MapProvider[]> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('map_providers')
+      .select(
+        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available',
+      )
+      .limit(300);
+    if (error) throw error;
+    const rows = (data ?? []) as MapProviderRow[];
+    if (rows.length > 0) return rows.map(rowToMapProvider);
+  } catch {
+    // Fall through to mocks: map stays useful before migration / offline.
+  }
+  return MOCK_PROVIDERS.map(mockToMapProvider);
+}

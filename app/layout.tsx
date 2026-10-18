@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Playfair_Display, Cormorant_Garamond } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
+import { CallProvider } from '@/components/calls/CallProvider'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -32,7 +33,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable} ${cormorant.variable}`}>
       <body>
-        <AgeGate>{children}</AgeGate>
+        {/* AgeGate still blocks everything until verified. CallProvider sits
+            inside it so voice/video calls work on every route, including the
+            public map landing page. */}
+        <AgeGate>
+          <CallProvider>{children}</CallProvider>
+        </AgeGate>
       </body>
     </html>
   )

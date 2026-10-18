@@ -8,11 +8,22 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
 
+/**
+ * Returns the validated `?next=` redirect target, or null.
+ * Only same-origin absolute paths are accepted (no protocol-relative URLs).
+ */
+function getNextParam(): string | null {
+  if (typeof window === 'undefined') return null
+  const next = new URLSearchParams(window.location.search).get('next')
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [nextParam] = useState<string | null>(() => getNextParam())
   const router = useRouter()
   const supabase = createClient()
 
@@ -30,8 +41,8 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.user) {
-        // Use window.location for hard navigation
-        window.location.href = '/dashboard'
+        // Use window.location for hard navigation, honoring ?next= when present
+        window.location.href = nextParam ?? '/dashboard'
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
@@ -88,7 +99,7 @@ export default function LoginPage() {
             </Button>
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
-              <Link href="/signup" className="text-[#AC244D] hover:underline">
+              <Link href={nextParam ? `/signup?next=${encodeURIComponent(nextParam)}` : '/signup'} className="text-[#AC244D] hover:underline">
                 Sign up
               </Link>
             </p>

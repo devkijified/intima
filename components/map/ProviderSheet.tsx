@@ -2,37 +2,48 @@
 
 import { BadgeCheck, MapPin, Phone, Star, Video, X } from 'lucide-react';
 import { formatPrice } from '@/lib/utils/helpers';
-import type { MockProvider } from '@/lib/map/mockProviders';
+import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderSheetProps {
-  provider: MockProvider | null;
+  provider: MapProvider | null;
   onClose: () => void;
-  onViewProfile: (provider: MockProvider) => void;
-  onVoiceCall: (provider: MockProvider) => void;
-  onVideoCall: (provider: MockProvider) => void;
+  onViewProfile: (provider: MapProvider) => void;
+  onRequestConnection: (provider: MapProvider) => void;
+  onVoiceCall: (provider: MapProvider) => void;
+  onVideoCall: (provider: MapProvider) => void;
+  /** True when the call buttons must render disabled (logged in, preview pin). */
+  callsDisabled: boolean;
+  callsDisabledNote: string;
+  /** Show the "View full profile" link (only for real provider rows). */
+  showViewProfile: boolean;
 }
-
-const UNAVAILABLE_COPY = 'Available after verification launch';
 
 export function ProviderSheet({
   provider,
   onClose,
   onViewProfile,
+  onRequestConnection,
   onVoiceCall,
   onVideoCall,
+  callsDisabled,
+  callsDisabledNote,
+  showViewProfile,
 }: ProviderSheetProps) {
   if (!provider) return null;
 
-  const callsEnabled = provider.userId !== null;
+  const nameLine =
+    provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-20 px-3 pb-3 sm:px-6 sm:pb-6">
+    <div className="absolute inset-x-0 bottom-0 z-30 px-3 pb-3 sm:px-6 sm:pb-6">
       <div className="mx-auto max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5">
+        {/* Prominent photo: fully visible, no blur, no cover overlays. */}
         <div className="relative">
           <img
             src={provider.avatar}
             alt={provider.displayName}
-            className="h-36 w-full object-cover"
+            className="h-56 w-full object-cover"
+            loading="lazy"
           />
           <button
             onClick={onClose}
@@ -41,8 +52,14 @@ export function ProviderSheet({
           >
             <X className="h-4 w-4" />
           </button>
+          {provider.verified && (
+            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-[#AC244D] px-3 py-1 text-xs font-semibold text-white shadow-lg">
+              <BadgeCheck className="h-3.5 w-3.5" />
+              Verified
+            </span>
+          )}
           {provider.available && (
-            <span className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-green-500/95 px-3 py-1 text-xs font-medium text-white shadow-lg">
+            <span className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-green-500/95 px-3 py-1 text-xs font-medium text-white shadow-lg">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
               Available now
             </span>
@@ -53,9 +70,7 @@ export function ProviderSheet({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="flex items-center gap-1.5 text-lg font-bold text-charcoal">
-                <span className="truncate">
-                  {provider.displayName}, {provider.age}
-                </span>
+                <span className="truncate">{nameLine}</span>
                 {provider.verified && (
                   <BadgeCheck className="h-5 w-5 shrink-0 fill-[#AC244D] text-white" />
                 )}
@@ -65,46 +80,65 @@ export function ProviderSheet({
                 {provider.area}, {provider.city}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-1 rounded-full bg-secondary-muted px-2.5 py-1">
-              <Star className="h-3.5 w-3.5 fill-secondary text-secondary" />
-              <span className="text-sm font-semibold">{provider.rating.toFixed(1)}</span>
-              <span className="text-xs text-neutral-500">({provider.reviewCount})</span>
-            </div>
+            {provider.rating !== null && (
+              <div className="flex shrink-0 items-center gap-1 rounded-full bg-secondary-muted px-2.5 py-1">
+                <Star className="h-3.5 w-3.5 fill-secondary text-secondary" />
+                <span className="text-sm font-semibold">{provider.rating.toFixed(1)}</span>
+                <span className="text-xs text-neutral-500">({provider.reviewCount})</span>
+              </div>
+            )}
           </div>
 
           <p className="mt-2 text-sm text-neutral-500">
-            {formatPrice(provider.ratePerHour)}
-            <span className="text-xs"> per hour</span>
+            {provider.ratePerHour !== null ? (
+              <>
+                {formatPrice(provider.ratePerHour)}
+                <span className="text-xs"> per hour</span>
+              </>
+            ) : (
+              <span className="text-xs">Rate on request</span>
+            )}
             <span className="mx-2 text-neutral-300">|</span>
             <span className="text-xs">Area location only, never an exact address</span>
           </p>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <button
-              onClick={() => onViewProfile(provider)}
-              className="rounded-xl bg-primary px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
-            >
-              View profile
-            </button>
+          {/* Primary CTA: see, then order. */}
+          <button
+            onClick={() => onRequestConnection(provider)}
+            className="mt-4 w-full rounded-2xl bg-primary py-3.5 text-base font-semibold text-white transition-colors hover:bg-primary-dark"
+          >
+            Request connection
+          </button>
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <button
               onClick={() => onVoiceCall(provider)}
-              disabled={!callsEnabled}
-              title={callsEnabled ? 'Start a voice call' : UNAVAILABLE_COPY}
+              disabled={callsDisabled}
+              title={callsDisabled ? callsDisabledNote : 'Start a voice call'}
               className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-charcoal transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200 disabled:hover:text-charcoal"
             >
               <Phone className="h-4 w-4" />
-              Voice
+              Voice call
             </button>
             <button
               onClick={() => onVideoCall(provider)}
-              disabled={!callsEnabled}
-              title={callsEnabled ? 'Start a video call' : UNAVAILABLE_COPY}
+              disabled={callsDisabled}
+              title={callsDisabled ? callsDisabledNote : 'Start a video call'}
               className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-charcoal transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200 disabled:hover:text-charcoal"
             >
               <Video className="h-4 w-4" />
-              Video
+              Video call
             </button>
           </div>
+
+          {showViewProfile && (
+            <button
+              onClick={() => onViewProfile(provider)}
+              className="mt-3 w-full text-center text-sm font-medium text-primary hover:underline"
+            >
+              View full profile
+            </button>
+          )}
         </div>
       </div>
     </div>

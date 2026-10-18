@@ -7,7 +7,7 @@ import {
   Star, 
   MapPin, 
   Heart, 
-  Shield, 
+  BadgeCheck,
   Sparkles,
   Clock,
   MessageCircle,
@@ -95,7 +95,7 @@ export function ModelCard({ model }: ModelCardProps) {
           <div className="absolute top-4 left-4 flex flex-col gap-2">
             {isVerified && (
               <div className="bg-primary/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg">
-                <Shield className="w-3 h-3" />
+                <BadgeCheck className="w-3 h-3" />
                 Verified
               </div>
             )}
