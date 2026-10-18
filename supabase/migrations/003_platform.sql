@@ -61,6 +61,16 @@ create table if not exists public.profiles (
     check (verification_status in ('unverified', 'pending', 'verified', 'rejected')),
   created_at timestamptz not null default now()
 );
+-- If a profiles table already existed (e.g. created by an older migration
+-- or by hand), make sure every column the app reads is present.
+alter table public.profiles add column if not exists role text not null default 'client';
+alter table public.profiles add column if not exists display_name text;
+alter table public.profiles add column if not exists full_name text;
+alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists is_verified boolean not null default false;
+alter table public.profiles add column if not exists verification_status text not null default 'unverified';
+alter table public.profiles add column if not exists created_at timestamptz not null default now();
 alter table public.profiles enable row level security;
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles
