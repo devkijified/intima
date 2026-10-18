@@ -194,11 +194,18 @@ export default function IntimaMap() {
   useEffect(() => {
     let cancelled = false;
     let map: MLMap | null = null;
-    let loadTimer: ReturnType<typeof setTimeout> | undefined;
+    let bundleTimer: ReturnType<typeof setTimeout> | undefined;
+    let styleTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function init() {
       try {
+        // Stage 1: the maplibre bundle itself. If it cannot download in
+        // 45s the connection is truly dead → list fallback.
+        bundleTimer = setTimeout(() => {
+          if (!cancelled && !map) setMapFailed(true);
+        }, 45000);
         const maplibre = await import('maplibre-gl');
+        clearTimeout(bundleTimer);
         if (cancelled || !containerRef.current) return;
         map = new maplibre.Map({
           container: containerRef.current,
@@ -209,6 +216,7 @@ export default function IntimaMap() {
         });
         map.on('load', () => {
           if (!cancelled) {
+            if (styleTimer) clearTimeout(styleTimer);
             mapRef.current = map;
             setMapReady(true);
           }
@@ -221,11 +229,11 @@ export default function IntimaMap() {
         map.on('error', () => {
           if (!cancelled && !mapRef.current) setMapFailed(true);
         });
-        // Backstop: a hanging connection that never resolves the style
-        // (no load, no error) still degrades to the list after 15 seconds.
-        loadTimer = setTimeout(() => {
+        // Stage 2: the style itself. A generous 60s for slow connections —
+        // a slow map shows the loading state, only a dead one falls back.
+        styleTimer = setTimeout(() => {
           if (!cancelled && !mapRef.current) setMapFailed(true);
-        }, 15000);
+        }, 60000);
       } catch {
         if (!cancelled) setMapFailed(true);
       }
@@ -234,7 +242,8 @@ export default function IntimaMap() {
     init();
     return () => {
       cancelled = true;
-      if (loadTimer) clearTimeout(loadTimer);
+      if (bundleTimer) clearTimeout(bundleTimer);
+      if (styleTimer) clearTimeout(styleTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map?.remove();
