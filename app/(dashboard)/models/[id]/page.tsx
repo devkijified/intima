@@ -5,8 +5,9 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Star, MapPin, Calendar, Phone } from 'lucide-react'
+import { Star, MapPin, Calendar, Phone, Video } from 'lucide-react'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
+import { useCall } from '@/components/calls/CallProvider'
 
 interface ModelProfile {
   id: string
@@ -32,6 +33,9 @@ export default function ModelDetailPage() {
   const [model, setModel] = useState<ModelProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const { startCall } = useCall()
+  const canCall = Boolean(model?.profile_id)
+  const callsDisabledCopy = 'Available after verification launch'
 
   useEffect(() => {
     async function fetchModel() {
@@ -108,6 +112,28 @@ export default function ModelDetailPage() {
                 <Button className="bg-[#AC244D] hover:bg-[#8F1D40]">
                   <Calendar className="mr-2 h-4 w-4" />
                   Book Now
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!canCall}
+                  title={canCall ? 'Start a voice call' : callsDisabledCopy}
+                  onClick={() => {
+                    if (model.profile_id) void startCall(model.profile_id, model.display_name, 'voice')
+                  }}
+                >
+                  <Phone className="mr-2 h-4 w-4" />
+                  Voice call
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={!canCall}
+                  title={canCall ? 'Start a video call' : callsDisabledCopy}
+                  onClick={() => {
+                    if (model.profile_id) void startCall(model.profile_id, model.display_name, 'video')
+                  }}
+                >
+                  <Video className="mr-2 h-4 w-4" />
+                  Video call
                 </Button>
                 <Button variant="outline">
                   <Phone className="mr-2 h-4 w-4" />

@@ -11,9 +11,12 @@ import {
   Sparkles,
   Clock,
   MessageCircle,
-  Camera
+  Camera,
+  Phone,
+  Video
 } from 'lucide-react'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
+import { useCall } from '@/components/calls/CallProvider'
 import { useState } from 'react'
 
 interface ModelCardProps {
@@ -32,6 +35,8 @@ interface ModelCardProps {
     is_new?: boolean
     is_featured?: boolean
     profile_id: string
+    /** Auth user id of the provider. Null for mock rows, which disables calls. */
+    userId?: string | null
     profiles: {
       avatar_url: string
     }
@@ -43,6 +48,9 @@ interface ModelCardProps {
 export function ModelCard({ model }: ModelCardProps) {
   const [isLiked, setIsLiked] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const { startCall } = useCall()
+  const canCall = Boolean(model.userId)
+  const callsDisabledCopy = 'Available after verification launch'
 
   // Default values for demo
   const isVerified = model.is_verified ?? Math.random() > 0.3
@@ -210,11 +218,34 @@ export function ModelCard({ model }: ModelCardProps) {
 
           {/* Quick Action Buttons */}
           <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs text-gray-400 flex items-center gap-1">
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Responds in minutes</span>
-              <span className="sm:hidden">Quick reply</span>
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={!canCall}
+                title={canCall ? 'Start a voice call' : callsDisabledCopy}
+                aria-label={canCall ? `Voice call ${model.display_name}` : callsDisabledCopy}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (model.userId) void startCall(model.userId, model.display_name, 'voice')
+                }}
+                className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:text-neutral-500"
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+              <button
+                disabled={!canCall}
+                title={canCall ? 'Start a video call' : callsDisabledCopy}
+                aria-label={canCall ? `Video call ${model.display_name}` : callsDisabledCopy}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (model.userId) void startCall(model.userId, model.display_name, 'video')
+                }}
+                className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:text-neutral-500"
+              >
+                <Video className="w-4 h-4" />
+              </button>
+            </div>
             <button 
               className="text-sm font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1"
               onClick={(e) => {

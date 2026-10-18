@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert } from 'lucide-react'
+import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { CallProvider } from '@/components/calls/CallProvider'
 
 export default function DashboardLayout({
   children,
@@ -95,6 +96,16 @@ export default function DashboardLayout({
               </Link>
 
               <Link 
+                href="/map" 
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  pathname.startsWith('/map') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
+                }`}
+              >
+                <MapIcon className="h-4 w-4" />
+                <span>Map</span>
+              </Link>
+
+              <Link 
                 href="/bookings" 
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   pathname.startsWith('/bookings') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
@@ -160,9 +171,11 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
-        {children}
-      </main>
+      <CallProvider>
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+          {children}
+        </main>
+      </CallProvider>
     </div>
   )
 }

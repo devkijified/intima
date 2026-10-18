@@ -22,6 +22,8 @@ interface Model {
   is_verified: boolean
   is_new: boolean
   profile_id: string
+  /** Auth user id of the provider, used as the call target. */
+  userId?: string | null
   profiles: {
     avatar_url: string
   }
@@ -80,6 +82,7 @@ export default function BrowseModelsPage() {
         // Add some mock data for demo purposes
         const enhancedData = data?.map((model: any) => ({
           ...model,
+          userId: model.profile_id ?? null,
           is_verified: Math.random() > 0.3,
           is_new: Math.random() > 0.7,
           specialties: ['Massage', 'Dinner Date', 'Travel Companion'].slice(0, Math.floor(Math.random() * 3) + 1),
