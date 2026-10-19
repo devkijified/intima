@@ -1,0 +1,16 @@
+name: Poll bank transfers
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger transfer poller
+        run: |
+          curl -sS -m 120 -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://intima-snowy.vercel.app/api/cron/poll-transfers"
