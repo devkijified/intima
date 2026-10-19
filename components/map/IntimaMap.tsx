@@ -52,6 +52,36 @@ function escAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+interface MapLibreLib {
+  Map: new (options: Record<string, unknown>) => MLMap;
+  Marker: new (options: Record<string, unknown>) => MLMarker;
+}
+
+/**
+ * maplibre-gl 3.x ships its main entry as a UMD bundle, so a dynamic
+ * import() resolves the exports under `.default` instead of as named
+ * exports (bundler-dependent). Resolve whichever shape we actually got,
+ * or report exactly what the namespace contained.
+ */
+async function loadMapLibre(): Promise<{ lib: MapLibreLib | null; keys: string }> {
+  const ns = (await import('maplibre-gl')) as unknown as Record<string, unknown>;
+  const keys = Object.keys(ns).join(',');
+  const candidate =
+    typeof ns.Map === 'function'
+      ? ns
+      : typeof ns.default === 'object' && ns.default !== null
+        ? (ns.default as Record<string, unknown>)
+        : null;
+  if (
+    candidate &&
+    typeof candidate.Map === 'function' &&
+    typeof candidate.Marker === 'function'
+  ) {
+    return { lib: candidate as unknown as MapLibreLib, keys };
+  }
+  return { lib: null, keys };
+}
+
 function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'intima-pin';
@@ -115,6 +145,8 @@ export default function IntimaMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const markersRef = useRef<MLMarker[]>([]);
+  /** Resolved maplibre exports, shared by init and pin rendering. */
+  const libRef = useRef<MapLibreLib | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [session, setSession] = useState<Session | null>(null);
@@ -211,11 +243,16 @@ export default function IntimaMap() {
           if (!cancelled && !map)
             failMap('maplibre bundle download timed out after 45s');
         }, 45000);
-        const maplibre = await import('maplibre-gl');
+        const { lib, keys } = await loadMapLibre();
         clearTimeout(bundleTimer);
         if (cancelled || !containerRef.current) return;
+        if (!lib) {
+          failMap(`maplibre exports unusable (namespace keys: ${keys || 'none'})`);
+          return;
+        }
+        libRef.current = lib;
         try {
-          map = new maplibre.Map({
+          map = new lib.Map({
             container: containerRef.current,
             style: CARTO_DARK,
             center: LAGOS_CENTER,
@@ -283,11 +320,11 @@ export default function IntimaMap() {
     let cancelled = false;
 
     async function renderPins() {
-      const maplibre = await import('maplibre-gl');
-      if (cancelled || !mapRef.current) return;
+      const lib = libRef.current;
+      if (cancelled || !mapRef.current || !lib) return;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = filtered.map((p) =>
-        new maplibre.Marker({ element: markerElement(p, setSelected) })
+        new lib.Marker({ element: markerElement(p, setSelected) })
           .setLngLat([p.lng, p.lat])
           .addTo(mapRef.current as MLMap),
       );
