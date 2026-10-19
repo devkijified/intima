@@ -68,9 +68,52 @@ export function ProviderSheet({
   }, [provider?.id]);
 
 /** Self-contained video slide: plays when active, pauses otherwise. */
-function VideoSlide({ src, active, poster }: { src: string; active: boolean; poster?: string }) {
+function VideoSlide({ src, active }: { src: string; active: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [keyframe, setKeyframe] = useState<string | null>(null);
+
+  // Capture a keyframe from the video itself for the thumbnail.
+  // Seeks past the opening (often black) to grab a representative frame.
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    let done = false;
+
+    const capture = () => {
+      if (done) return;
+      try {
+        v.currentTime = Math.min(1.5, (v.duration || 2) / 2);
+      } catch {
+        /* seek is best-effort */
+      }
+    };
+    const onSeeked = () => {
+      if (done) return;
+      done = true;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = v.videoWidth || 640;
+        canvas.height = v.videoHeight || 360;
+        canvas.getContext('2d')?.drawImage(v, 0, 0, canvas.width, canvas.height);
+        setKeyframe(canvas.toDataURL('image/jpeg', 0.7));
+        try {
+          v.currentTime = 0;
+        } catch {
+          /* reset is best-effort */
+        }
+      } catch {
+        /* CORS-tainted canvas: fall back to the video's own first frame */
+      }
+    };
+
+    v.addEventListener('loadeddata', capture);
+    v.addEventListener('seeked', onSeeked);
+    return () => {
+      v.removeEventListener('loadeddata', capture);
+      v.removeEventListener('seeked', onSeeked);
+    };
+  }, [src]);
 
   useEffect(() => {
     const v = ref.current;
@@ -113,19 +156,26 @@ function VideoSlide({ src, active, poster }: { src: string; active: boolean; pos
       <video
         ref={ref}
         src={src}
-        poster={poster}
+        crossOrigin="anonymous"
         className="h-full w-full object-cover"
         muted
         loop
         playsInline
         preload="auto"
       />
-      {/* Big play button when paused: makes it obvious this is a video */}
+      {/* Keyframe thumbnail + big play button until it plays */}
       {!playing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-xl active:scale-95">
-            <Play className="ml-1 h-7 w-7 fill-charcoal text-charcoal" />
-          </span>
+        <div className="absolute inset-0">
+          {keyframe ? (
+            <img src={keyframe} alt="Video thumbnail" className="h-full w-full object-cover" draggable={false} />
+          ) : (
+            <div className="h-full w-full bg-neutral-900" />
+          )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-xl active:scale-95">
+              <Play className="ml-1 h-7 w-7 fill-charcoal text-charcoal" />
+            </span>
+          </div>
         </div>
       )}
     </div>
@@ -272,11 +322,7 @@ function VideoSlide({ src, active, poster }: { src: string; active: boolean; pos
                       draggable={false}
                     />
                   ) : (
-                    <VideoSlide
-                      src={slide.src}
-                      active={i === photoIndex}
-                      poster={photos[0]}
-                    />
+                    <VideoSlide src={slide.src} active={i === photoIndex} />
                   )}
                   <PhotoWatermark />
                   {slide.kind === 'video' && (
