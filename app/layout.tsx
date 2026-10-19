@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Fraunces, Inter } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
+import { SplashDismiss } from '@/components/SplashDismiss'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
@@ -63,6 +64,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
       <body>
+        {/* In-app splash: server-rendered so it paints before JS loads. */}
+        <div id="app-splash">
+          <div className="splash-mark">I</div>
+          <div className="splash-word">INTIMA</div>
+          <div className="splash-tag">Where Elegance Meets Connection</div>
+        </div>
+        <SplashDismiss />
         {/* AgeGate still blocks everything until verified. CallProvider sits
             inside it so voice/video calls work on every route, including the
             public map landing page. */}

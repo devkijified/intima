@@ -156,3 +156,53 @@
 .map-raster-dark canvas {
   filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(96%) saturate(70%);
 }
+
+/* ---- In-app splash screen ---- */
+#app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: linear-gradient(135deg, #C22A57 0%, #8F1D40 100%);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transition: opacity 0.45s ease;
+}
+#app-splash.splash-hide {
+  opacity: 0;
+  pointer-events: none;
+}
+#app-splash .splash-mark {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 5.5rem;
+  font-weight: bold;
+  line-height: 1;
+  background: linear-gradient(180deg, #E3C878 0%, #B8943F 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: splash-rise 0.7s ease-out;
+}
+#app-splash .splash-word {
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  letter-spacing: 0.45em;
+  text-indent: 0.45em;
+  color: #FDF9F6;
+  animation: splash-rise 0.7s ease-out 0.1s backwards;
+}
+#app-splash .splash-tag {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 0.85rem;
+  color: rgba(253, 249, 246, 0.75);
+  animation: splash-rise 0.7s ease-out 0.2s backwards;
+}
+@keyframes splash-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
