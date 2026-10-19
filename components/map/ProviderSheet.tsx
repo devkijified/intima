@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronLeft, ChevronRight, Clock, Eye, MapPin, Phone, Star, Video, X } from 'lucide-react';
+import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, MapPin, Phone, Play, Star, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
@@ -142,21 +142,35 @@ export function ProviderSheet({
   ];
   const totalSlides = slides.length;
 
-  const scrollToPhoto = (index: number) => {
-    const clamped = Math.max(0, Math.min(index, totalPhotos - 1));
+  const scrollToSlide = (index: number) => {
+    const clamped = Math.max(0, Math.min(index, totalSlides - 1));
     setPhotoIndex(clamped);
     const el = carouselRef.current;
     if (el) {
-      el.scrollTo({ left: clamped * el.clientWidth, behavior: 'smooth' });
+      el.scrollTo({ top: clamped * el.clientHeight, behavior: 'smooth' });
     }
   };
 
   const handleScroll = () => {
     const el = carouselRef.current;
-    if (!el || el.clientWidth === 0) return;
-    const index = Math.round(el.scrollLeft / el.clientWidth);
+    if (!el || el.clientHeight === 0) return;
+    const index = Math.round(el.scrollTop / el.clientHeight);
     if (index !== photoIndex) setPhotoIndex(index);
   };
+
+  // TikTok-style: videos autoplay when their slide is active, pause otherwise.
+  const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+  useEffect(() => {
+    videoRefs.current.forEach((v, i) => {
+      if (!v) return;
+      const slideIndex = photos.length + i;
+      if (slideIndex === photoIndex) {
+        v.play().catch(() => {});
+      } else {
+        v.pause();
+      }
+    });
+  }, [photoIndex, photos.length]);
 
   return (
     <>
@@ -187,74 +201,84 @@ export function ProviderSheet({
 
         {/* Scrollable content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {/* Gallery preview: swipeable carousel, Instagram-style */}
+          {/* Gallery: TikTok-style vertical feed. Swipe up/down, videos autoplay. */}
           <div className="relative">
             <div
               ref={carouselRef}
               onScroll={handleScroll}
-              className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex h-[52vh] snap-y snap-mandatory flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {slides.map((slide, i) => (
-                <div key={i} className="relative w-full shrink-0 snap-center">
+                <div key={i} className="relative h-full w-full shrink-0 snap-start">
                   {slide.kind === 'photo' ? (
                     <img
                       src={slide.src}
                       alt={`${provider.displayName} photo ${i + 1}`}
-                      className="aspect-[4/3] w-full object-cover"
+                      className="h-full w-full object-cover"
                       draggable={false}
                     />
                   ) : (
                     <video
+                      ref={(el) => {
+                        videoRefs.current[i - photos.length] = el;
+                      }}
                       src={slide.src}
-                      className="aspect-[4/3] w-full object-cover"
-                      controls
+                      className="h-full w-full object-cover"
+                      muted
+                      loop
                       playsInline
                       preload="metadata"
                     />
                   )}
                   <PhotoWatermark />
                   {slide.kind === 'video' && (
-                    <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                    <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                      <Play className="h-3 w-3 fill-white" />
                       Video
                     </span>
                   )}
                 </div>
               ))}
             </div>
-            {/* Slide counter + arrows */}
+            {/* Slide counter */}
+            {totalSlides > 1 && (
+              <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                {photoIndex + 1} / {totalSlides}
+              </span>
+            )}
+            {/* Up/down arrows */}
             {totalSlides > 1 && (
               <>
-                <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                  {photoIndex + 1} / {totalSlides}
-                </span>
                 <button
-                  onClick={() => scrollToPhoto(photoIndex - 1)}
-                  aria-label="Previous photo"
-                  className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm active:scale-95"
+                  onClick={() => scrollToSlide(photoIndex - 1)}
+                  aria-label="Previous"
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-[150%] items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm active:scale-95"
                 >
-                  <ChevronLeft className="h-5 w-5" />
+                  <ChevronUp className="h-5 w-5" />
                 </button>
                 <button
-                  onClick={() => scrollToPhoto(photoIndex + 1)}
-                  aria-label="Next photo"
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm active:scale-95"
+                  onClick={() => scrollToSlide(photoIndex + 1)}
+                  aria-label="Next"
+                  className="absolute bottom-16 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm active:scale-95"
                 >
-                  <ChevronRight className="h-5 w-5" />
+                  <ChevronDown className="h-5 w-5" />
                 </button>
-                {/* Dots */}
-                <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-                  {slides.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => scrollToPhoto(i)}
-                      aria-label={`Go to photo ${i + 1}`}
-                      className={`h-1.5 rounded-full transition-all ${
-                        i === photoIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
-                      }`}
-                    />
-                  ))}
-                </div>
               </>
+            )}
+            {/* Swipe hint dots (vertical) */}
+            {totalSlides > 1 && (
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+                {slides.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => scrollToSlide(i)}
+                    aria-label={`Go to slide ${i + 1}`}
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === photoIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
+                    }`}
+                  />
+                ))}
+              </div>
             )}
             {/* Available pill overlaid */}
             {provider.available && (
