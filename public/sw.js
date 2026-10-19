@@ -2,7 +2,7 @@
  * Installability (the "Add to Home Screen" prompt) requires a service
  * worker; this one stays lean and never caches authenticated pages. */
 const CACHE = 'intima-shell-v1';
-const SHELL = ['/', '/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest'];
+const SHELL = ['/', '/icons/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

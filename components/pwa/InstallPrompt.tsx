@@ -59,7 +59,7 @@ export function InstallPrompt() {
     <div className="fixed bottom-20 left-4 right-4 z-[70] md:bottom-6 md:left-auto md:right-6 md:w-96">
       <div className="rounded-3xl border border-white/10 bg-charcoal p-4 text-white shadow-2xl">
         <div className="flex items-start gap-3">
-          <img src="/icons/icon-192.png" alt="" className="h-12 w-12 rounded-2xl" />
+          <img src="/icons/icon.svg" alt="" className="h-12 w-12 rounded-2xl" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">Install Intima</p>
             {showIos ? (
