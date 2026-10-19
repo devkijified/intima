@@ -3,6 +3,7 @@ import { Fraunces, Inter } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { CallProvider } from '@/components/calls/CallProvider'
+import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 
 // One pairing for the whole product: Fraunces for display (wordmark,
 // headings, prices, sheet titles) and Inter for everything else. Loaded
@@ -21,9 +22,25 @@ const fraunces = Fraunces({
   weight: ['400', '500', '600', '700'],
 })
 
+export const viewport = { viewportFit: 'cover', themeColor: '#AC244D' };
+
 export const metadata: Metadata = {
   title: 'Intima - Premium Companion Platform',
-  description: 'Nigeria\'s premier platform for verified companions.',
+  description: "Nigeria's premier platform for verified companions.",
+  manifest: '/manifest.webmanifest',
+  themeColor: '#AC244D',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Intima',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 }
 
 export default function RootLayout({
@@ -39,7 +56,13 @@ export default function RootLayout({
             public map landing page. */}
         <AgeGate>
           <CallProvider>{children}</CallProvider>
+          <InstallPrompt />
         </AgeGate>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if ('serviceWorker' in navigator) { window.addEventListener('load', function() { navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }`,
+          }}
+        />
       </body>
     </html>
   )
