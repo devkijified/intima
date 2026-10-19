@@ -60,16 +60,42 @@ export function ProviderSheet({
     };
   }, []);
 
-  // TikTok-style video refs (declared early so the reset effect can clear them).
-  const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
-
-  // Reset tab, slide, and video refs when switching providers.
+  // Reset tab and slide when switching providers.
   useEffect(() => {
     setActiveTab('services');
     setPhotoIndex(0);
-    videoRefs.current = [];
     carouselRef.current?.scrollTo({ top: 0 });
   }, [provider?.id]);
+
+/** Self-contained video slide: plays when active, pauses otherwise. */
+function VideoSlide({ src, active }: { src: string; active: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    try {
+      if (active) {
+        const p = v.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } else {
+        v.pause();
+      }
+    } catch {
+      /* autoplay is best-effort */
+    }
+  }, [active]);
+  return (
+    <video
+      ref={ref}
+      src={src}
+      className="h-full w-full object-cover"
+      muted
+      loop
+      playsInline
+      preload="metadata"
+    />
+  );
+}
 
   // Load reviews: real rows for DB providers, deterministic mocks for previews.
   // Also bumps the view counter best-effort (traction stat).
@@ -162,23 +188,8 @@ export function ProviderSheet({
     if (index !== photoIndex) setPhotoIndex(index);
   };
 
-  // TikTok-style: videos autoplay when their slide is active, pause otherwise.
-  useEffect(() => {
-    try {
-      videoRefs.current.forEach((v, i) => {
-        if (!v || typeof v.play !== 'function') return;
-        const slideIndex = photos.length + i;
-        if (slideIndex === photoIndex) {
-          const p = v.play();
-          if (p && typeof p.catch === 'function') p.catch(() => {});
-        } else if (typeof v.pause === 'function') {
-          v.pause();
-        }
-      });
-    } catch {
-      /* autoplay is best-effort */
-    }
-  }, [photoIndex, photos.length]);
+  // TikTok-style: each video manages its own playback based on `active`.
+  // No shared ref array, no indexing across renders.
 
   return (
     <>
@@ -226,17 +237,7 @@ export function ProviderSheet({
                       draggable={false}
                     />
                   ) : (
-                    <video
-                      ref={(el) => {
-                        videoRefs.current[i - photos.length] = el;
-                      }}
-                      src={slide.src}
-                      className="h-full w-full object-cover"
-                      muted
-                      loop
-                      playsInline
-                      preload="metadata"
-                    />
+                    <VideoSlide src={slide.src} active={i === photoIndex} />
                   )}
                   <PhotoWatermark />
                   {slide.kind === 'video' && (
