@@ -68,32 +68,67 @@ export function ProviderSheet({
   }, [provider?.id]);
 
 /** Self-contained video slide: plays when active, pauses otherwise. */
-function VideoSlide({ src, active }: { src: string; active: boolean }) {
+function VideoSlide({ src, active, poster }: { src: string; active: boolean; poster?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
     try {
       if (active) {
         const p = v.play();
-        if (p && typeof p.catch === 'function') p.catch(() => {});
+        if (p && typeof p.catch === 'function') {
+          p.then(() => setPlaying(true)).catch(() => setPlaying(false));
+        }
       } else {
         v.pause();
+        setPlaying(false);
       }
     } catch {
-      /* autoplay is best-effort */
+      setPlaying(false);
     }
   }, [active]);
+
+  const toggle = () => {
+    const v = ref.current;
+    if (!v) return;
+    try {
+      if (v.paused) {
+        const p = v.play();
+        if (p && typeof p.catch === 'function') {
+          p.then(() => setPlaying(true)).catch(() => setPlaying(false));
+        }
+      } else {
+        v.pause();
+        setPlaying(false);
+      }
+    } catch {
+      /* tap is best-effort */
+    }
+  };
+
   return (
-    <video
-      ref={ref}
-      src={src}
-      className="h-full w-full object-cover"
-      muted
-      loop
-      playsInline
-      preload="metadata"
-    />
+    <div className="relative h-full w-full" onClick={toggle}>
+      <video
+        ref={ref}
+        src={src}
+        poster={poster}
+        className="h-full w-full object-cover"
+        muted
+        loop
+        playsInline
+        preload="auto"
+      />
+      {/* Big play button when paused: makes it obvious this is a video */}
+      {!playing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-xl active:scale-95">
+            <Play className="ml-1 h-7 w-7 fill-charcoal text-charcoal" />
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -237,7 +272,11 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                       draggable={false}
                     />
                   ) : (
-                    <VideoSlide src={slide.src} active={i === photoIndex} />
+                    <VideoSlide
+                      src={slide.src}
+                      active={i === photoIndex}
+                      poster={photos[0]}
+                    />
                   )}
                   <PhotoWatermark />
                   {slide.kind === 'video' && (
