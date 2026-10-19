@@ -176,9 +176,32 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 pb-24 md:pb-8">
         {children}
       </main>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden">
+        <div className="grid grid-cols-5 px-2 py-1.5">
+          {[
+            { href: '/dashboard', icon: LayoutDashboard, label: 'Home', active: pathname === '/dashboard' },
+            { href: '/live', icon: Radio, label: 'Live', active: pathname.startsWith('/live') },
+            { href: '/', icon: MapIcon, label: 'Map', active: pathname === '/' },
+            { href: '/saved', icon: Heart, label: 'Saved', active: pathname.startsWith('/saved') },
+            { href: '/profile', icon: User, label: 'Profile', active: pathname.startsWith('/profile') },
+          ].map(({ href, icon: Icon, label, active }) => (
+            <Link
+              key={href}
+              href={href}
+              className={'flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium transition-colors ' + (active ? 'text-primary' : 'text-neutral-400')}
+            >
+              <Icon className="h-5 w-5" />
+              {label}
+            </Link>
+          ))}
+        </div>
+        <div className="h-[env(safe-area-inset-bottom)]" />
+      </nav>
     </div>
   )
 }
