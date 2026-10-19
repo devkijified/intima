@@ -528,7 +528,7 @@ export default function IntimaMap() {
 
       {/* First-class list view. Also the graceful fallback when tiles fail. */}
       {showList && (
-        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[196px]">
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[124px]">
           {mapFailed && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
