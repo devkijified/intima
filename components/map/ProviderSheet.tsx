@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, Heart, MapPin, Phone, Play, Star, Video, X } from 'lucide-react';
+import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
@@ -26,7 +26,7 @@ interface ProviderSheetProps {
   showViewProfile: boolean;
 }
 
-type SheetTab = 'services' | 'rates' | 'reviews';
+type SheetTab = 'posts' | 'services' | 'rates' | 'reviews';
 
 /**
  * Instagram-style provider sheet: swipeable gallery preview on top,
@@ -45,8 +45,9 @@ export function ProviderSheet({
   showViewProfile,
 }: ProviderSheetProps) {
   const [connectionFee, setConnectionFee] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<SheetTab>('services');
+  const [activeTab, setActiveTab] = useState<SheetTab>('posts');
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [lightbox, setLightbox] = useState<number | null>(null);
   const [reviews, setReviews] = useState<MockReview[]>([]);
   const carouselRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +63,7 @@ export function ProviderSheet({
 
   // Reset tab and slide when switching providers.
   useEffect(() => {
-    setActiveTab('services');
+    setActiveTab('posts');
     setPhotoIndex(0);
     carouselRef.current?.scrollTo({ top: 0 });
   }, [provider?.id]);
@@ -347,161 +348,114 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
 
         {/* Scrollable content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {/* Gallery: TikTok-style vertical feed. Swipe up/down, videos autoplay. */}
-          <div className="relative">
-            <div
-              ref={carouselRef}
-              onScroll={handleScroll}
-              className="flex h-[52vh] snap-y snap-mandatory flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {slides.map((slide, i) => (
-                <div key={i} className="relative h-full w-full shrink-0 snap-start">
-                  {slide.kind === 'photo' ? (
-                    <img
-                      src={slide.src}
-                      alt={`${provider.displayName} photo ${i + 1}`}
-                      className="h-full w-full object-cover"
-                      draggable={false}
-                    />
-                  ) : (
-                    <VideoSlide src={slide.src} active={i === photoIndex} />
-                  )}
-                  <PhotoWatermark />
-                  {slide.kind === 'video' && (
-                    <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                      <Play className="h-3 w-3 fill-white" />
-                      Video
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-            {/* Slide counter */}
-            {totalSlides > 1 && (
-              <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                {photoIndex + 1} / {totalSlides}
-              </span>
-            )}
-            {/* Up/down arrows */}
-            {totalSlides > 1 && (
-              <>
-                <button
-                  onClick={() => scrollToSlide(photoIndex - 1)}
-                  aria-label="Previous"
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-[150%] items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm active:scale-95"
-                >
-                  <ChevronUp className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => scrollToSlide(photoIndex + 1)}
-                  aria-label="Next"
-                  className="absolute bottom-16 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm active:scale-95"
-                >
-                  <ChevronDown className="h-5 w-5" />
-                </button>
-              </>
-            )}
-            {/* Swipe hint dots (vertical) */}
-            {totalSlides > 1 && (
-              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-                {slides.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => scrollToSlide(i)}
-                    aria-label={`Go to slide ${i + 1}`}
-                    className={`h-1.5 rounded-full transition-all ${
-                      i === photoIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/50'
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-            {/* Available pill overlaid */}
-            {provider.available && (
-              <span className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-green-500/95 px-3 py-1 text-xs font-medium text-white shadow-lg">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-                Available now
-              </span>
-            )}
-          </div>
-
-          {/* Profile header: name, verified, stats */}
+          {/* TikTok-style profile header: avatar + stats */}
           <div className="px-4 pt-3">
-            <div className="flex items-center gap-2">
-              <h2 className="flex-1 font-display text-xl font-semibold text-charcoal">{nameLine}</h2>
+            <div className="flex items-center gap-4">
+              <img
+                src={provider.avatar}
+                alt={provider.displayName}
+                className="h-20 w-20 shrink-0 rounded-full border-2 border-white object-cover shadow-md"
+              />
+              <div className="flex flex-1 items-center justify-around">
+                <div className="text-center">
+                  <p className="text-lg font-bold text-charcoal">{formatCompactCount(provider.viewCount)}</p>
+                  <p className="text-xs text-neutral-500">Views</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-charcoal">{formatCompactCount(provider.bookingCount)}</p>
+                  <p className="text-xs text-neutral-500">Bookings</p>
+                </div>
+                <div className="text-center">
+                  <p className="flex items-center justify-center gap-1 text-lg font-bold text-charcoal">
+                    {provider.rating !== null ? provider.rating.toFixed(1) : '-'}
+                  </p>
+                  <p className="text-xs text-neutral-500">Rating ({provider.reviewCount})</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-center gap-1.5">
+              <h2 className="font-display text-lg font-semibold text-charcoal">{nameLine}</h2>
+              {provider.verified && <BadgeCheck className="h-4 w-4 text-primary" />}
+            </div>
+            <p className="flex items-center gap-1 text-sm text-neutral-500">
+              <MapPin className="h-3.5 w-3.5" />
+              {provider.area}, {provider.city}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              {provider.available && (
+                <span className="flex items-center gap-1 font-medium text-green-700">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+                  Available now
+                </span>
+              )}
+              {recency && (
+                <span className="text-neutral-500">{recency}</span>
+              )}
+              <span className="text-neutral-500">
+                {provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}
+              </span>
+            </div>
+
+            {/* Action row: request + calls + favorite */}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={() => onRequestConnection(provider)}
+                className="flex-1 rounded-full bg-primary py-2.5 text-sm font-bold text-white active:scale-[0.98]"
+              >
+                Request connection
+                {connectionFee !== null && (
+                  <span className="font-normal opacity-80"> • N{connectionFee.toLocaleString()}</span>
+                )}
+              </button>
+              <button
+                onClick={() => onVoiceCall(provider)}
+                disabled={voiceDisabled}
+                title={voiceNote}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+              >
+                <Phone className="h-4 w-4 text-charcoal" />
+              </button>
+              <button
+                onClick={() => onVideoCall(provider)}
+                disabled={videoDisabled}
+                title={videoNote}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+              >
+                <Video className="h-4 w-4 text-charcoal" />
+              </button>
               <button
                 onClick={toggleFav}
                 disabled={favBusy}
                 aria-label={isFav ? 'Remove from favorites' : 'Save to favorites'}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream active:scale-90"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-cream active:scale-90"
               >
-                <Heart className={'h-5 w-5 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
+                <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
               </button>
-              {provider.verified && (
-                <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                  <BadgeCheck className="h-3.5 w-3.5" />
-                  Verified
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 flex items-center gap-1 text-sm text-neutral-500">
-              <MapPin className="h-3.5 w-3.5" />
-              {provider.area}, {provider.city}
-            </p>
-            {/* Stats row: rating, views (traction), recency, negotiable */}
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-              {provider.rating !== null && (
-                <span className="flex items-center gap-1 font-semibold text-charcoal">
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                  {provider.rating.toFixed(1)}
-                  <span className="font-normal text-neutral-500">({provider.reviewCount})</span>
-                </span>
-              )}
-              <span className="flex items-center gap-1 text-xs text-neutral-500">
-                <Eye className="h-3.5 w-3.5" />
-                {formatCompactCount(provider.viewCount)} views
-              </span>
-              {provider.bookingCount > 0 && (
-                <span className="text-xs font-medium text-neutral-600">
-                  {formatCompactCount(provider.bookingCount)} bookings
-                </span>
-              )}
-              {recency && (
-                <span className="flex items-center gap-1 text-xs font-medium text-green-700">
-                  <Clock className="h-3 w-3" />
-                  {recency}
-                </span>
-              )}
-              <span className="flex items-center gap-1 text-xs text-neutral-500">
-                <span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${
-                    provider.ratesNegotiable ? 'bg-green-500' : 'bg-neutral-400'
-                  }`}
-                />
-                {provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}
-              </span>
             </div>
           </div>
 
-          {/* Tab bar: Instagram-style */}
-          <div className="mt-3 flex border-b border-neutral-100 px-4">
+          {/* TikTok-style tab bar: icons */}
+          <div className="mt-3 flex border-b border-neutral-100">
             {(
               [
-                { value: 'services', label: 'Services' },
-                { value: 'rates', label: 'Rates' },
-                { value: 'reviews', label: `Reviews${provider.reviewCount > 0 ? ` (${provider.reviewCount})` : ''}` },
+                { value: 'posts', icon: LayoutGrid, label: 'Posts' },
+                { value: 'services', icon: ListChecks, label: 'Services' },
+                { value: 'rates', icon: Tag, label: 'Rates' },
+                { value: 'reviews', icon: Star, label: 'Reviews' },
               ] as const
-            ).map(({ value, label }) => (
+            ).map(({ value, icon: Icon, label }) => (
               <button
                 key={value}
                 onClick={() => setActiveTab(value)}
-                className={`relative flex-1 py-2.5 text-sm font-semibold transition-colors ${
-                  activeTab === value ? 'text-charcoal' : 'text-neutral-400'
+                aria-label={label}
+                className={`relative flex flex-1 items-center justify-center py-2.5 transition-colors ${
+                  activeTab === value ? 'text-charcoal' : 'text-neutral-300'
                 }`}
               >
-                {label}
+                <Icon className="h-5 w-5" />
                 {activeTab === value && (
-                  <span className="absolute inset-x-8 bottom-0 h-0.5 rounded-full bg-primary" />
+                  <span className="absolute inset-x-10 bottom-0 h-0.5 rounded-full bg-charcoal" />
                 )}
               </button>
             ))}
@@ -509,6 +463,37 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
 
           {/* Tab content */}
           <div className="px-4 py-3">
+            {activeTab === 'posts' && (
+              <div className="grid grid-cols-3 gap-1">
+                {slides.map((slide, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setLightbox(i)}
+                    className="relative aspect-[3/4] overflow-hidden bg-neutral-100"
+                  >
+                    {slide.kind === 'photo' ? (
+                      <img
+                        src={slide.src}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        draggable={false}
+                      />
+                    ) : (
+                      <VideoSlide src={slide.src} active={false} />
+                    )}
+                    <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-semibold text-white drop-shadow">
+                      <Play className="h-2.5 w-2.5 fill-white" />
+                      {formatCompactCount(Math.max(1, Math.round(provider.viewCount / Math.max(1, totalSlides))))}
+                    </span>
+                    {slide.kind === 'video' && (
+                      <span className="absolute right-1 top-1 rounded bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white">
+                        VIDEO
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
             {activeTab === 'services' && (
               <ServiceChips services={provider.services} />
             )}
@@ -572,41 +557,52 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           <div className="h-2" />
         </div>
 
-        {/* Sticky action footer */}
-        <div className="shrink-0 border-t border-neutral-100 bg-white/95 p-3 backdrop-blur">
-          <button
-            onClick={() => onRequestConnection(provider)}
-            className="w-full rounded-2xl bg-primary py-3.5 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-[0.99]"
-          >
-            Request connection
-            {connectionFee !== null && (
-              <span className="mt-0.5 block text-xs font-normal text-white/85">
-                {formatCompactPrice(connectionFee)} connection fee
-              </span>
-            )}
-          </button>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => onVoiceCall(provider)}
-              disabled={voiceDisabled}
-              title={voiceNote}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-charcoal transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200 disabled:hover:text-charcoal"
-            >
-              <Phone className="h-4 w-4" />
-              Voice call
-            </button>
-            <button
-              onClick={() => onVideoCall(provider)}
-              disabled={videoDisabled}
-              title={videoNote}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-charcoal transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200 disabled:hover:text-charcoal"
-            >
-              <Video className="h-4 w-4" />
-              Video call
-            </button>
-          </div>
-        </div>
       </div>
+
+      {/* Lightbox: fullscreen viewer for grid taps */}
+      {lightbox !== null && slides[lightbox] && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/95"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            aria-label="Close"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
+            {slides[lightbox].kind === 'photo' ? (
+              <img
+                src={slides[lightbox].src}
+                alt=""
+                className="max-h-[80vh] w-full rounded-2xl object-contain"
+                draggable={false}
+              />
+            ) : (
+              <VideoSlide src={slides[lightbox].src} active={true} />
+            )}
+          </div>
+          {totalSlides > 1 && (
+            <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + totalSlides) % totalSlides); }}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+                aria-label="Previous"
+              >
+                <ChevronUp className="h-5 w-5 -rotate-90" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % totalSlides); }}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+                aria-label="Next"
+              >
+                <ChevronUp className="h-5 w-5 rotate-90" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
