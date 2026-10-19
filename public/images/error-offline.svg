@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="e-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDF9F6"/>
+      <stop offset="1" stop-color="#F5EDE6"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" rx="24" fill="url(#e-bg)"/>
+  <g transform="translate(200,108)">
+    <circle r="52" fill="#AC244D" opacity="0.08"/>
+    <circle r="38" fill="none" stroke="#AC244D" stroke-width="5" opacity="0.55"/>
+    <path d="M -14 6 L -4 16 L 16 -6" fill="none" stroke="#AC244D" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85" transform="rotate(45) translate(0,-2)"/>
+    <path d="M -52 -52 L 52 52 M 52 -52 L -52 52" stroke="#AC244D" stroke-width="0" />
+    <!-- signal waves -->
+    <path d="M -22 -30 A 40 40 0 0 1 22 -30" fill="none" stroke="#C9A84C" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+    <path d="M -32 -44 A 58 58 0 0 1 32 -44" fill="none" stroke="#C9A84C" stroke-width="5" stroke-linecap="round" opacity="0.45"/>
+  </g>
+  <text x="200" y="196" font-family="Georgia, serif" font-size="26" font-weight="bold" fill="#1A1A1A" text-anchor="middle">You're offline</text>
+  <text x="200" y="226" font-family="Inter, system-ui, sans-serif" font-size="15" fill="#6B7280" text-anchor="middle">Check your connection and try again.</text>
+  <text x="200" y="262" font-family="Georgia, serif" font-size="14" font-style="italic" fill="#AC244D" text-anchor="middle">Intima</text>
+</svg>
