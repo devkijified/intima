@@ -60,11 +60,15 @@ export function ProviderSheet({
     };
   }, []);
 
-  // Reset tab and photo when switching providers.
+  // TikTok-style video refs (declared early so the reset effect can clear them).
+  const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+
+  // Reset tab, slide, and video refs when switching providers.
   useEffect(() => {
     setActiveTab('services');
     setPhotoIndex(0);
-    carouselRef.current?.scrollTo({ left: 0 });
+    videoRefs.current = [];
+    carouselRef.current?.scrollTo({ top: 0 });
   }, [provider?.id]);
 
   // Load reviews: real rows for DB providers, deterministic mocks for previews.
@@ -159,17 +163,21 @@ export function ProviderSheet({
   };
 
   // TikTok-style: videos autoplay when their slide is active, pause otherwise.
-  const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   useEffect(() => {
-    videoRefs.current.forEach((v, i) => {
-      if (!v) return;
-      const slideIndex = photos.length + i;
-      if (slideIndex === photoIndex) {
-        v.play().catch(() => {});
-      } else {
-        v.pause();
-      }
-    });
+    try {
+      videoRefs.current.forEach((v, i) => {
+        if (!v || typeof v.play !== 'function') return;
+        const slideIndex = photos.length + i;
+        if (slideIndex === photoIndex) {
+          const p = v.play();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } else if (typeof v.pause === 'function') {
+          v.pause();
+        }
+      });
+    } catch {
+      /* autoplay is best-effort */
+    }
   }, [photoIndex, photos.length]);
 
   return (
