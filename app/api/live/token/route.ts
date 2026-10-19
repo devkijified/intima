@@ -1,64 +1,87 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
+import { AccessToken } from 'livekit-server-sdk';
+import { createClient } from '@/lib/supabase/server';
 
-export async function POST(request: Request) {
+/**
+ * POST /api/live/token
+ * Mints a LiveKit access token. Body: { sessionId, role: 'publisher' | 'viewer' }.
+ *
+ * - Publisher: must own the live session and be a provider.
+ * - Viewer: session must be live; if the session is paid (price_ngn > 0),
+ *   the viewer must hold an active paid connection OR be the host.
+ * The API secret never leaves the server.
+ */
+export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
 
-    const body = await request.json()
-    const { sessionId } = body
+    const { sessionId, role } = await req.json();
+    if (!sessionId || !['publisher', 'viewer'].includes(role)) {
+      return NextResponse.json({ error: 'sessionId and role required' }, { status: 400 });
+    }
 
-    // Verify the user owns this live session
-    const { data: sessionData, error: sessionError } = await supabase
+    const { data: session } = await supabase
       .from('live_sessions')
-      .select(`
-        *,
-        model_profiles (
-          user_id
-        )
-      `)
+      .select('id, provider_id, status, is_public, price_ngn, livekit_room')
       .eq('id', sessionId)
-      .single()
+      .single();
 
-    if (sessionError || !sessionData) {
-      return NextResponse.json(
-        { error: 'Live session not found' },
-        { status: 404 }
-      )
+    if (!session || session.status !== 'live') {
+      return NextResponse.json({ error: 'Stream is not live' }, { status: 404 });
     }
 
-    // Check if user owns this stream
-    if (sessionData.model_profiles?.user_id !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const roomName = session.livekit_room || `intima-live-${session.id}`;
+    const isHost = session.provider_id === user.id;
+
+    if (role === 'publisher') {
+      if (!isHost) {
+        return NextResponse.json({ error: 'Only the host can publish' }, { status: 403 });
+      }
+    } else {
+      // Paid room gate: host always in; others need an active connection.
+      if (!isHost && !session.is_public && (session.price_ngn ?? 0) > 0) {
+        const { data: conn } = await supabase
+          .from('connections')
+          .select('id')
+          .eq('client_id', user.id)
+          .eq('provider_id', session.provider_id)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle();
+        if (!conn) {
+          return NextResponse.json({ error: 'This is a paid stream' }, { status: 402 });
+        }
+      }
     }
 
-    // Generate a token for the stream (simplified for now)
-    // In production, you'd use Mux or similar service
-    const token = `token_${Date.now()}_${sessionId}`
+    const at = new AccessToken(
+      process.env.LIVEKIT_API_KEY!,
+      process.env.LIVEKIT_API_SECRET!,
+      {
+        identity: user.id,
+        name: user.id.slice(0, 8),
+        ttl: role === 'publisher' ? '4h' : '2h',
+      }
+    );
+    at.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: role === 'publisher',
+      canSubscribe: true,
+      canPublishData: true,
+    });
 
     return NextResponse.json({
-      success: true,
-      token: token,
-      streamKey: sessionData.stream_key,
-      streamUrl: sessionData.stream_url,
-      expiresIn: 3600, // 1 hour
-    })
-  } catch (error) {
-    console.error('Error generating token:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+      token: await at.toJwt(),
+      url: process.env.LIVEKIT_URL,
+      room: roomName,
+    });
+  } catch (e) {
+    console.error('[live/token]', e);
+    return NextResponse.json({ error: 'Token mint failed' }, { status: 500 });
   }
 }
