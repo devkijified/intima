@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2 } from 'lucide-react'
+import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
+  Banknote} from 'lucide-react'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 export default function DashboardPage() {
@@ -244,6 +245,10 @@ export default function DashboardPage() {
                 <Link href="/wallet" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
                   <span className="text-sm font-medium">Wallet & Payouts</span>
                   <Wallet className="h-4 w-4 text-[#AC244D]" />
+                </Link>
+                <Link href="/earnings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                  <span className="text-sm font-medium">Gift Earnings & Cash Out</span>
+                  <Banknote className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
