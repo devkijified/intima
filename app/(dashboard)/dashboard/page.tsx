@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2 } from 'lucide-react'
+import { formatCompactCount } from '@/lib/utils/helpers'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -15,7 +16,6 @@ export default function DashboardPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [userName, setUserName] = useState('')
   const [userRole, setUserRole] = useState<string>('client')
-  const [modelId, setModelId] = useState<string | null>(null)
   const [isAvailable, setIsAvailable] = useState(true)
   const supabase = createClient()
 
@@ -27,101 +27,62 @@ export default function DashboardPage() {
         return
       }
 
-      const metaRole = user.user_metadata?.role || user.app_metadata?.role
-      const metaName = user.user_metadata?.full_name
-
-      let role = metaRole || 'client'
-      let name = metaName || user.email?.split('@')[0] || 'Member'
-
-      // 1. Check or create the parent record in public.profiles first (satisfies foreign key)
-      let { data: profile } = await supabase
+      // Real tables: profiles (role, display_name, view_count),
+      // provider_presence (is_available), connections, reviews.
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name, role')
+        .select('display_name, role, view_count')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (!profile) {
-        const { data: newProfile } = await supabase
-          .from('profiles')
-          .upsert([
-            {
-              id: user.id,
-              full_name: name,
-              role: role,
-              is_active: true,
-            }
-          ], { onConflict: 'id' })
-          .select('full_name, role')
-          .maybeSingle()
-
-        if (newProfile) profile = newProfile
-      }
-
-      if (profile) {
-        if (profile.full_name) name = profile.full_name
-        if (profile.role) role = profile.role
-      }
+      const role = profile?.role ?? user.user_metadata?.role ?? 'client'
+      const name =
+        profile?.display_name ||
+        user.user_metadata?.full_name ||
+        user.email?.split('@')[0] ||
+        'Member'
 
       setUserRole(role)
       setUserName(name)
 
       if (role === 'model') {
-        // 2. Fetch existing model profile safely
-        let { data: model } = await supabase
-          .from('model_profiles')
-          .select('id, view_count, is_available')
-          .eq('profile_id', user.id)
+        // Availability lives in provider_presence.
+        const { data: presence } = await supabase
+          .from('provider_presence')
+          .select('is_available')
+          .eq('provider_id', user.id)
           .maybeSingle()
+        setIsAvailable(presence?.is_available ?? true)
 
-        // 3. If companion record doesn't exist yet, insert it safely
-        if (!model) {
-          const { data: newModel } = await supabase
-            .from('model_profiles')
-            .upsert([
-              {
-                profile_id: user.id,
-                display_name: name,
-                city: 'Lagos',
-                is_available: true,
-              }
-            ], { onConflict: 'profile_id' })
-            .select('id, view_count, is_available')
-            .maybeSingle()
-
-          if (newModel) model = newModel
-        }
-
-        if (model) {
-          setModelId(model.id)
-          setIsAvailable(model.is_available ?? true)
-
-          const { count: reviewsCount } = await supabase
+        // Traction stats: views, reviews, active connections.
+        const [{ count: reviewsCount }, { count: bookingsCount }] = await Promise.all([
+          supabase
             .from('reviews')
             .select('*', { count: 'exact', head: true })
-            .eq('model_id', model.id)
-
-          const { count: bookingsCount } = await supabase
-            .from('bookings')
+            .eq('provider_id', user.id),
+          supabase
+            .from('connections')
             .select('*', { count: 'exact', head: true })
-            .eq('model_id', model.id)
-            .eq('status', 'pending')
+            .eq('provider_id', user.id)
+            .eq('status', 'active'),
+        ])
 
-          setStats({
-            profileViews: model.view_count || 0,
-            reviews: reviewsCount || 0,
-            bookings: bookingsCount || 0,
-          })
-        }
+        setStats({
+          profileViews: profile?.view_count ?? 0,
+          reviews: reviewsCount ?? 0,
+          bookings: bookingsCount ?? 0,
+        })
       } else {
         const { count: clientBookingsCount } = await supabase
-          .from('bookings')
+          .from('connections')
           .select('*', { count: 'exact', head: true })
           .eq('client_id', user.id)
+          .eq('status', 'active')
 
         setStats({
           profileViews: 0,
           reviews: 0,
-          bookings: clientBookingsCount || 0,
+          bookings: clientBookingsCount ?? 0,
         })
       }
 
@@ -132,19 +93,19 @@ export default function DashboardPage() {
   }, [supabase])
 
   const handleToggleAvailability = async () => {
-    if (!modelId) {
-      alert('Model profile reference is missing. Please refresh the page.')
-      return
-    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
     const newStatus = !isAvailable
     setUpdatingStatus(true)
     setIsAvailable(newStatus)
 
     const { error } = await supabase
-      .from('model_profiles')
-      .update({ is_available: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', modelId)
+      .from('provider_presence')
+      .upsert(
+        { provider_id: user.id, is_available: newStatus, updated_at: new Date().toISOString() },
+        { onConflict: 'provider_id' }
+      )
 
     if (error) {
       console.error('Failed to update availability status:', error.message)
@@ -169,7 +130,7 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 font-sans">
-      
+
       {/* Top Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-neutral-200/80 pb-6 gap-4">
         <div>
@@ -191,7 +152,7 @@ export default function DashboardPage() {
           {isModel ? (
             <div className="flex items-center bg-white border border-neutral-200/85 rounded-full px-4 py-2 shadow-xs">
               <span className="text-xs font-medium text-neutral-600 mr-3">Status:</span>
-              <button 
+              <button
                 onClick={handleToggleAvailability}
                 disabled={updatingStatus}
                 className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
@@ -207,8 +168,8 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : (
-            <Link 
-              href="/models/browse" 
+            <Link
+              href="/"
               className="inline-flex items-center justify-center bg-[#AC244D] hover:bg-[#8F1D40] text-white text-sm font-medium px-5 py-2.5 rounded-full transition-all shadow-xs"
             >
               Browse Companions
@@ -227,7 +188,7 @@ export default function DashboardPage() {
                 <span className="text-xs font-medium uppercase tracking-wider">Profile Views</span>
                 <Eye className="h-4 w-4 text-[#AC244D]" />
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.profileViews}</p>
+              <p className="text-3xl font-serif text-neutral-900">{formatCompactCount(stats.profileViews)}</p>
               <p className="text-xs text-neutral-400 mt-1">Total public directory visits</p>
             </div>
 
@@ -242,11 +203,11 @@ export default function DashboardPage() {
 
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Pending Bookings</span>
+                <span className="text-xs font-medium uppercase tracking-wider">Active Connections</span>
                 <Calendar className="h-4 w-4 text-[#AC244D]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
-              <p className="text-xs text-neutral-400 mt-1">Requires your response</p>
+              <p className="text-xs text-neutral-400 mt-1">Clients you are chatting with</p>
             </div>
           </div>
 
@@ -286,11 +247,11 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Bookings</span>
+                <span className="text-xs font-medium uppercase tracking-wider">Connections</span>
                 <Calendar className="h-4 w-4 text-[#AC244D]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
-              <p className="text-xs text-neutral-400 mt-1">Confirmed appointments</p>
+              <p className="text-xs text-neutral-400 mt-1">Active companion chats</p>
             </div>
 
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
@@ -316,7 +277,7 @@ export default function DashboardPage() {
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Explore Intima</h3>
               <div className="space-y-2">
-                <Link href="/models/browse" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
                   <span className="text-sm font-medium">Browse All Verified Companions</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
