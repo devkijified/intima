@@ -445,9 +445,18 @@ export default function IntimaMap() {
     <div className="relative h-screen w-full overflow-hidden bg-[#111118]" style={{ height: '100dvh' }}>
       <div ref={containerRef} className="absolute inset-0" />
       {!mapReady && !mapFailed && !mapStalled && view === 'map' && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#111118] text-neutral-400">
-          <Loader2 className="h-8 w-8 animate-spin text-[#AC244D]" />
-          <p className="text-sm">Loading the map…</p>
+        <div className="absolute inset-0 z-10 overflow-hidden bg-[#111118]">
+          {/* Shimmer sweep: guests see intentional loading, not a bug. */}
+          <div className="map-shimmer absolute inset-0" />
+          {/* Pulsing pin placeholders where providers will appear. */}
+          <div className="absolute left-[22%] top-[38%] h-12 w-12 animate-ping rounded-full bg-[#AC244D]/25" />
+          <div className="absolute left-[64%] top-[30%] h-12 w-12 animate-ping rounded-full bg-[#AC244D]/25 [animation-delay:0.4s]" />
+          <div className="absolute left-[48%] top-[62%] h-12 w-12 animate-ping rounded-full bg-[#AC244D]/25 [animation-delay:0.8s]" />
+          <div className="absolute left-[78%] top-[55%] h-12 w-12 animate-ping rounded-full bg-[#AC244D]/25 [animation-delay:1.2s]" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <p className="font-display text-2xl font-semibold text-white/90">Intima</p>
+            <p className="text-sm text-neutral-400">Finding companions near you…</p>
+          </div>
         </div>
       )}
       {mapStalled && !mapReady && !mapFailed && view === 'map' && (
