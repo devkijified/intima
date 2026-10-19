@@ -37,10 +37,17 @@ export interface MockProvider {
   /** Catalog ids from lib/services.ts. Deliberately varied: not everyone
       offers video calls or threesomes, and one provider lists nothing. */
   services: string[];
+  /** ISO timestamp for the recency chip. Deliberately varied. */
+  lastActiveAt: string;
 }
 
 function jitter(base: number, spread = 0.012): number {
   return base + (Math.random() - 0.5) * 2 * spread;
+}
+
+/** ISO timestamp N hours ago, for varied recency chips in mocks. */
+function hoursAgo(h: number): string {
+  return new Date(Date.now() - h * 3_600_000).toISOString();
 }
 
 interface PinSeed {
@@ -91,6 +98,21 @@ const SEEDS: PinSeed[] = [
     services: ['voice-call', 'massage', 'party', 'threesome-ffm'] },
 ];
 
+const RECENCY_HOURS: Record<string, number> = {
+  'mock-01': 2,
+  'mock-02': 5,
+  'mock-03': 26,
+  'mock-04': 70,
+  'mock-05': 6,
+  'mock-06': 30,
+  'mock-07': 1,
+  'mock-08': 96,
+  'mock-09': 8,
+  'mock-10': 50,
+  'mock-11': 12,
+  'mock-12': 55,
+};
+
 export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   id: s.id,
   displayName: s.displayName,
@@ -110,4 +132,5 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   avatar: `https://i.pravatar.cc/150?img=${s.img}`,
   userId: null,
   services: s.services,
+  lastActiveAt: hoursAgo(RECENCY_HOURS[s.id] ?? 24),
 }));

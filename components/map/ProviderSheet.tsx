@@ -1,8 +1,10 @@
 'use client';
 
-import { BadgeCheck, MapPin, Phone, Star, Video, X } from 'lucide-react';
+import { BadgeCheck, Clock, MapPin, Phone, Star, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
+import { PhotoWatermark } from '@/components/media/PhotoWatermark';
+import { formatRecency } from '@/lib/utils/recency';
 import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderSheetProps {
@@ -34,6 +36,7 @@ export function ProviderSheet({
 
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
+  const recency = formatRecency(provider.lastActiveAt);
 
   return (
     <>
@@ -80,6 +83,7 @@ export function ProviderSheet({
                     Available now
                   </span>
                 )}
+                <PhotoWatermark />
               </div>
 
               <div className="p-4">
@@ -92,6 +96,12 @@ export function ProviderSheet({
                       <MapPin className="h-3.5 w-3.5" />
                       {provider.area}, {provider.city}
                     </p>
+                    {recency && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-green-700">
+                        <Clock className="h-3 w-3" />
+                        {recency}
+                      </p>
+                    )}
                   </div>
                   {provider.rating !== null && (
                     <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#C9A84C]/15 px-2.5 py-1">

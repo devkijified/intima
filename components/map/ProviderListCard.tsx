@@ -2,6 +2,8 @@
 
 import { BadgeCheck, Star } from 'lucide-react';
 import { formatPrice } from '@/lib/utils/helpers';
+import { formatRecency } from '@/lib/utils/recency';
+import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderListCardProps {
@@ -18,6 +20,7 @@ interface ProviderListCardProps {
 export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) {
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
+  const recency = formatRecency(provider.lastActiveAt);
 
   return (
     <li>
@@ -45,6 +48,7 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
               Available
             </span>
           )}
+          <PhotoWatermark />
         </div>
         <div className="p-3">
           <div className="flex items-center justify-between gap-2">
@@ -61,6 +65,12 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
           <p className="mt-0.5 truncate text-xs text-neutral-500">
             {provider.area}, {provider.city}
           </p>
+          {recency && (
+            <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-green-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              {recency}
+            </p>
+          )}
           {provider.rateShortTime !== null ? (
             <p className="mt-1 text-sm font-bold text-[#AC244D]">
               {formatPrice(provider.rateShortTime)}{' '}
