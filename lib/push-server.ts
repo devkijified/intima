@@ -113,4 +113,3 @@ export async function notifyUsers(opts: NotifyOpts): Promise<void> {
   }
 }
 
-// Webhook re-fire: no functional change.
