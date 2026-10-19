@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Check,
+  Phone,
   X,
   Loader2,
   MapPin,
@@ -39,6 +40,7 @@ interface ProviderForm {
   rateWeekend: string
   services: string[]
   ratesNegotiable: boolean
+  whatsappNumber: string
   galleryUrls: string
   showOnMap: boolean
   isAvailable: boolean
@@ -53,6 +55,7 @@ const EMPTY_FORM: ProviderForm = {
   rateWeekend: '',
   services: [],
   ratesNegotiable: true,
+    whatsappNumber: '',
   galleryUrls: '',
   showOnMap: true,
   isAvailable: true,
@@ -90,7 +93,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls'
+          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, whatsapp_number'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -114,6 +117,7 @@ export default function ProfilePage() {
           rateWeekend: profile?.rate_weekend_ngn?.toString() ?? '',
           services: profile?.services ?? [],
           ratesNegotiable: profile?.rates_negotiable ?? true,
+    whatsappNumber: profile?.whatsapp_number ?? '',
           galleryUrls: (profile?.gallery_urls ?? []).join('\n'),
           showOnMap: presence?.show_on_map ?? true,
           isAvailable: presence?.is_available ?? true,
@@ -175,6 +179,7 @@ export default function ProfilePage() {
           rate_weekend_ngn: parseRate(form.rateWeekend),
           services: form.services,
           rates_negotiable: form.ratesNegotiable,
+          whatsapp_number: form.whatsappNumber.trim() || null,
           gallery_urls: gallery,
         },
         { onConflict: 'id' }
@@ -360,6 +365,27 @@ export default function ProfilePage() {
                   jittered area point within the city.
                 </p>
               </div>
+            </div>
+          </div>
+
+
+          {/* ---- WhatsApp ---- */}
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
+            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+              <Phone className="h-4 w-4 text-[#128C4B]" /> WhatsApp
+            </h2>
+            <div>
+              <label className={labelCls}>WhatsApp number</label>
+              <input
+                className={inputCls}
+                inputMode="tel"
+                value={form.whatsappNumber}
+                onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })}
+                placeholder="e.g. 2348012345678"
+              />
+              <p className="mt-1.5 text-xs text-neutral-500">
+                Only clients with an active (paid) connection can see this. Never shown on your public profile or the map.
+              </p>
             </div>
           </div>
 

@@ -232,26 +232,13 @@ export default function BookingsPage() {
               {c.status === 'active' && (
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-100 pt-4">
                   <Link
-                    href="/"
+                    href={`/messages/${c.id}`}
                     className="inline-flex items-center gap-1.5 rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
                   >
                     <MessageCircle className="h-4 w-4" />
                     Open chat
                   </Link>
-                  <Link
-                    href="/"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 transition-all hover:bg-neutral-50"
-                  >
-                    <Phone className="h-4 w-4" />
-                    Voice call
-                  </Link>
-                  <Link
-                    href="/"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 transition-all hover:bg-neutral-50"
-                  >
-                    <Video className="h-4 w-4" />
-                    Video call
-                  </Link>
+
                 </div>
               )}
               {c.status === 'pending_payment' && !isModel && (
