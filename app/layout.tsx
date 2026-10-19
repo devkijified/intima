@@ -4,6 +4,7 @@ import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 
 // One pairing for the whole product: Fraunces for display (wordmark,
 // headings, prices, sheet titles) and Inter for everything else. Loaded
@@ -57,6 +58,7 @@ export default function RootLayout({
         <AgeGate>
           <CallProvider>{children}</CallProvider>
           <InstallPrompt />
+          <ConnectionMonitor />
         </AgeGate>
         <script
           dangerouslySetInnerHTML={{
