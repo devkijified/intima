@@ -9,6 +9,7 @@ import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, Shield
   Banknote,} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import PushAutoSubscribe from '@/components/PushAutoSubscribe'
 
 export default function DashboardLayout({
   children,
@@ -63,7 +64,11 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
-      <header className="border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md sticky top-0 z-50">
+      <PushAutoSubscribe />
+      <header
+        className="border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md sticky top-0 z-50"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3.5">
           <div className="flex items-center justify-between">
             <Link href="/dashboard" className="text-2xl font-serif tracking-tight text-[#AC244D]">
@@ -214,7 +219,10 @@ export default function DashboardLayout({
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden">
+      <nav
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
         <div className="grid grid-cols-5 px-2 py-1.5">
           {[
             { href: '/dashboard', icon: LayoutDashboard, label: 'Home', active: pathname === '/dashboard' },
