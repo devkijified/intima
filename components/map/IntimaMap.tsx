@@ -548,7 +548,7 @@ export default function IntimaMap() {
   const showList = view === 'list' || mapFailed;
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-[#111118]" style={{ height: '100dvh' }}>
+    <div className="fixed inset-0 w-full overflow-hidden bg-[#111118]" style={{ height: '100dvh' }}>
       <div
         ref={containerRef}
         className={`absolute inset-0 ${usingRaster ? 'map-raster-dark' : ''}`}
@@ -598,7 +598,7 @@ export default function IntimaMap() {
       )}
 
       {/* Slim floating header: wordmark, city select, auth actions. No marketing copy. */}
-      <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-3 sm:px-5 sm:pt-4">
+      <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-[max(1rem,env(safe-area-inset-top))] sm:px-5 sm:pt-[max(1.25rem,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5 rounded-full bg-black/55 py-1.5 pl-3 pr-1.5 backdrop-blur-md ring-1 ring-white/10 sm:gap-2 sm:pl-4">
             <span className="font-display text-lg font-semibold tracking-tight text-white sm:text-xl">Intima</span>
@@ -747,7 +747,7 @@ export default function IntimaMap() {
         </div>
       </div>
       {/* Story tray: WhatsApp Status-style, below the header. */}
-      <div className="absolute left-0 right-0 top-[68px] z-30 sm:top-[76px]">
+      <div className="absolute left-0 right-0 top-[calc(68px+env(safe-area-inset-top))] z-30 sm:top-[calc(76px+env(safe-area-inset-top))]">
         <StoryTray />
       </div>
 
@@ -758,7 +758,7 @@ export default function IntimaMap() {
 
       {/* Legend */}
       {mapReady && !mapFailed && view === 'map' && (
-        <div className="absolute bottom-4 left-3 z-10 rounded-xl bg-black/60 px-3 py-2 text-xs text-white ring-1 ring-white/10 backdrop-blur-sm">
+        <div className="absolute left-3 z-10 rounded-xl bg-black/60 px-3 py-2 text-xs text-white ring-1 ring-white/10 backdrop-blur-sm" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
           <p className="flex items-center gap-2">
             <BadgeCheck className="h-3.5 w-3.5" />
             Verified
