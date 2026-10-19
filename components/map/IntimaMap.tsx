@@ -58,27 +58,35 @@ interface MapLibreLib {
 }
 
 /**
- * maplibre-gl 3.x ships its main entry as a UMD bundle, so a dynamic
- * import() resolves the exports under `.default` instead of as named
- * exports (bundler-dependent). Resolve whichever shape we actually got,
- * or report exactly what the namespace contained.
+ * maplibre-gl 3.x ships its main entry as a UMD bundle, and the bundler's
+ * interop shape for dynamic import() is not stable: we have seen the
+ * namespace arrive as { default } where default itself needed unwrapping.
+ * Try every plausible nesting, validate the constructors we actually use,
+ * and report the full structure when nothing validates so the failure is
+ * debuggable from the phone alone.
  */
 async function loadMapLibre(): Promise<{ lib: MapLibreLib | null; keys: string }> {
   const ns = (await import('maplibre-gl')) as unknown as Record<string, unknown>;
-  const keys = Object.keys(ns).join(',');
-  const candidate =
-    typeof ns.Map === 'function'
-      ? ns
-      : typeof ns.default === 'object' && ns.default !== null
-        ? (ns.default as Record<string, unknown>)
-        : null;
-  if (
-    candidate &&
-    typeof candidate.Map === 'function' &&
-    typeof candidate.Marker === 'function'
-  ) {
-    return { lib: candidate as unknown as MapLibreLib, keys };
+  const shapes: Array<{ label: string; value: unknown }> = [
+    { label: 'ns', value: ns },
+    { label: 'ns.default', value: ns?.default },
+    { label: 'ns.default.default', value: (ns?.default as any)?.default },
+  ];
+  for (const shape of shapes) {
+    const v = shape.value as Record<string, unknown> | null;
+    if (v && typeof v.Map === 'function' && typeof v.Marker === 'function') {
+      return { lib: v as unknown as MapLibreLib, keys: `ok:${shape.label}` };
+    }
   }
+  const describe = (v: unknown): string => {
+    if (v === null || v === undefined) return String(v);
+    if (typeof v === 'function') return 'function';
+    if (typeof v !== 'object') return typeof v;
+    const o = v as Record<string, unknown>;
+    const ks = Object.keys(o);
+    return `{${ks.slice(0, 6).join(',')}${ks.length > 6 ? ',…' : ''}} Map=${typeof o.Map} Marker=${typeof o.Marker}`;
+  };
+  const keys = shapes.map((s) => `${s.label}=${describe(s.value)}`).join(' | ');
   return { lib: null, keys };
 }
 

@@ -103,7 +103,7 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     rateOvernight: row.rate_overnight_ngn,
     rateWeekend: row.rate_weekend_ngn,
     services: row.services ?? [],
-    avatar: row.avatar_url || `https://i.pravatar.cc/300?img=${hashToImg(row.provider_id)}`,
+    avatar: row.avatar_url || `https://i.pravatar.cc/600?img=${hashToImg(row.provider_id)}`,
     userId: row.provider_id,
     lastActiveAt: row.last_active_at,
   };

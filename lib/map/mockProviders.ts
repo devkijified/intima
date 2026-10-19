@@ -129,7 +129,7 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   rateShortTime: s.rateShortTime,
   rateOvernight: s.rateOvernight,
   rateWeekend: s.rateWeekend,
-  avatar: `https://i.pravatar.cc/150?img=${s.img}`,
+  avatar: `https://i.pravatar.cc/600?img=${s.img}`,
   userId: null,
   services: s.services,
   lastActiveAt: hoursAgo(RECENCY_HOURS[s.id] ?? 24),
