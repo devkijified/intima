@@ -11,6 +11,7 @@ export default function DashboardPage() {
     profileViews: 0,
     reviews: 0,
     bookings: 0,
+    saved: 0,
   })
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -71,6 +72,7 @@ export default function DashboardPage() {
           profileViews: profile?.view_count ?? 0,
           reviews: reviewsCount ?? 0,
           bookings: bookingsCount ?? 0,
+          saved: 0,
         })
       } else {
         const { count: clientBookingsCount } = await supabase
@@ -79,10 +81,16 @@ export default function DashboardPage() {
           .eq('client_id', user.id)
           .eq('status', 'active')
 
+        const { count: savedCount } = await supabase
+          .from('favorites')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+
         setStats({
           profileViews: 0,
           reviews: 0,
           bookings: clientBookingsCount ?? 0,
+          saved: savedCount ?? 0,
         })
       }
 
@@ -268,7 +276,7 @@ export default function DashboardPage() {
                 <span className="text-xs font-medium uppercase tracking-wider">Saved</span>
                 <Sparkles className="h-4 w-4 text-[#AC244D]" />
               </div>
-              <p className="text-3xl font-serif text-neutral-900">0</p>
+              <p className="text-3xl font-serif text-neutral-900">{stats.saved}</p>
               <p className="text-xs text-neutral-400 mt-1">Favorite companions</p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, MapPin, Phone, Play, Star, Video, X } from 'lucide-react';
+import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, Heart, MapPin, Phone, Play, Star, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
@@ -181,6 +181,48 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
     </div>
   );
 }
+
+  // Favorites: heart toggle, persisted per user.
+  const [isFav, setIsFav] = useState(false);
+  const [favBusy, setFavBusy] = useState(false);
+
+  useEffect(() => {
+    if (!provider) return;
+    setIsFav(false);
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !provider.userId) return;
+        const { data } = await supabase.from('favorites')
+          .select('id').eq('user_id', user.id).eq('provider_id', provider.userId).maybeSingle();
+        setIsFav(!!data);
+      } catch { /* guests see unfilled heart */ }
+    })();
+  }, [provider?.id]);
+
+  const toggleFav = async () => {
+    if (!provider?.userId || favBusy) return;
+    setFavBusy(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = '/signup?next=/';
+        return;
+      }
+      if (isFav) {
+        await supabase.from('favorites')
+          .delete().eq('user_id', user.id).eq('provider_id', provider.userId);
+        setIsFav(false);
+      } else {
+        await supabase.from('favorites')
+          .insert({ user_id: user.id, provider_id: provider.userId });
+        setIsFav(true);
+      }
+    } catch { /* best-effort */ }
+    setFavBusy(false);
+  };
 
   // Load reviews: real rows for DB providers, deterministic mocks for previews.
   // Also bumps the view counter best-effort (traction stat).
@@ -386,7 +428,15 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           {/* Profile header: name, verified, stats */}
           <div className="px-4 pt-3">
             <div className="flex items-center gap-2">
-              <h2 className="font-display text-xl font-semibold text-charcoal">{nameLine}</h2>
+              <h2 className="flex-1 font-display text-xl font-semibold text-charcoal">{nameLine}</h2>
+              <button
+                onClick={toggleFav}
+                disabled={favBusy}
+                aria-label={isFav ? 'Remove from favorites' : 'Save to favorites'}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream active:scale-90"
+              >
+                <Heart className={'h-5 w-5 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
+              </button>
               {provider.verified && (
                 <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                   <BadgeCheck className="h-3.5 w-3.5" />
