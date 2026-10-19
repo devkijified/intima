@@ -30,19 +30,19 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 /**
- * Fallback raster style: Wikimedia OSM tiles (Wikimedia Foundation infra,
- * reachable virtually everywhere) with a dark-mode CSS filter applied to
- * the canvas so it keeps our brand. Used when the CARTO vector style is
- * unreachable. A map that loads beats a prettier map that stays black.
+ * Primary raster style: OpenStreetMap tiles. OSM sends proper CORS headers
+ * (required for WebGL tile rendering) and runs on highly reachable
+ * infrastructure. The dark-mode CSS filter keeps our brand.
+ * A map that loads beats a prettier map that stays black.
  */
-const WIKIMEDIA_RASTER_STYLE = {
+const OSM_RASTER_STYLE = {
   version: 8 as const,
   sources: {
     osm: {
       type: 'raster' as const,
-      tiles: ['https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'],
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
       tileSize: 256,
-      attribution: '© OpenStreetMap contributors | © Wikimedia maps',
+      attribution: '© OpenStreetMap contributors',
     },
   },
   layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
@@ -289,7 +289,7 @@ export default function IntimaMap() {
       if (cancelled || !map || mapRef.current || rasterTried) return;
       rasterTried = true;
       try {
-        map.setStyle(WIKIMEDIA_RASTER_STYLE as any);
+        map.setStyle(OSM_RASTER_STYLE as any);
         setUsingRaster(true);
       } catch {
         // setStyle failed; the stall timer will surface the error card.
@@ -327,7 +327,7 @@ export default function IntimaMap() {
         try {
           map = new lib.Map({
             container: containerRef.current,
-            style: useRasterPrimary ? (WIKIMEDIA_RASTER_STYLE as any) : CARTO_DARK,
+            style: useRasterPrimary ? (OSM_RASTER_STYLE as any) : CARTO_DARK,
             center: LAGOS_CENTER,
             zoom: 11,
             attributionControl: true,
