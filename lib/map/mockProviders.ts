@@ -39,6 +39,8 @@ export interface MockProvider {
   services: string[];
   /** ISO timestamp for the recency chip. Deliberately varied. */
   lastActiveAt: string;
+  /** False = fixed rates, not open to offers. Deliberately varied. */
+  ratesNegotiable: boolean;
 }
 
 function jitter(base: number, spread = 0.012): number {
@@ -113,6 +115,21 @@ const RECENCY_HOURS: Record<string, number> = {
   'mock-12': 55,
 };
 
+const RATES_NEGOTIABLE: Record<string, boolean> = {
+  'mock-01': true,
+  'mock-02': true,
+  'mock-03': false,
+  'mock-04': true,
+  'mock-05': true,
+  'mock-06': true,
+  'mock-07': false,
+  'mock-08': true,
+  'mock-09': true,
+  'mock-10': true,
+  'mock-11': true,
+  'mock-12': false,
+};
+
 export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   id: s.id,
   displayName: s.displayName,
@@ -133,4 +150,5 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   userId: null,
   services: s.services,
   lastActiveAt: hoursAgo(RECENCY_HOURS[s.id] ?? 24),
+  ratesNegotiable: RATES_NEGOTIABLE[s.id] ?? true,
 }));

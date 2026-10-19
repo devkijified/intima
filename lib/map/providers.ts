@@ -36,6 +36,8 @@ export interface MapProvider {
   userId: string | null; // null for mock/preview pins
   /** ISO timestamp of last presence update. Null = unknown, no chip shown. */
   lastActiveAt: string | null;
+  /** False = her rates are fixed, not open to offers. */
+  ratesNegotiable: boolean;
 }
 
 interface MapProviderRow {
@@ -52,6 +54,7 @@ interface MapProviderRow {
   rate_weekend_ngn: number | null;
   services: string[] | null;
   last_active_at: string | null;
+  rates_negotiable: boolean | null;
 }
 
 export function mockToMapProvider(m: MockProvider): MapProvider {
@@ -75,6 +78,7 @@ export function mockToMapProvider(m: MockProvider): MapProvider {
     avatar: m.avatar,
     userId: m.userId,
     lastActiveAt: m.lastActiveAt,
+    ratesNegotiable: m.ratesNegotiable,
   };
 }
 
@@ -106,6 +110,7 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     avatar: row.avatar_url || `https://i.pravatar.cc/600?img=${hashToImg(row.provider_id)}`,
     userId: row.provider_id,
     lastActiveAt: row.last_active_at,
+    ratesNegotiable: row.rates_negotiable !== false,
   };
 }
 
@@ -119,7 +124,7 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at',
+        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable',
       )
       .limit(300);
     if (error) throw error;

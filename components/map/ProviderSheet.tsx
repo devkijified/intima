@@ -1,10 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { BadgeCheck, Clock, MapPin, Phone, Star, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import { formatRecency } from '@/lib/utils/recency';
+import { formatCompactPrice } from '@/lib/utils/helpers';
+import { getConnectionFeeNgn } from '@/lib/settings/platformSettings';
 import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderSheetProps {
@@ -32,11 +35,31 @@ export function ProviderSheet({
   callsDisabledNote,
   showViewProfile,
 }: ProviderSheetProps) {
+  const [connectionFee, setConnectionFee] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    getConnectionFeeNgn().then((fee) => {
+      if (live) setConnectionFee(fee);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   if (!provider) return null;
 
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
   const recency = formatRecency(provider.lastActiveAt);
+  /** Call buttons reflect what she actually offers. If she hasn't listed
+      a call service, the button is disabled with an honest note. */
+  const offersVoice = provider.services.includes('voice-call');
+  const offersVideo = provider.services.includes('video-call');
+  const voiceDisabled = callsDisabled || !offersVoice;
+  const videoDisabled = callsDisabled || !offersVideo;
+  const voiceNote = callsDisabled ? callsDisabledNote : !offersVoice ? 'She doesn\u2019t offer voice calls' : 'Start a voice call';
+  const videoNote = callsDisabled ? callsDisabledNote : !offersVideo ? 'She doesn\u2019t offer video calls' : 'Start a video call';
 
   return (
     <>
@@ -128,6 +151,19 @@ export function ProviderSheet({
                       weekend: provider.rateWeekend,
                     }}
                   />
+                  <p className="mt-1.5 flex items-center gap-1 text-xs text-neutral-500">
+                    {provider.ratesNegotiable ? (
+                      <>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+                        Open to offers on rates
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-400" />
+                        Fixed rates, not negotiable
+                      </>
+                    )}
+                  </p>
                 </div>
                 <p className="mt-2 text-xs text-neutral-500">
                   Area location only, never an exact address
@@ -151,12 +187,17 @@ export function ProviderSheet({
                 className="w-full rounded-2xl bg-primary py-3.5 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-[0.99]"
               >
                 Request connection
+                {connectionFee !== null && (
+                  <span className="mt-0.5 block text-xs font-normal text-white/85">
+                    {formatCompactPrice(connectionFee)} connection fee
+                  </span>
+                )}
               </button>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   onClick={() => onVoiceCall(provider)}
-                  disabled={callsDisabled}
-                  title={callsDisabled ? callsDisabledNote : 'Start a voice call'}
+                  disabled={voiceDisabled}
+                  title={voiceNote}
                   className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-charcoal transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200 disabled:hover:text-charcoal"
                 >
                   <Phone className="h-4 w-4" />
@@ -164,8 +205,8 @@ export function ProviderSheet({
                 </button>
                 <button
                   onClick={() => onVideoCall(provider)}
-                  disabled={callsDisabled}
-                  title={callsDisabled ? callsDisabledNote : 'Start a video call'}
+                  disabled={videoDisabled}
+                  title={videoNote}
                   className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-medium text-charcoal transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-200 disabled:hover:text-charcoal"
                 >
                   <Video className="h-4 w-4" />

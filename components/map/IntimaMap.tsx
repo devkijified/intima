@@ -788,6 +788,8 @@ export default function IntimaMap() {
           providerId={connectionTarget.userId}
           providerName={connectionTarget.displayName}
           providerAvatarUrl={connectionTarget.avatar}
+          ratesNegotiable={connectionTarget.ratesNegotiable}
+          anchorRateNgn={connectionTarget.rateShortTime}
           onClose={() => setConnectionTarget(null)}
           onConnected={() => {
             setConnectionTarget(null);

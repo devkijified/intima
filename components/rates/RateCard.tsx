@@ -1,6 +1,6 @@
 'use client';
 
-import { formatPrice } from '@/lib/utils/helpers';
+import { formatCompactPrice } from '@/lib/utils/helpers';
 
 export interface RateCardRates {
   shortTime: number | null;
@@ -37,8 +37,8 @@ export function RateCard({ rates }: { rates: RateCardRates }) {
               className="min-w-0 rounded-xl bg-white px-1.5 py-2 text-center ring-1 ring-black/5 sm:px-2"
             >
               <p className="truncate text-[10px] text-neutral-500 sm:text-[11px]">{label}</p>
-              <p className="mt-0.5 truncate text-[13px] font-bold text-charcoal sm:text-sm">
-                {formatPrice(rates[key] as number)}
+              <p className="mt-0.5 text-[13px] font-bold text-charcoal sm:text-sm">
+                {formatCompactPrice(rates[key] as number)}
               </p>
             </div>
           ))}

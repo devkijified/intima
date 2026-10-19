@@ -11,6 +11,10 @@ interface RequestConnectionModalProps {
   providerId: string
   providerName: string
   providerAvatarUrl?: string | null
+  /** False = her rates are fixed; no offer input is shown. */
+  ratesNegotiable?: boolean
+  /** Her listed short-time rate, shown as the anchor for offers. */
+  anchorRateNgn?: number | null
   onClose: () => void
   onConnected: () => void
 }
@@ -21,12 +25,16 @@ export function RequestConnectionModal({
   providerId,
   providerName,
   providerAvatarUrl,
+  ratesNegotiable = true,
+  anchorRateNgn = null,
   onClose,
   onConnected,
 }: RequestConnectionModalProps) {
   const [fee, setFee] = useState<number | null>(null)
   const [step, setStep] = useState<Step>('summary')
   const [error, setError] = useState('')
+  /** inDrive-style: client proposes a rate when she is open to offers. */
+  const [proposedRate, setProposedRate] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -70,6 +78,10 @@ export function RequestConnectionModal({
         fee_ngn: fee,
         status: 'active',
         payment_ref: init.reference,
+        proposed_rate_ngn:
+          ratesNegotiable && proposedRate.trim() !== ''
+            ? Math.max(0, parseInt(proposedRate.replace(/[^0-9]/g, ''), 10) || 0)
+            : null,
       })
       if (insertError) throw insertError
 
@@ -154,6 +166,35 @@ export function RequestConnectionModal({
                 Test mode: no real money moves. The live payment rail plugs in here after legal review.
               </p>
             </div>
+
+            {ratesNegotiable ? (
+              <div className="mb-5">
+                <label htmlFor="proposed-rate" className="text-sm font-medium text-charcoal">
+                  Propose your rate <span className="font-normal text-gray-500">(optional)</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-0.5 mb-2">
+                  She is open to offers
+                  {anchorRateNgn !== null && `, her listed short time is ${formatPrice(anchorRateNgn)}`}.
+                  Leave blank to accept her rates.
+                </p>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₦</span>
+                  <input
+                    id="proposed-rate"
+                    type="text"
+                    inputMode="numeric"
+                    value={proposedRate}
+                    onChange={(e) => setProposedRate(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="e.g. 100000"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-9 pr-4 text-charcoal outline-none focus:border-primary focus:bg-white transition-colors"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 text-center mb-5">
+                Her rates are fixed and not open to offers.
+              </p>
+            )}
 
             <button
               onClick={handlePay}
