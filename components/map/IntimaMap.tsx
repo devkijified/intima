@@ -14,13 +14,14 @@ import {
   Loader2,
   Map as MapIcon,
   SearchX,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MAP_CITIES } from '@/lib/map/mockProviders';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
-import { SERVICE_CATALOG } from '@/lib/services';
 import { ProviderSheet } from './ProviderSheet';
+import { FilterSheet } from './FilterSheet';
 import { ProviderListCard, ProviderListSkeleton } from './ProviderListCard';
 import { useCall } from '@/components/calls/CallProvider';
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal';
@@ -28,7 +29,7 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
 
-interface Filters {
+export interface Filters {
   verifiedOnly: boolean;
   availableNow: boolean;
   city: string;
@@ -46,14 +47,6 @@ interface ToastState {
 
 const CHECK_SVG = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 
-/** Budget bands filter pins by the short-time rate. */
-const BUDGET_OPTIONS: Array<{ label: string; value: number | null }> = [
-  { label: 'Any', value: null },
-  { label: '≤ ₦50k', value: 50000 },
-  { label: '≤ ₦100k', value: 100000 },
-  { label: '≤ ₦200k', value: 200000 },
-];
-
 /** Escape for use inside an HTML attribute in the pin markup. */
 function escAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -66,21 +59,23 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
   el.setAttribute('aria-label', `${escAttr(provider.displayName)} in ${escAttr(provider.area)}`);
   el.innerHTML =
     `<div style="position:relative;cursor:pointer;transition:transform .15s ease">` +
-    // Photo fully visible: no blur, no cover overlays. Burgundy ring for every pin.
+    // Photo pin, Instagram-story style: white ring, soft shadow, photo fully visible.
     `<img src="${escAttr(provider.avatar)}" alt="" loading="lazy" ` +
-    `style="width:48px;height:48px;border-radius:9999px;object-fit:cover;background:#222;` +
-    `border:3px solid #AC244D;box-shadow:0 4px 14px rgba(0,0,0,.45)"/>` +
-    // Verified is an explicit icon badge overlapping the pin corner, not a ring color.
+    `style="width:54px;height:54px;border-radius:9999px;object-fit:cover;background:#222;` +
+    `border:2.5px solid #fff;box-shadow:0 4px 14px rgba(0,0,0,.45)"/>` +
+    // Verified is an explicit burgundy badge overlapping the pin corner.
     (provider.verified
-      ? `<span title="Verified" style="position:absolute;top:-5px;right:-5px;width:22px;height:22px;` +
+      ? `<span title="Verified" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;` +
         `border-radius:9999px;background:#AC244D;border:2px solid #fff;` +
         `display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.4)">` +
         CHECK_SVG +
         `</span>`
       : '') +
+    // Available: green dot with a soft pulse ring, top-right.
     (provider.available
-      ? `<span style="position:absolute;bottom:0px;right:0px;width:13px;height:13px;` +
-        `background:#22c55e;border-radius:9999px;border:2px solid #fff"></span>`
+      ? `<span style="position:absolute;top:-1px;right:-1px;width:15px;height:15px;` +
+        `background:#22c55e;border-radius:9999px;border:2.5px solid #fff;` +
+        `box-shadow:0 0 0 3px rgba(34,197,94,.35)"></span>`
       : '') +
     `</div>`;
   el.addEventListener('click', (e) => {
@@ -132,6 +127,7 @@ export default function IntimaMap() {
   const [connectionTarget, setConnectionTarget] = useState<MapProvider | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const showToast = (t: ToastState) => {
     setToast(t);
@@ -276,15 +272,11 @@ export default function IntimaMap() {
   const toggle = (key: 'verifiedOnly' | 'availableNow') =>
     setFilters((f) => ({ ...f, [key]: !f[key] }));
 
-  const toggleService = (id: string) =>
-    setFilters((f) => ({
-      ...f,
-      services: f.services.includes(id)
-        ? f.services.filter((s) => s !== id)
-        : [...f.services, id],
-    }));
-
   const clearFilters = () => setFilters(EMPTY_FILTERS);
+
+  /** Active budget + service filters, shown as a badge on the Filters button. */
+  const sheetFilterCount =
+    (filters.budget !== null ? 1 : 0) + filters.services.length;
 
   const goSignup = () => router.push('/signup?next=/');
 
@@ -411,7 +403,7 @@ export default function IntimaMap() {
           </div>
         </div>
 
-        {/* View toggle + quick filters */}
+        {/* Single filter bar: view toggle, quick toggles, filters sheet. */}
         <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {!mapFailed && (
             <div
@@ -452,7 +444,7 @@ export default function IntimaMap() {
             }`}
           >
             <BadgeCheck className="h-4 w-4" />
-            Verified only
+            Verified
           </button>
           <button
             onClick={() => toggle('availableNow')}
@@ -464,59 +456,29 @@ export default function IntimaMap() {
             }`}
           >
             <span className="h-2 w-2 rounded-full bg-green-400" />
-            Available now
+            Available
+          </button>
+          <button
+            onClick={() => setFilterOpen(true)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
+              sheetFilterCount > 0
+                ? 'bg-[#C9A84C] text-charcoal shadow-lg'
+                : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
+            }`}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {sheetFilterCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-charcoal px-1 text-[11px] font-bold text-white">
+                {sheetFilterCount}
+              </span>
+            )}
           </button>
           {providersReady && (
             <span className="ml-auto shrink-0 rounded-full bg-black/45 px-2.5 py-1 text-xs text-white/85 backdrop-blur-sm">
               {filtered.length} nearby
             </span>
           )}
-        </div>
-
-        {/* Budget filter */}
-        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <span className="shrink-0 pl-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
-            Budget
-          </span>
-          {BUDGET_OPTIONS.map((opt) => (
-            <button
-              key={opt.label}
-              onClick={() => setFilters((f) => ({ ...f, budget: opt.value }))}
-              aria-label={`Budget ${opt.label}`}
-              aria-pressed={filters.budget === opt.value}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
-                filters.budget === opt.value
-                  ? 'bg-[#C9A84C] text-charcoal shadow-lg'
-                  : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Services filter: multi-select, AND logic, live-updating. */}
-        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <span className="shrink-0 pl-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
-            Services
-          </span>
-          {SERVICE_CATALOG.map((s) => {
-            const active = filters.services.includes(s.id);
-            return (
-              <button
-                key={s.id}
-                onClick={() => toggleService(s.id)}
-                aria-pressed={active}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-all active:scale-95 ${
-                  active
-                    ? 'bg-[#C9A84C] text-charcoal shadow-lg'
-                    : 'bg-black/55 text-white/90 ring-1 ring-white/10 hover:bg-black/75'
-                }`}
-              >
-                {s.label}
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -601,6 +563,14 @@ export default function IntimaMap() {
         callsDisabled={callsDisabled}
         callsDisabledNote="Available after verification launch"
         showViewProfile={!!selected?.userId}
+      />
+
+      <FilterSheet
+        open={filterOpen}
+        filters={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+        onClose={() => setFilterOpen(false)}
       />
 
       {connectionTarget && connectionTarget.userId && (

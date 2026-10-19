@@ -98,3 +98,31 @@
     @apply w-2 h-2 bg-red-500 rounded-full;
   }
 }
+
+/* Bottom-sheet motion: iOS-style spring up + backdrop fade. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .animate-sheet-up {
+    animation: sheet-up 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+}
