@@ -545,14 +545,14 @@ export default function IntimaMap() {
       {/* Slim floating header: wordmark, city select, auth actions. No marketing copy. */}
       <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-3 sm:px-5 sm:pt-4">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 rounded-full bg-black/55 py-1.5 pl-4 pr-1.5 backdrop-blur-md ring-1 ring-white/10">
-            <span className="font-display text-xl font-semibold tracking-tight text-white">Intima</span>
+          <div className="flex min-w-0 items-center gap-1.5 rounded-full bg-black/55 py-1.5 pl-3 pr-1.5 backdrop-blur-md ring-1 ring-white/10 sm:gap-2 sm:pl-4">
+            <span className="font-display text-lg font-semibold tracking-tight text-white sm:text-xl">Intima</span>
             <div className="relative">
               <select
                 value={filters.city}
                 onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
                 aria-label="Choose city"
-                className="appearance-none rounded-full bg-white/10 py-1.5 pl-3 pr-8 text-sm font-medium text-white outline-none"
+                className="max-w-[110px] appearance-none truncate rounded-full bg-white/10 py-1.5 pl-3 pr-8 text-sm font-medium text-white outline-none sm:max-w-none"
               >
                 <option value="" className="text-charcoal">
                   All cities
@@ -578,13 +578,13 @@ export default function IntimaMap() {
               <>
                 <Link
                   href="/login"
-                  className="rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95"
+                  className="hidden rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95 min-[380px]:block"
                 >
                   Log in
                 </Link>
                 <Link
                   href="/signup"
-                  className="rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
+                  className="rounded-full bg-[#AC244D] px-3.5 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95 sm:px-4"
                 >
                   Sign up
                 </Link>

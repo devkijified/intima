@@ -150,6 +150,9 @@
 
 /* Dark-mode filter for the raster fallback tiles: inverts the light OSM
    tiles to keep our dark brand when the vector style is unreachable. */
+.map-raster-dark {
+  background: #0d0d12;
+}
 .map-raster-dark canvas {
-  filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%);
+  filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(96%) saturate(70%);
 }

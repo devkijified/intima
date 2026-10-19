@@ -30,14 +30,14 @@ export function RateCard({ rates }: { rates: RateCardRates }) {
       {listed.length === 0 ? (
         <p className="mt-1 text-sm text-neutral-400">Rates not listed yet</p>
       ) : (
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:gap-2">
           {listed.map(({ key, label }) => (
             <div
               key={key}
-              className="rounded-xl bg-white px-2 py-2 text-center ring-1 ring-black/5"
+              className="min-w-0 rounded-xl bg-white px-1.5 py-2 text-center ring-1 ring-black/5 sm:px-2"
             >
-              <p className="text-[11px] text-neutral-500">{label}</p>
-              <p className="mt-0.5 text-sm font-bold text-charcoal">
+              <p className="truncate text-[10px] text-neutral-500 sm:text-[11px]">{label}</p>
+              <p className="mt-0.5 truncate text-[13px] font-bold text-charcoal sm:text-sm">
                 {formatPrice(rates[key] as number)}
               </p>
             </div>
