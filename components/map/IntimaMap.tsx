@@ -298,19 +298,12 @@ export default function IntimaMap() {
 
     async function init() {
       try {
-        // Stall watch: 25s without reaching ready means both tile sources
-        // are blocked. Show an honest error card with retry and list
-        // options instead of a silent black screen. (The raster fallback
-        // gets its chance at 12s, so this only fires when truly stuck.)
+        // Stall watch: 25s without reaching ready means tiles are blocked.
+        // Show an honest error card with retry and list options instead
+        // of a silent black screen.
         stallTimer = setTimeout(() => {
           if (!cancelled) setMapStalled(true);
         }, 25000);
-        // Raster fallback: 12s without the CARTO vector style loading
-        // means its CDN is unreachable from this network. Switch to
-        // Wikimedia raster tiles rather than sitting black.
-        rasterTimer = setTimeout(() => {
-          if (!cancelled) tryRasterFallback();
-        }, 12000);
         // Stage 1: the maplibre bundle itself. If it cannot download in
         // 45s the connection is truly dead → list fallback.
         bundleTimer = setTimeout(() => {
@@ -325,14 +318,21 @@ export default function IntimaMap() {
           return;
         }
         libRef.current = lib;
+        // Primary style: Wikimedia raster tiles. Wikimedia Foundation
+        // infrastructure is reachable virtually everywhere, unlike
+        // commercial vector CDNs that get filtered on some networks.
+        // The dark CSS filter keeps our brand. A map that loads beats
+        // a prettier map that stays black.
+        const useRasterPrimary = true;
         try {
           map = new lib.Map({
             container: containerRef.current,
-            style: CARTO_DARK,
+            style: useRasterPrimary ? (WIKIMEDIA_RASTER_STYLE as any) : CARTO_DARK,
             center: LAGOS_CENTER,
             zoom: 11,
             attributionControl: true,
           });
+          if (useRasterPrimary) setUsingRaster(true);
         } catch (err) {
           failMap(
             `map init threw: ${err instanceof Error ? err.message : String(err)}`,
