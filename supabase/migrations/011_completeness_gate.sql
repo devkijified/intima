@@ -9,6 +9,7 @@
 --   2. A profile photo (avatar)
 --   3. A city
 --   4. At least one rate (short time, overnight, or weekend)
+--   5. At least one service offered
 --
 -- This keeps the "Rates not listed yet" profiles out of guest browsing.
 -- Providers complete their profile in onboarding/settings; the moment
@@ -46,6 +47,7 @@ where pp.show_on_map = true
     p.rate_short_time_ngn is not null
     or p.rate_overnight_ngn is not null
     or p.rate_weekend_ngn is not null
-  );
+  )
+  and coalesce(array_length(p.services, 1), 0) > 0;
 
 grant select on public.map_providers to anon, authenticated;
