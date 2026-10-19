@@ -28,6 +28,25 @@ import { useCall } from '@/components/calls/CallProvider';
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal';
 
 const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+
+/**
+ * Fallback raster style: Wikimedia OSM tiles (Wikimedia Foundation infra,
+ * reachable virtually everywhere) with a dark-mode CSS filter applied to
+ * the canvas so it keeps our brand. Used when the CARTO vector style is
+ * unreachable. A map that loads beats a prettier map that stays black.
+ */
+const WIKIMEDIA_RASTER_STYLE = {
+  version: 8 as const,
+  sources: {
+    osm: {
+      type: 'raster' as const,
+      tiles: ['https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors | © Wikimedia maps',
+    },
+  },
+  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
+};
 const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
 
 export interface Filters {
@@ -163,6 +182,8 @@ export default function IntimaMap() {
   const [providersReady, setProvidersReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  /** True when the raster fallback style is active (gets the dark CSS filter). */
+  const [usingRaster, setUsingRaster] = useState(false);
   /** True when the map has been loading too long without reaching ready:
       show an honest error card instead of a silent black screen. */
   const [mapStalled, setMapStalled] = useState(false);
@@ -182,6 +203,7 @@ export default function IntimaMap() {
     setMapFailed(false);
     setMapFailReason(null);
     setMapReady(false);
+    setUsingRaster(false);
     setMapAttempt((n) => n + 1);
   };
 
@@ -251,6 +273,8 @@ export default function IntimaMap() {
     let bundleTimer: ReturnType<typeof setTimeout> | undefined;
     let styleTimer: ReturnType<typeof setTimeout> | undefined;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    let rasterTimer: ReturnType<typeof setTimeout> | undefined;
+    let rasterTried = false;
 
     const failMap = (reason: string) => {
       if (cancelled) return;
@@ -258,14 +282,35 @@ export default function IntimaMap() {
       setMapFailed(true);
     };
 
+    /** Switch to the Wikimedia raster tiles when the CARTO vector style
+        is unreachable. A map that loads beats a prettier map that stays
+        black. */
+    const tryRasterFallback = () => {
+      if (cancelled || !map || mapRef.current || rasterTried) return;
+      rasterTried = true;
+      try {
+        map.setStyle(WIKIMEDIA_RASTER_STYLE as any);
+        setUsingRaster(true);
+      } catch {
+        // setStyle failed; the stall timer will surface the error card.
+      }
+    };
+
     async function init() {
       try {
-        // Stall watch: 15s without reaching ready means tiles or the style
-        // are blocked (ad blocker, firewall). Show an honest error card
-        // with retry and list options instead of a silent black screen.
+        // Stall watch: 25s without reaching ready means both tile sources
+        // are blocked. Show an honest error card with retry and list
+        // options instead of a silent black screen. (The raster fallback
+        // gets its chance at 12s, so this only fires when truly stuck.)
         stallTimer = setTimeout(() => {
           if (!cancelled) setMapStalled(true);
-        }, 15000);
+        }, 25000);
+        // Raster fallback: 12s without the CARTO vector style loading
+        // means its CDN is unreachable from this network. Switch to
+        // Wikimedia raster tiles rather than sitting black.
+        rasterTimer = setTimeout(() => {
+          if (!cancelled) tryRasterFallback();
+        }, 12000);
         // Stage 1: the maplibre bundle itself. If it cannot download in
         // 45s the connection is truly dead → list fallback.
         bundleTimer = setTimeout(() => {
@@ -298,18 +343,23 @@ export default function IntimaMap() {
           if (!cancelled) {
             if (styleTimer) clearTimeout(styleTimer);
             if (stallTimer) clearTimeout(stallTimer);
+            if (rasterTimer) clearTimeout(rasterTimer);
             setMapStalled(false);
             mapRef.current = map;
             setMapReady(true);
           }
         });
         // MapLibre fires 'error' for transient tile/sprite/font hiccups as
-        // well as fatal style failures. Only the latter kills the map: once
-        // the style has loaded (mapRef set), failed tiles are retried by the
-        // renderer and the map stays up. On flaky connections a single slow
-        // tile must not nuke the whole map into the list fallback.
+        // well as fatal style failures. A style failure before load now
+        // tries the raster fallback first; only if that also fails does
+        // the map give up. Once the style has loaded (mapRef set), failed
+        // tiles are retried by the renderer and the map stays up.
         map.on('error', (e) => {
           if (cancelled || mapRef.current) return;
+          if (!rasterTried) {
+            tryRasterFallback();
+            return;
+          }
           const detail =
             e && typeof e === 'object' && 'error' in e
               ? (e as { error?: { message?: string; status?: number } }).error
@@ -339,6 +389,7 @@ export default function IntimaMap() {
       if (bundleTimer) clearTimeout(bundleTimer);
       if (styleTimer) clearTimeout(styleTimer);
       if (stallTimer) clearTimeout(stallTimer);
+      if (rasterTimer) clearTimeout(rasterTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map?.remove();
@@ -443,7 +494,10 @@ export default function IntimaMap() {
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#111118]" style={{ height: '100dvh' }}>
-      <div ref={containerRef} className="absolute inset-0" />
+      <div
+        ref={containerRef}
+        className={`absolute inset-0 ${usingRaster ? 'map-raster-dark' : ''}`}
+      />
       {!mapReady && !mapFailed && !mapStalled && view === 'map' && (
         <div className="absolute inset-0 z-10 overflow-hidden bg-[#111118]">
           {/* Shimmer sweep: guests see intentional loading, not a bug. */}
@@ -467,8 +521,8 @@ export default function IntimaMap() {
           <div>
             <p className="text-base font-semibold text-white">The map is stuck loading</p>
             <p className="mt-1 max-w-xs text-sm text-neutral-400">
-              The map tiles are not reaching this device. This is usually an ad blocker
-              or network filter blocking the tile server.
+              The map tiles are not reaching this device, even on our backup
+              tiles. Check your connection, then try again.
             </p>
           </div>
           <div className="flex gap-3">
