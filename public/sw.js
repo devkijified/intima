@@ -1,8 +1,8 @@
 /* Intima service worker: minimal offline shell + static cache.
  * Installability (the "Add to Home Screen" prompt) requires a service
  * worker; this one stays lean and never caches authenticated pages. */
-const CACHE = 'intima-shell-v1';
-const SHELL = ['/', '/icons/icon.svg', '/manifest.webmanifest'];
+const CACHE = 'intima-shell-v2';
+const SHELL = ['/icons/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -25,6 +25,14 @@ self.addEventListener('fetch', (event) => {
   // Only cache same-origin GETs for static assets and the shell.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
+  // Navigations always hit the network first: the app shell HTML must
+  // never go stale (new splash, age gate fixes, etc.).
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).catch(() => caches.match('/'))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request).then((res) => {
