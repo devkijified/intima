@@ -112,3 +112,5 @@ export async function notifyUsers(opts: NotifyOpts): Promise<void> {
     // Push is best effort; the in-app notification is the source of truth.
   }
 }
+
+// Webhook re-fire: no functional change.
