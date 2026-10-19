@@ -161,6 +161,17 @@ const EMPTY_FILTERS: Filters = {
   services: [],
 };
 
+const CITY_STORAGE_KEY = 'intima_city';
+
+/** City persists after first pick: users never filter twice. */
+function loadInitialCity(): string {
+  try {
+    return localStorage.getItem(CITY_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 /**
  * The Intima landing experience: full-screen, guest-accessible discovery.
  * See first, order second. Guests browse everything; signup happens at
@@ -195,7 +206,10 @@ export default function IntimaMap() {
   const [selected, setSelected] = useState<MapProvider | null>(null);
   const [connectionTarget, setConnectionTarget] = useState<MapProvider | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<Filters>(() => ({
+    ...EMPTY_FILTERS,
+    city: typeof window !== 'undefined' ? loadInitialCity() : '',
+  }));
   const [filterOpen, setFilterOpen] = useState(false);
   /** Bumped to re-run map init without a full page reload. */
   const [mapAttempt, setMapAttempt] = useState(0);
@@ -425,7 +439,8 @@ export default function IntimaMap() {
   const toggle = (key: 'verifiedOnly' | 'availableNow' | 'negotiableOnly') =>
     setFilters((f) => ({ ...f, [key]: !f[key] }));
 
-  const clearFilters = () => setFilters(EMPTY_FILTERS);
+  const clearFilters = () =>
+    setFilters((f) => ({ ...EMPTY_FILTERS, city: f.city }));
 
   /** Active budget + service filters, shown as a badge on the Filters button. */
   const sheetFilterCount =
@@ -553,7 +568,15 @@ export default function IntimaMap() {
             <div className="relative">
               <select
                 value={filters.city}
-                onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+                onChange={(e) => {
+                  const city = e.target.value;
+                  setFilters((f) => ({ ...f, city }));
+                  try {
+                    localStorage.setItem(CITY_STORAGE_KEY, city);
+                  } catch {
+                    /* persistence is best-effort */
+                  }
+                }}
                 aria-label="Choose city"
                 className="max-w-[110px] appearance-none truncate rounded-full bg-white/10 py-1.5 pl-3 pr-8 text-sm font-medium text-white outline-none sm:max-w-none"
               >

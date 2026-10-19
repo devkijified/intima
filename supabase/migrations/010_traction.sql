@@ -13,7 +13,8 @@ alter table public.profiles
   add column if not exists view_count integer not null default 0
     check (view_count >= 0);
 
--- 2. Reviews table.
+-- 2. Reviews table. If it already exists with a different shape from a
+-- partial run, repair the columns instead of skipping.
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
   provider_id uuid not null references auth.users(id) on delete cascade,
@@ -25,6 +26,13 @@ create table if not exists public.reviews (
   unique(provider_id, client_id)
 );
 alter table public.reviews enable row level security;
+
+-- Repair: add any missing columns if the table pre-existed.
+alter table public.reviews add column if not exists provider_id uuid;
+alter table public.reviews add column if not exists client_id uuid;
+alter table public.reviews add column if not exists rating integer;
+alter table public.reviews add column if not exists comment text;
+alter table public.reviews add column if not exists created_at timestamptz not null default now();
 
 drop policy if exists "Reviews are publicly readable" on public.reviews;
 create policy "Reviews are publicly readable"
@@ -61,7 +69,8 @@ select
   coalesce(p.gallery_urls, '{}') as gallery_urls,
   coalesce(p.view_count, 0) as view_count,
   coalesce((select count(*) from public.reviews r where r.provider_id = pp.provider_id), 0)::integer as review_count,
-  (select round(avg(r.rating)::numeric, 1) from public.reviews r where r.provider_id = pp.provider_id)::float as avg_rating
+  (select round(avg(r.rating)::numeric, 1) from public.reviews r where r.provider_id = pp.provider_id)::float as avg_rating,
+  coalesce((select count(*) from public.connections c where c.provider_id = pp.provider_id and c.status = 'active'), 0)::integer as booking_count
 from public.provider_presence pp
 join public.profiles p on p.id = pp.provider_id
 where pp.show_on_map = true;

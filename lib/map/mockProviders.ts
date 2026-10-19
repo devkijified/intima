@@ -45,6 +45,8 @@ export interface MockProvider {
   gallery: string[];
   /** Traction stat. Deliberately varied. */
   viewCount: number;
+  /** inDrive-style booking count. Deliberately varied. */
+  bookingCount: number;
 }
 
 function jitter(base: number, spread = 0.012): number {
@@ -161,6 +163,21 @@ const VIEW_COUNTS: Record<string, number> = {
   'mock-12': 7400,
 };
 
+const BOOKING_COUNTS: Record<string, number> = {
+  'mock-01': 47,
+  'mock-02': 32,
+  'mock-03': 89,
+  'mock-04': 8,
+  'mock-05': 21,
+  'mock-06': 3,
+  'mock-07': 56,
+  'mock-08': 19,
+  'mock-09': 28,
+  'mock-10': 6,
+  'mock-11': 24,
+  'mock-12': 11,
+};
+
 export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   id: s.id,
   displayName: s.displayName,
@@ -184,4 +201,5 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   ratesNegotiable: RATES_NEGOTIABLE[s.id] ?? true,
   gallery: galleryFor(s.id),
   viewCount: VIEW_COUNTS[s.id] ?? 0,
+  bookingCount: BOOKING_COUNTS[s.id] ?? 0,
 }));

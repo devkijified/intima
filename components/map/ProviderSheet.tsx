@@ -271,6 +271,11 @@ export function ProviderSheet({
                 <Eye className="h-3.5 w-3.5" />
                 {formatCompactCount(provider.viewCount)} views
               </span>
+              {provider.bookingCount > 0 && (
+                <span className="text-xs font-medium text-neutral-600">
+                  {formatCompactCount(provider.bookingCount)} bookings
+                </span>
+              )}
               {recency && (
                 <span className="flex items-center gap-1 text-xs font-medium text-green-700">
                   <Clock className="h-3 w-3" />
