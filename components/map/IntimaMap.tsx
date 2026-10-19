@@ -13,6 +13,7 @@ import {
   List,
   Loader2,
   Map as MapIcon,
+  MapPin,
   SearchX,
   SlidersHorizontal,
   X,
@@ -162,6 +163,9 @@ export default function IntimaMap() {
   const [providersReady, setProvidersReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  /** True when the map has been loading too long without reaching ready:
+      show an honest error card instead of a silent black screen. */
+  const [mapStalled, setMapStalled] = useState(false);
   /** Why the map fell back, shown under Technical details in the fallback. */
   const [mapFailReason, setMapFailReason] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
@@ -170,6 +174,16 @@ export default function IntimaMap() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  /** Bumped to re-run map init without a full page reload. */
+  const [mapAttempt, setMapAttempt] = useState(0);
+
+  const retryMap = () => {
+    setMapStalled(false);
+    setMapFailed(false);
+    setMapFailReason(null);
+    setMapReady(false);
+    setMapAttempt((n) => n + 1);
+  };
 
   const showToast = (t: ToastState) => {
     setToast(t);
@@ -236,6 +250,7 @@ export default function IntimaMap() {
     let map: MLMap | null = null;
     let bundleTimer: ReturnType<typeof setTimeout> | undefined;
     let styleTimer: ReturnType<typeof setTimeout> | undefined;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
 
     const failMap = (reason: string) => {
       if (cancelled) return;
@@ -245,6 +260,12 @@ export default function IntimaMap() {
 
     async function init() {
       try {
+        // Stall watch: 15s without reaching ready means tiles or the style
+        // are blocked (ad blocker, firewall). Show an honest error card
+        // with retry and list options instead of a silent black screen.
+        stallTimer = setTimeout(() => {
+          if (!cancelled) setMapStalled(true);
+        }, 15000);
         // Stage 1: the maplibre bundle itself. If it cannot download in
         // 45s the connection is truly dead → list fallback.
         bundleTimer = setTimeout(() => {
@@ -276,6 +297,8 @@ export default function IntimaMap() {
         map.on('load', () => {
           if (!cancelled) {
             if (styleTimer) clearTimeout(styleTimer);
+            if (stallTimer) clearTimeout(stallTimer);
+            setMapStalled(false);
             mapRef.current = map;
             setMapReady(true);
           }
@@ -315,12 +338,13 @@ export default function IntimaMap() {
       cancelled = true;
       if (bundleTimer) clearTimeout(bundleTimer);
       if (styleTimer) clearTimeout(styleTimer);
+      if (stallTimer) clearTimeout(stallTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [mapAttempt]);
 
   // Rebuild pins whenever the filtered set changes.
   useEffect(() => {
@@ -420,10 +444,38 @@ export default function IntimaMap() {
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#111118]" style={{ height: '100dvh' }}>
       <div ref={containerRef} className="absolute inset-0" />
-      {!mapReady && !mapFailed && view === 'map' && (
+      {!mapReady && !mapFailed && !mapStalled && view === 'map' && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#111118] text-neutral-400">
           <Loader2 className="h-8 w-8 animate-spin text-[#AC244D]" />
           <p className="text-sm">Loading the map…</p>
+        </div>
+      )}
+      {mapStalled && !mapReady && !mapFailed && view === 'map' && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#111118] px-6 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#AC244D]/15">
+            <MapPin className="h-7 w-7 text-[#AC244D]" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-white">The map is stuck loading</p>
+            <p className="mt-1 max-w-xs text-sm text-neutral-400">
+              The map tiles are not reaching this device. This is usually an ad blocker
+              or network filter blocking the tile server.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={retryMap}
+              className="rounded-full bg-[#AC244D] px-5 py-2.5 text-sm font-semibold text-white"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className="rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white"
+            >
+              View as list
+            </button>
+          </div>
         </div>
       )}
 
