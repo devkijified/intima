@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut, Radio } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 
 export default async function AdminLayout({
@@ -50,6 +50,9 @@ export default async function AdminLayout({
               </Link>
               <Link href="/admin/models" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Models">
                 <Video className="inline h-5 w-5" />
+              </Link>
+              <Link href="/admin/live" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Live streams">
+                <Radio className="inline h-5 w-5" />
               </Link>
               <Link href="/admin/settings" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Settings">
                 <Settings className="inline h-5 w-5" />

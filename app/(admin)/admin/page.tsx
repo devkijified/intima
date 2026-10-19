@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -24,8 +25,9 @@ export default function AdminPage() {
           .select('*', { count: 'exact', head: true })
 
         const { count: modelsCount } = await supabase
-          .from('model_profiles')
+          .from('profiles')
           .select('*', { count: 'exact', head: true })
+          .eq('role', 'model')
 
         const { count: pendingCount } = await supabase
           .from('profiles')
@@ -74,18 +76,18 @@ export default function AdminPage() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button className="w-full justify-start">
+            <Link href="/admin/verifications" className="flex w-full items-center justify-start rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white">
               <UserCheck className="mr-2 h-4 w-4" />
               Verify Models
-            </Button>
-            <Button className="w-full justify-start" variant="outline">
+            </Link>
+            <Link href="/admin/users" className="flex w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
               <Users className="mr-2 h-4 w-4" />
               Manage Users
-            </Button>
-            <Button className="w-full justify-start" variant="outline">
+            </Link>
+            <Link href="/admin/live" className="flex w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
               <Video className="mr-2 h-4 w-4" />
               Monitor Live Streams
-            </Button>
+            </Link>
           </CardContent>
         </Card>
 
