@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon, Radio, Heart,
-  MessageCircle,} from 'lucide-react'
+  MessageCircle,
+  Coins,} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
@@ -137,6 +138,15 @@ export default function DashboardLayout({
               >
                 <Wallet className="h-4 w-4" />
                 <span>Wallet</span>
+              </Link>
+              <Link 
+                href="/coins" 
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  pathname.startsWith('/coins') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
+                }`}
+              >
+                <Coins className="h-4 w-4" />
+                <span>Coins</span>
               </Link>
 
               <Link 
