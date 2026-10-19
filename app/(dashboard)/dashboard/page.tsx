@@ -190,8 +190,8 @@ export default function DashboardPage() {
       {isModel ? (
         /* ================= COMPANION VIEW ================= */
         <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Profile Views</span>
                 <Eye className="h-4 w-4 text-[#AC244D]" />
@@ -200,7 +200,7 @@ export default function DashboardPage() {
               <p className="text-xs text-neutral-400 mt-1">Total public directory visits</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Reviews</span>
                 <Star className="h-4 w-4 text-[#AC244D]" />
@@ -209,7 +209,7 @@ export default function DashboardPage() {
               <p className="text-xs text-neutral-400 mt-1">Verified client feedback</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Active Connections</span>
                 <Calendar className="h-4 w-4 text-[#AC244D]" />
@@ -220,7 +220,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Quick Management</h3>
               <div className="space-y-2">
                 <Link href="/profile" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
@@ -234,7 +234,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Bookings & Earnings</h3>
               <div className="space-y-2">
                 <Link href="/bookings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
@@ -252,8 +252,8 @@ export default function DashboardPage() {
       ) : (
         /* ================= CLIENT VIEW ================= */
         <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Connections</span>
                 <Calendar className="h-4 w-4 text-[#AC244D]" />
@@ -262,7 +262,7 @@ export default function DashboardPage() {
               <p className="text-xs text-neutral-400 mt-1">Active companion chats</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Wallet Balance</span>
                 <Wallet className="h-4 w-4 text-[#AC244D]" />
@@ -271,7 +271,7 @@ export default function DashboardPage() {
               <p className="text-xs text-neutral-400 mt-1">Available funds</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Saved</span>
                 <Sparkles className="h-4 w-4 text-[#AC244D]" />
@@ -282,7 +282,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Explore Intima</h3>
               <div className="space-y-2">
                 <Link href="/" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
@@ -296,7 +296,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
+            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
               <h3 className="font-serif text-lg text-neutral-900 mb-4">Account Settings</h3>
               <div className="space-y-2">
                 <Link href="/profile" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
