@@ -22,7 +22,8 @@ export function AgeGate({ children }: { children: React.ReactNode }) {
   const [verified, setVerified] = useState(false)
 
   useEffect(() => {
-    setVerified(hasAgeCookie())
+    // PREVIEW BRANCH ONLY: bypass age gate for mobile screenshots.
+    setVerified(true)
     setChecked(true)
   }, [])
 
