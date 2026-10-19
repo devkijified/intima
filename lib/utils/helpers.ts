@@ -29,6 +29,22 @@ export function formatCompactPrice(price: number) {
   return `₦${price}`;
 }
 
+/**
+ * TikTok-style compact count: 45200 → 45.2K, 1200000 → 1.2M.
+ * For view counts and other traction stats.
+ */
+export function formatCompactCount(n: number) {
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return `${m % 1 === 0 ? m.toString() : m.toFixed(1)}M`;
+  }
+  if (n >= 1_000) {
+    const k = n / 1_000;
+    return `${k % 1 === 0 ? k.toString() : k.toFixed(1)}K`;
+  }
+  return n.toString();
+}
+
 export function getInitials(name: string) {
   return name
     .split(' ')

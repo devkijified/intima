@@ -40,6 +40,8 @@ export interface MapProvider {
   ratesNegotiable: boolean;
   /** Photo gallery URLs in display order. avatar is the cover. */
   gallery: string[];
+  /** Profile view count (traction). */
+  viewCount: number;
 }
 
 interface MapProviderRow {
@@ -58,6 +60,9 @@ interface MapProviderRow {
   last_active_at: string | null;
   rates_negotiable: boolean | null;
   gallery_urls: string[] | null;
+  view_count: number | null;
+  review_count: number | null;
+  avg_rating: number | null;
 }
 
 export function mockToMapProvider(m: MockProvider): MapProvider {
@@ -83,6 +88,7 @@ export function mockToMapProvider(m: MockProvider): MapProvider {
     lastActiveAt: m.lastActiveAt,
     ratesNegotiable: m.ratesNegotiable,
     gallery: m.gallery,
+    viewCount: m.viewCount,
   };
 }
 
@@ -104,8 +110,8 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     lng: row.area_lng,
     verified: row.is_verified === true,
     available: row.is_available === true,
-    rating: null,
-    reviewCount: 0,
+    rating: row.avg_rating,
+    reviewCount: row.review_count ?? 0,
     ratePerHour: null,
     rateShortTime: row.rate_short_time_ngn,
     rateOvernight: row.rate_overnight_ngn,
@@ -116,6 +122,7 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     lastActiveAt: row.last_active_at,
     ratesNegotiable: row.rates_negotiable !== false,
     gallery: row.gallery_urls ?? [],
+    viewCount: row.view_count ?? 0,
   };
 }
 
@@ -129,7 +136,7 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls',
+        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating',
       )
       .limit(300);
     if (error) throw error;

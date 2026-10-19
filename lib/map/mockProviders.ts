@@ -43,6 +43,8 @@ export interface MockProvider {
   ratesNegotiable: boolean;
   /** Gallery photo URLs. Deliberately varied counts (2-4). */
   gallery: string[];
+  /** Traction stat. Deliberately varied. */
+  viewCount: number;
 }
 
 function jitter(base: number, spread = 0.012): number {
@@ -144,6 +146,21 @@ function galleryFor(id: string): string[] {
   return photos;
 }
 
+const VIEW_COUNTS: Record<string, number> = {
+  'mock-01': 45200,
+  'mock-02': 32100,
+  'mock-03': 89300,
+  'mock-04': 8900,
+  'mock-05': 18700,
+  'mock-06': 3200,
+  'mock-07': 67400,
+  'mock-08': 23400,
+  'mock-09': 28900,
+  'mock-10': 5600,
+  'mock-11': 19800,
+  'mock-12': 7400,
+};
+
 export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   id: s.id,
   displayName: s.displayName,
@@ -166,4 +183,5 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   lastActiveAt: hoursAgo(RECENCY_HOURS[s.id] ?? 24),
   ratesNegotiable: RATES_NEGOTIABLE[s.id] ?? true,
   gallery: galleryFor(s.id),
+  viewCount: VIEW_COUNTS[s.id] ?? 0,
 }));

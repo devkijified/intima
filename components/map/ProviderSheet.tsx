@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronLeft, ChevronRight, Clock, MapPin, Phone, Star, Video, X } from 'lucide-react';
+import { BadgeCheck, ChevronLeft, ChevronRight, Clock, Eye, MapPin, Phone, Star, Video, X } from 'lucide-react';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import { formatRecency } from '@/lib/utils/recency';
-import { formatCompactPrice } from '@/lib/utils/helpers';
+import { formatCompactCount, formatCompactPrice } from '@/lib/utils/helpers';
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings';
+import { getMockReviews, type MockReview } from '@/lib/map/mockReviews';
+import { createClient } from '@/lib/supabase/client';
 import type { MapProvider } from '@/lib/map/providers';
 
 interface ProviderSheetProps {
@@ -24,7 +26,7 @@ interface ProviderSheetProps {
   showViewProfile: boolean;
 }
 
-type SheetTab = 'services' | 'rates';
+type SheetTab = 'services' | 'rates' | 'reviews';
 
 /**
  * Instagram-style provider sheet: swipeable gallery preview on top,
@@ -45,6 +47,7 @@ export function ProviderSheet({
   const [connectionFee, setConnectionFee] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<SheetTab>('services');
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [reviews, setReviews] = useState<MockReview[]>([]);
   const carouselRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,6 +65,58 @@ export function ProviderSheet({
     setActiveTab('services');
     setPhotoIndex(0);
     carouselRef.current?.scrollTo({ left: 0 });
+  }, [provider?.id]);
+
+  // Load reviews: real rows for DB providers, deterministic mocks for previews.
+  // Also bumps the view counter best-effort (traction stat).
+  useEffect(() => {
+    if (!provider) return;
+    let live = true;
+    (async () => {
+      // Mock/preview pins use deterministic mock reviews.
+      if (!provider.userId) {
+        if (live) setReviews(getMockReviews(provider.id, provider.reviewCount));
+        return;
+      }
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from('reviews')
+          .select('id, rating, comment, created_at')
+          .eq('provider_id', provider.userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (!live) return;
+        if (data && data.length > 0) {
+          setReviews(
+            data.map((r: any) => ({
+              id: r.id,
+              author: 'Verified client',
+              rating: r.rating,
+              comment: r.comment ?? '',
+              date: new Date(r.created_at).toLocaleDateString('en-NG', {
+                day: 'numeric',
+                month: 'short',
+              }),
+            })),
+          );
+        } else {
+          setReviews(getMockReviews(provider.id, provider.reviewCount));
+        }
+      } catch {
+        if (live) setReviews(getMockReviews(provider.id, provider.reviewCount));
+      }
+      // Best-effort view bump. Fails silently for guests (RLS).
+      try {
+        const supabase = createClient();
+        await supabase.rpc('bump_profile_view', { pid: provider.userId });
+      } catch {
+        /* traction is best-effort */
+      }
+    })();
+    return () => {
+      live = false;
+    };
   }, [provider?.id]);
 
   if (!provider) return null;
@@ -203,8 +258,8 @@ export function ProviderSheet({
               <MapPin className="h-3.5 w-3.5" />
               {provider.area}, {provider.city}
             </p>
-            {/* Stats row: rating, recency, negotiable */}
-            <div className="mt-2 flex items-center gap-4 text-sm">
+            {/* Stats row: rating, views (traction), recency, negotiable */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               {provider.rating !== null && (
                 <span className="flex items-center gap-1 font-semibold text-charcoal">
                   <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
@@ -212,6 +267,10 @@ export function ProviderSheet({
                   <span className="font-normal text-neutral-500">({provider.reviewCount})</span>
                 </span>
               )}
+              <span className="flex items-center gap-1 text-xs text-neutral-500">
+                <Eye className="h-3.5 w-3.5" />
+                {formatCompactCount(provider.viewCount)} views
+              </span>
               {recency && (
                 <span className="flex items-center gap-1 text-xs font-medium text-green-700">
                   <Clock className="h-3 w-3" />
@@ -235,6 +294,7 @@ export function ProviderSheet({
               [
                 { value: 'services', label: 'Services' },
                 { value: 'rates', label: 'Rates' },
+                { value: 'reviews', label: `Reviews${provider.reviewCount > 0 ? ` (${provider.reviewCount})` : ''}` },
               ] as const
             ).map(({ value, label }) => (
               <button
@@ -265,6 +325,39 @@ export function ProviderSheet({
                   weekend: provider.rateWeekend,
                 }}
               />
+            )}
+            {activeTab === 'reviews' && (
+              <div className="space-y-3">
+                {reviews.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-neutral-400">
+                    No reviews yet. Be the first to book and review.
+                  </p>
+                ) : (
+                  reviews.map((r) => (
+                    <div key={r.id} className="rounded-2xl bg-cream p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-charcoal">{r.author}</span>
+                        <span className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star
+                              key={s}
+                              className={`h-3 w-3 ${
+                                s <= r.rating
+                                  ? 'fill-amber-400 text-amber-400'
+                                  : 'text-neutral-300'
+                              }`}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                      {r.comment && (
+                        <p className="mt-1 text-sm text-neutral-600">{r.comment}</p>
+                      )}
+                      <p className="mt-1 text-xs text-neutral-400">{r.date}</p>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
 
