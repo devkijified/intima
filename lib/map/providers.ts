@@ -40,6 +40,8 @@ export interface MapProvider {
   ratesNegotiable: boolean;
   /** Photo gallery URLs in display order. avatar is the cover. */
   gallery: string[];
+  /** Profile video clip URLs. */
+  videos: string[];
   /** Profile view count (traction). */
   viewCount: number;
   /** Completed bookings (inDrive-style traction). */
@@ -66,6 +68,7 @@ interface MapProviderRow {
   review_count: number | null;
   avg_rating: number | null;
   booking_count: number | null;
+  video_urls: string[] | null;
 }
 
 export function mockToMapProvider(m: MockProvider): MapProvider {
@@ -93,6 +96,7 @@ export function mockToMapProvider(m: MockProvider): MapProvider {
     gallery: m.gallery,
     viewCount: m.viewCount,
     bookingCount: m.bookingCount,
+    videos: m.videos,
   };
 }
 
@@ -128,6 +132,7 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     gallery: row.gallery_urls ?? [],
     viewCount: row.view_count ?? 0,
     bookingCount: row.booking_count ?? 0,
+    videos: row.video_urls ?? [],
   };
 }
 
@@ -141,7 +146,7 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count',
+        'provider_id, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls',
       )
       .limit(300);
     if (error) throw error;

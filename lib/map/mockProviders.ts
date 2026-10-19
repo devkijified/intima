@@ -47,6 +47,8 @@ export interface MockProvider {
   viewCount: number;
   /** inDrive-style booking count. Deliberately varied. */
   bookingCount: number;
+  /** Profile video clips. */
+  videos: string[];
 }
 
 function jitter(base: number, spread = 0.012): number {
@@ -202,4 +204,7 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   gallery: galleryFor(s.id),
   viewCount: VIEW_COUNTS[s.id] ?? 0,
   bookingCount: BOOKING_COUNTS[s.id] ?? 0,
+  videos: ['mock-01', 'mock-03', 'mock-07'].includes(s.id)
+    ? ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4']
+    : [],
 }));

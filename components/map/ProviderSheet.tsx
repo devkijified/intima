@@ -133,7 +133,14 @@ export function ProviderSheet({
 
   // Gallery: avatar is the cover, gallery_urls are the rest.
   const photos = [provider.avatar, ...provider.gallery].filter(Boolean);
+  const videos = (provider.videos ?? []).filter(Boolean);
   const totalPhotos = photos.length;
+  /** Combined slides: photos first, then videos. */
+  const slides: Array<{ kind: 'photo' | 'video'; src: string }> = [
+    ...photos.map((src) => ({ kind: 'photo' as const, src })),
+    ...videos.map((src) => ({ kind: 'video' as const, src })),
+  ];
+  const totalSlides = slides.length;
 
   const scrollToPhoto = (index: number) => {
     const clamped = Math.max(0, Math.min(index, totalPhotos - 1));
@@ -187,23 +194,38 @@ export function ProviderSheet({
               onScroll={handleScroll}
               className="flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              {photos.map((src, i) => (
+              {slides.map((slide, i) => (
                 <div key={i} className="relative w-full shrink-0 snap-center">
-                  <img
-                    src={src}
-                    alt={`${provider.displayName} photo ${i + 1}`}
-                    className="aspect-[4/3] w-full object-cover"
-                    draggable={false}
-                  />
+                  {slide.kind === 'photo' ? (
+                    <img
+                      src={slide.src}
+                      alt={`${provider.displayName} photo ${i + 1}`}
+                      className="aspect-[4/3] w-full object-cover"
+                      draggable={false}
+                    />
+                  ) : (
+                    <video
+                      src={slide.src}
+                      className="aspect-[4/3] w-full object-cover"
+                      controls
+                      playsInline
+                      preload="metadata"
+                    />
+                  )}
                   <PhotoWatermark />
+                  {slide.kind === 'video' && (
+                    <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                      Video
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
-            {/* Photo counter + arrows */}
-            {totalPhotos > 1 && (
+            {/* Slide counter + arrows */}
+            {totalSlides > 1 && (
               <>
                 <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                  {photoIndex + 1} / {totalPhotos}
+                  {photoIndex + 1} / {totalSlides}
                 </span>
                 <button
                   onClick={() => scrollToPhoto(photoIndex - 1)}
@@ -221,7 +243,7 @@ export function ProviderSheet({
                 </button>
                 {/* Dots */}
                 <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-                  {photos.map((_, i) => (
+                  {slides.map((_, i) => (
                     <button
                       key={i}
                       onClick={() => scrollToPhoto(i)}
