@@ -609,6 +609,11 @@ export default function IntimaMap() {
         </div>
       </div>
 
+      {/* Build tag: tiny, bottom-right. Tells us exactly what version is running. */}
+      <div className="pointer-events-none absolute bottom-1 right-2 z-40 select-none text-[10px] text-white/25">
+        {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev'}
+      </div>
+
       {/* Legend */}
       {mapReady && !mapFailed && view === 'map' && (
         <div className="absolute bottom-4 left-3 z-10 rounded-xl bg-black/60 px-3 py-2 text-xs text-white ring-1 ring-white/10 backdrop-blur-sm">
