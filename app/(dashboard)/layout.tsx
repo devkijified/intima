@@ -26,22 +26,15 @@ export default function DashboardLayout({
         return
       }
 
-      // 1. Check user metadata first (where Supabase stores signup metadata like role)
-      let role = user.user_metadata?.role || user.app_metadata?.role
+      // profiles.role is the source of truth (metadata goes stale
+      // after role changes like admin promotion).
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
 
-      // 2. Fallback to public.profiles if not in metadata
-      if (!role) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-        
-        if (profile?.role) {
-          role = profile.role
-        }
-      }
-
+      const role = profile?.role || user.user_metadata?.role || user.app_metadata?.role
       setUserRole(role || 'client')
       setLoading(false)
     }
