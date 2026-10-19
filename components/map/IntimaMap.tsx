@@ -49,6 +49,16 @@ const OSM_RASTER_STYLE = {
 };
 const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
 
+/** City centers for map fly-to when the city filter changes. [lng, lat]. */
+const CITY_CENTERS: Record<string, [number, number]> = {
+  Lagos: [3.3792, 6.5244],
+  Abuja: [7.4951, 9.0579],
+  'Port Harcourt': [6.9962, 4.7714],
+  Ibadan: [3.947, 7.3775],
+  Kano: [8.5167, 12.0022],
+  Enugu: [7.4951, 6.4584],
+};
+
 export interface Filters {
   verifiedOnly: boolean;
   availableNow: boolean;
@@ -345,7 +355,7 @@ export default function IntimaMap() {
           map = new lib.Map({
             container: containerRef.current,
             style: useRasterPrimary ? (OSM_RASTER_STYLE as any) : CARTO_DARK,
-            center: LAGOS_CENTER,
+            center: CITY_CENTERS[loadInitialCity()] ?? LAGOS_CENTER,
             zoom: 11,
             attributionControl: true,
           });
@@ -414,11 +424,33 @@ export default function IntimaMap() {
     };
   }, [mapAttempt]);
 
+  // Fly the map to the selected city so its pins are on screen.
+  // Skipped on first mount (map already centers on Lagos).
+  const firstCityRender = useRef(true);
+  useEffect(() => {
+    if (firstCityRender.current) {
+      firstCityRender.current = false;
+      return;
+    }
+    if (!mapReady || !mapRef.current || mapFailed) return;
+    const center = filters.city ? CITY_CENTERS[filters.city] : LAGOS_CENTER;
+    if (!center) return;
+    try {
+      mapRef.current.flyTo({ center, zoom: 11, duration: 1200 });
+    } catch {
+      try {
+        mapRef.current.setCenter(center);
+        mapRef.current.setZoom(11);
+      } catch {
+        /* map not ready for camera moves */
+      }
+    }
+  }, [filters.city, mapReady, mapFailed]);
+
   // Rebuild pins whenever the filtered set changes.
   useEffect(() => {
     if (!mapReady || !mapRef.current || mapFailed) return;
     let cancelled = false;
-
     async function renderPins() {
       const lib = libRef.current;
       if (cancelled || !mapRef.current || !lib) return;
