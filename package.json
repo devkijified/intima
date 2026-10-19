@@ -21,6 +21,7 @@
     "@tanstack/react-query": "^5.8.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
+    "googleapis": "^131.0.0",
     "livekit-client": "^2.23.0",
     "livekit-server-sdk": "^2.19.1",
     "lucide-react": "^0.294.0",
@@ -30,13 +31,14 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.47.0",
     "tailwind-merge": "^2.1.0",
-    "zod": "^3.22.4",
-    "googleapis": "^131.0.0"
+    "web-push": "^3.6.7",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
+    "@types/web-push": "^3.6.4",
     "@typescript-eslint/eslint-plugin": "^6.13.2",
     "@typescript-eslint/parser": "^6.13.2",
     "autoprefixer": "^10.4.16",

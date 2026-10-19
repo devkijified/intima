@@ -44,3 +44,40 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+/* ---- Web Push ---- */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch { /* ignore malformed payloads */ }
+  event.waitUntil(
+    (async () => {
+      try {
+        await self.registration.showNotification(data.title || 'Intima', {
+          body: data.body || '',
+          icon: '/icons/icon.svg',
+          badge: '/icons/icon.svg',
+          tag: data.tag || 'intima',
+          data: { url: data.url || '/' },
+        });
+      } catch { /* showing must never throw */ }
+    })()
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    (async () => {
+      try {
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const w of wins) {
+          if ('focus' in w) { await w.focus(); return; }
+        }
+        await self.clients.openWindow(url);
+      } catch { /* ignore */ }
+    })()
+  );
+});

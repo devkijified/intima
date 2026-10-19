@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck } from 'lucide-react'
+import { pushState, subscribePush, unsubscribePush, PushState, iosNeedsInstall } from '@/lib/push-client'
+import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck, Smartphone } from 'lucide-react'
 
 interface Notif {
   id: string
@@ -35,6 +36,10 @@ function timeAgo(iso: string) {
 export default function NotificationsPage() {
   const [notifs, setNotifs] = useState<Notif[]>([])
   const [loading, setLoading] = useState(true)
+  const [push, setPush] = useState<PushState>('available')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushMsg, setPushMsg] = useState<string | null>(null)
+  const [iosInstallNeeded, setIosInstallNeeded] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -54,6 +59,57 @@ export default function NotificationsPage() {
     if (!user) return
     await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
     setNotifs((ns) => ns.map((n) => ({ ...n, read: true })))
+  }
+
+  useEffect(() => {
+    pushState().then(setPush).catch(() => {})
+    setIosInstallNeeded(iosNeedsInstall())
+  }, [])
+
+  async function togglePush() {
+    setPushBusy(true)
+    setPushMsg(null)
+    if (push === 'subscribed') {
+      await unsubscribePush()
+      setPush(await pushState())
+      setPushMsg('Push turned off on this device.')
+    } else {
+      const res = await subscribePush()
+      setPush(await pushState())
+      if (res.ok) {
+        setPushMsg('Push is on. Alerts will pop up here even with the app closed.')
+      } else if (res.reason === 'no-key') {
+        setPushMsg("Push isn't set up on the server yet. The site owner needs to add the VAPID keys and redeploy.")
+      } else if (res.reason === 'denied') {
+        setPushMsg('Notifications are blocked. Allow them in your browser settings, then try again.')
+      } else if (res.reason === 'unsupported') {
+        setPushMsg('This browser does not support push notifications.')
+      } else {
+        setPushMsg('Could not turn on push. Check your connection and try again.')
+      }
+    }
+    setPushBusy(false)
+  }
+
+  async function sendTestPush() {
+    setPushBusy(true)
+    setPushMsg(null)
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (data?.ok && data?.sent > 0) {
+        setPushMsg('Test sent. It should pop up on this device now.')
+      } else if (data?.pushSkipped) {
+        setPushMsg("Push isn't set up on the server yet (VAPID keys missing).")
+      } else if (data?.sent === 0) {
+        setPushMsg('This device is not subscribed. Turn push on first.')
+      } else {
+        setPushMsg(data?.error || 'Test failed. Try again.')
+      }
+    } catch {
+      setPushMsg('Test failed. Check your connection and try again.')
+    }
+    setPushBusy(false)
   }
 
   const openNotif = async (n: Notif) => {
@@ -80,6 +136,40 @@ export default function NotificationsPage() {
             <CheckCheck className="h-4 w-4" /> Mark all read
           </button>
         )}
+      </div>
+
+      <div className="mt-4 rounded-3xl border border-neutral-200/80 bg-white p-5">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Smartphone className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-charcoal">Push notifications</p>
+            <p className="mt-0.5 text-sm text-neutral-500">
+              {iosInstallNeeded ? 'iPhone only supports push for web apps added to the Home Screen. Add Intima to your Home Screen, then turn push on here.'
+                : push === 'unsupported' ? 'Not supported in this browser.'
+                : push === 'denied' ? 'Blocked. Allow notifications in your browser settings to turn on.'
+                : push === 'subscribed' ? 'On. Alerts will pop up here even with the app closed.'
+                : 'Off. Turn on to get alerts on this device.'}
+            </p>
+          </div>
+          {!iosInstallNeeded && push !== 'unsupported' && push !== 'denied' && (
+            <button
+              onClick={togglePush}
+              disabled={pushBusy}
+              className={'shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ' +
+                (push === 'subscribed' ? 'border border-neutral-300 text-charcoal hover:bg-neutral-50' : 'bg-primary text-white hover:bg-primary/90')}
+            >
+              {push === 'subscribed' ? 'Turn off' : 'Turn on'}
+            </button>
+          )}
+        </div>
+        {push === 'subscribed' && (
+          <button onClick={sendTestPush} disabled={pushBusy} className="mt-3 text-xs font-semibold text-primary hover:underline disabled:opacity-50">
+            Send a test push
+          </button>
+        )}
+        {pushMsg && <p className="mt-2 text-xs text-neutral-500">{pushMsg}</p>}
       </div>
 
       {notifs.length === 0 ? (

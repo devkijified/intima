@@ -103,21 +103,23 @@ export default function GoLivePage() {
       await room.localParticipant.publishTrack(cam)
       await room.localParticipant.publishTrack(mic)
 
-      // Notify past clients (best-effort).
+      // Notify past clients (best-effort, via the push+notification primitive).
       try {
         const { data: clients } = await supabase.from('connections')
           .select('client_id').eq('provider_id', user.id).eq('status', 'active')
         const ids = [...new Set((clients ?? []).map((c: { client_id: string }) => c.client_id))]
         if (ids.length > 0) {
-          await supabase.from('notifications').insert(
-            ids.map((cid) => ({
-              user_id: cid,
+          await fetch('/api/push/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_ids: ids,
               type: 'live_started',
               title: (profile?.display_name ?? 'A companion') + ' is live',
               body: priceNgn > 0 ? 'Join for N' + priceNgn.toLocaleString() : 'Join free now',
               link: '/live/' + session.id,
-            }))
-          )
+            }),
+          })
         }
       } catch { /* best-effort */ }
 
