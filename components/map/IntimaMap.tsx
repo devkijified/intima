@@ -52,6 +52,7 @@ const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
 export interface Filters {
   verifiedOnly: boolean;
   availableNow: boolean;
+  negotiableOnly: boolean;
   city: string;
   /** Max short-time rate in naira. null = Any budget. */
   budget: number | null;
@@ -154,6 +155,7 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
 const EMPTY_FILTERS: Filters = {
   verifiedOnly: false,
   availableNow: false,
+  negotiableOnly: false,
   city: '',
   budget: null,
   services: [],
@@ -249,6 +251,7 @@ export default function IntimaMap() {
         (p) =>
           (!filters.verifiedOnly || p.verified) &&
           (!filters.availableNow || p.available) &&
+          (!filters.negotiableOnly || p.ratesNegotiable) &&
           (!filters.city || p.city === filters.city) &&
           // Pins with no listed short-time rate stay visible under every
           // budget: an unlisted rate is not proof of an unaffordable one,
@@ -419,7 +422,7 @@ export default function IntimaMap() {
     };
   }, [filtered, mapReady, mapFailed]);
 
-  const toggle = (key: 'verifiedOnly' | 'availableNow') =>
+  const toggle = (key: 'verifiedOnly' | 'availableNow' | 'negotiableOnly') =>
     setFilters((f) => ({ ...f, [key]: !f[key] }));
 
   const clearFilters = () => setFilters(EMPTY_FILTERS);
@@ -624,29 +627,41 @@ export default function IntimaMap() {
               ))}
             </div>
           )}
+          {/* Bybit P2P-style quick filters: compact action chips, clear on/off. */}
           <button
             onClick={() => toggle('verifiedOnly')}
             aria-pressed={filters.verifiedOnly}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.verifiedOnly
-                ? 'bg-[#AC244D] text-white shadow-lg'
-                : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
+                ? 'border-[#AC244D] bg-[#AC244D] text-white shadow-lg'
+                : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
             }`}
           >
-            <BadgeCheck className="h-4 w-4" />
+            <BadgeCheck className="h-3.5 w-3.5" />
             Verified
           </button>
           <button
             onClick={() => toggle('availableNow')}
             aria-pressed={filters.availableNow}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.availableNow
-                ? 'bg-green-600 text-white shadow-lg'
-                : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
+                ? 'border-green-600 bg-green-600 text-white shadow-lg'
+                : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
             }`}
           >
-            <span className="h-2 w-2 rounded-full bg-green-400" />
+            <span className={`h-2 w-2 rounded-full ${filters.availableNow ? 'bg-white' : 'bg-green-400'}`} />
             Available
+          </button>
+          <button
+            onClick={() => toggle('negotiableOnly')}
+            aria-pressed={filters.negotiableOnly}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+              filters.negotiableOnly
+                ? 'border-[#C9A84C] bg-[#C9A84C] text-charcoal shadow-lg'
+                : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
+            }`}
+          >
+            Negotiable
           </button>
           <button
             onClick={() => setFilterOpen(true)}

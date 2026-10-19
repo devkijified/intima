@@ -41,6 +41,8 @@ export interface MockProvider {
   lastActiveAt: string;
   /** False = fixed rates, not open to offers. Deliberately varied. */
   ratesNegotiable: boolean;
+  /** Gallery photo URLs. Deliberately varied counts (2-4). */
+  gallery: string[];
 }
 
 function jitter(base: number, spread = 0.012): number {
@@ -130,6 +132,18 @@ const RATES_NEGOTIABLE: Record<string, boolean> = {
   'mock-12': false,
 };
 
+/** Deterministic gallery: 2-4 pravatar photos per mock, varied IDs. */
+function galleryFor(id: string): string[] {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 997;
+  const count = 2 + (h % 3);
+  const photos: string[] = [];
+  for (let i = 0; i < count; i++) {
+    photos.push(`https://i.pravatar.cc/600?img=${((h + i * 17) % 70) + 1}`);
+  }
+  return photos;
+}
+
 export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   id: s.id,
   displayName: s.displayName,
@@ -151,4 +165,5 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   services: s.services,
   lastActiveAt: hoursAgo(RECENCY_HOURS[s.id] ?? 24),
   ratesNegotiable: RATES_NEGOTIABLE[s.id] ?? true,
+  gallery: galleryFor(s.id),
 }));
