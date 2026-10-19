@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon } from 'lucide-react'
+import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon, Radio } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { CallProvider } from '@/components/calls/CallProvider'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 export default function DashboardLayout({
   children,
@@ -86,19 +86,19 @@ export default function DashboardLayout({
               </Link>
 
               <Link 
-                href="/models/browse" 
+                href="/live" 
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  pathname.startsWith('/models/browse') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
+                  pathname.startsWith('/live') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
                 }`}
               >
-                <Compass className="h-4 w-4" />
-                <span>Browse</span>
+                <Radio className="h-4 w-4" />
+                <span>Live</span>
               </Link>
 
               <Link 
-                href="/map" 
+                href="/" 
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  pathname.startsWith('/map') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
+                  pathname === '/' ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
                 }`}
               >
                 <MapIcon className="h-4 w-4" />
@@ -159,6 +159,8 @@ export default function DashboardLayout({
                 </Link>
               )}
 
+              <NotificationBell />
+
               <button 
                 onClick={handleLogout} 
                 className="p-2 text-neutral-500 hover:text-[#AC244D] hover:bg-white rounded-full border border-transparent hover:border-neutral-200 transition-all"
@@ -171,11 +173,9 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      <CallProvider>
-        <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
-          {children}
-        </main>
-      </CallProvider>
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+        {children}
+      </main>
     </div>
   )
 }
