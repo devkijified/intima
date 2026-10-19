@@ -22,6 +22,13 @@ export default function CoinsPage() {
   const [topups, setTopups] = useState<Topup[]>([])
   const [buying, setBuying] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [method, setMethod] = useState<'paystack' | 'transfer'>('transfer')
+  const [intent, setIntent] = useState<{
+    reference: string; amountNgn: number; coins: number; expiresAt: string
+    bank: { name: string; accountNumber: string; accountName: string }
+  } | null>(null)
+  const [creatingIntent, setCreatingIntent] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
@@ -40,9 +47,12 @@ export default function CoinsPage() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20)
+      const intentRes = await fetch('/api/coins/transfer-intent')
+      const intentData = intentRes.ok ? await intentRes.json() : { intent: null }
       if (live) {
         setBalance(bal?.balance ?? 0)
         setTopups(history ?? [])
+        setIntent(intentData.intent)
       }
     })()
     return () => { live = false }
@@ -64,6 +74,33 @@ export default function CoinsPage() {
       setError(e instanceof Error ? e.message : 'Payment failed')
       setBuying(null)
     }
+  }
+
+  const startTransfer = async (packageId: string) => {
+    setCreatingIntent(packageId)
+    setError(null)
+    try {
+      const res = await fetch('/api/coins/transfer-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not start transfer')
+      setIntent(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Transfer failed')
+    } finally {
+      setCreatingIntent(null)
+    }
+  }
+
+  const copy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      setTimeout(() => setCopied(null), 1500)
+    } catch { /* clipboard unavailable */ }
   }
 
   return (
@@ -93,32 +130,92 @@ export default function CoinsPage() {
 
       {/* Packages */}
       <h2 className="mt-6 text-sm font-bold uppercase tracking-widest text-neutral-400">Buy coins</h2>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        {COIN_PACKAGES.map((pkg) => (
-          <button
-            key={pkg.id}
-            onClick={() => buy(pkg.id)}
-            disabled={buying !== null}
-            className="rounded-3xl border border-neutral-200/80 bg-white p-5 text-left shadow-xs transition-all hover:border-gold active:scale-[0.98] disabled:opacity-60"
-          >
-            <p className="font-display text-2xl font-bold text-charcoal">
-              {pkg.coins.toLocaleString()}
-            </p>
-            <p className="text-xs text-neutral-500">{pkg.label}</p>
-            <p className="mt-2 flex items-center justify-between">
-              <span className="text-sm font-bold text-primary">₦{pkg.priceNgn.toLocaleString()}</span>
-              {buying === pkg.id ? (
-                <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
-              ) : (
-                <Plus className="h-4 w-4 text-neutral-300" />
-              )}
-            </p>
-          </button>
-        ))}
+
+      {/* Payment method tabs */}
+      <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-neutral-100 p-1">
+        <button
+          onClick={() => setMethod('transfer')}
+          className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'transfer' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
+        >
+          Bank transfer
+        </button>
+        <button
+          onClick={() => setMethod('paystack')}
+          className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'paystack' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
+        >
+          Card / Paystack
+        </button>
       </div>
-      <p className="mt-3 text-center text-xs text-neutral-400">
-        Secure checkout via Paystack. Coins are non-refundable.
-      </p>
+
+      {method === 'transfer' && intent && (
+        <div className="mt-3 rounded-3xl border-2 border-gold/60 bg-gold/5 p-5">
+          <p className="text-sm font-bold text-charcoal">Transfer ₦{intent.amountNgn.toLocaleString()} to:</p>
+          <div className="mt-3 space-y-2">
+            {[
+              { k: 'bank', label: 'Bank', value: intent.bank.name },
+              { k: 'acct', label: 'Account number', value: intent.bank.accountNumber },
+              { k: 'name', label: 'Account name', value: intent.bank.accountName },
+              { k: 'ref', label: 'Reference (put in narration)', value: intent.reference },
+              { k: 'amt', label: 'Amount', value: `₦${intent.amountNgn.toLocaleString()}` },
+            ].map((row) => (
+              <button
+                key={row.k}
+                onClick={() => copy(row.value, row.k)}
+                className="flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 text-left active:scale-[0.99]"
+              >
+                <span>
+                  <span className="block text-[11px] font-medium uppercase tracking-wide text-neutral-400">{row.label}</span>
+                  <span className={`block font-mono text-sm font-bold ${row.k === 'ref' ? 'text-primary' : 'text-charcoal'}`}>{row.value}</span>
+                </span>
+                <span className="text-xs font-medium text-neutral-400">{copied === row.k ? 'Copied!' : 'Tap to copy'}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-center text-xs text-neutral-500">
+            Send exactly ₦{intent.amountNgn.toLocaleString()} with the reference above.
+            Coins land automatically once the transfer confirms (usually a few minutes).
+          </p>
+          <button
+            onClick={() => setIntent(null)}
+            className="mt-2 w-full text-center text-xs font-medium text-neutral-400 underline"
+          >
+            Cancel this transfer
+          </button>
+        </div>
+      )}
+
+      {!(method === 'transfer' && intent) && (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {COIN_PACKAGES.map((pkg) => (
+              <button
+                key={pkg.id}
+                onClick={() => method === 'paystack' ? buy(pkg.id) : startTransfer(pkg.id)}
+                disabled={buying !== null || creatingIntent !== null}
+                className="rounded-3xl border border-neutral-200/80 bg-white p-5 text-left shadow-xs transition-all hover:border-gold active:scale-[0.98] disabled:opacity-60"
+              >
+                <p className="font-display text-2xl font-bold text-charcoal">
+                  {pkg.coins.toLocaleString()}
+                </p>
+                <p className="text-xs text-neutral-500">{pkg.label}</p>
+                <p className="mt-2 flex items-center justify-between">
+                  <span className="text-sm font-bold text-primary">₦{pkg.priceNgn.toLocaleString()}</span>
+                  {(buying === pkg.id || creatingIntent === pkg.id) ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
+                  ) : (
+                    <Plus className="h-4 w-4 text-neutral-300" />
+                  )}
+                </p>
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-center text-xs text-neutral-400">
+            {method === 'paystack'
+              ? 'Secure checkout via Paystack. Coins are non-refundable.'
+              : 'No KYC, no card needed. Transfer from any Nigerian bank app.'}
+          </p>
+        </>
+      )}
 
       {/* History */}
       {topups.length > 0 && (
