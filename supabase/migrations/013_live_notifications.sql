@@ -26,6 +26,19 @@ create table if not exists public.live_sessions (
 );
 alter table public.live_sessions enable row level security;
 
+-- Repair: if live_sessions pre-existed with the old shape (model_id),
+-- add the new columns instead of failing.
+alter table public.live_sessions add column if not exists provider_id uuid;
+alter table public.live_sessions add column if not exists title text not null default 'Live';
+alter table public.live_sessions add column if not exists is_public boolean not null default true;
+alter table public.live_sessions add column if not exists price_ngn integer not null default 0;
+alter table public.live_sessions add column if not exists status text not null default 'live';
+alter table public.live_sessions add column if not exists viewer_count integer not null default 0;
+alter table public.live_sessions add column if not exists featured boolean not null default false;
+alter table public.live_sessions add column if not exists started_at timestamptz not null default now();
+alter table public.live_sessions add column if not exists ended_at timestamptz;
+alter table public.live_sessions add column if not exists created_at timestamptz not null default now();
+
 drop policy if exists "Live sessions are publicly readable" on public.live_sessions;
 create policy "Live sessions are publicly readable"
   on public.live_sessions for select
