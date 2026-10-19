@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { StoryTray } from '@/components/stories/StoryTray';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -740,6 +741,10 @@ export default function IntimaMap() {
             </span>
           )}
         </div>
+      </div>
+      {/* Story tray: WhatsApp Status-style, below the header. */}
+      <div className="absolute left-0 right-0 top-[68px] z-30 sm:top-[76px]">
+        <StoryTray />
       </div>
 
       {/* Build tag: tiny, bottom-right. Tells us exactly what version is running. */}

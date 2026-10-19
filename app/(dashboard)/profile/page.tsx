@@ -1,5 +1,6 @@
 'use client'
 
+import { StoryManager } from '@/components/stories/StoryManager';
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -388,6 +389,8 @@ export default function ProfilePage() {
               </p>
             </div>
           </div>
+
+          <StoryManager />
 
           {/* ---- Rates ---- */}
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
