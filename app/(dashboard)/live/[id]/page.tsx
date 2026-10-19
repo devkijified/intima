@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, Gift, Heart, Lock, Radio, Send, Share2, X } from 'lucide-react'
+import { Eye, Gift, Heart, Lock, Radio, Send, Share2, X,
+  PictureInPicture2,} from 'lucide-react'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 /* ---------------------------------- types --------------------------------- */
@@ -67,6 +68,10 @@ export default function StreamRoomPage() {
   const [paidPrice, setPaidPrice] = useState(0)
 
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [pipActive, setPipActive] = useState(false)
+  const [pipSupported] = useState(
+    () => typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
+  )
   const roomRef = useRef<Room | null>(null)
   const lastTapRef = useRef(0)
   const heartIdRef = useRef(0)
@@ -392,6 +397,56 @@ export default function StreamRoomPage() {
     }
   }, [stream])
 
+  // Picture-in-Picture: floating video when minimized, TikTok-style.
+  const togglePip = async () => {
+    const video = videoRef.current
+    if (!video) return
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      } else {
+        await video.requestPictureInPicture()
+      }
+    } catch {
+      /* PiP rejected (e.g. no user gesture yet) */
+    }
+  }
+
+  useEffect(() => {
+    const onEnter = () => setPipActive(true)
+    const onLeave = () => setPipActive(false)
+    const video = videoRef.current
+    video?.addEventListener('enterpictureinpicture', onEnter)
+    video?.addEventListener('leavepictureinpicture', onLeave)
+    return () => {
+      video?.removeEventListener('enterpictureinpicture', onEnter)
+      video?.removeEventListener('leavepictureinpicture', onLeave)
+    }
+  }, [])
+
+  // Auto-PiP when the tab hides (minimize / switch apps).
+  useEffect(() => {
+    const onHide = async () => {
+      const video = videoRef.current
+      if (
+        document.hidden &&
+        video &&
+        pipSupported &&
+        !document.pictureInPictureElement &&
+        video.readyState >= 2
+      ) {
+        try {
+          await video.requestPictureInPicture()
+        } catch {
+          /* needs a prior tap; the PiP button covers it */
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [pipSupported])
+
+
   /* --------------------------------- phases -------------------------------- */
 
   if (phase === 'loading') {
@@ -502,8 +557,19 @@ export default function StreamRoomPage() {
         </button>
       </div>
 
-      {/* Top-right: share + close */}
+      {/* Top-right: PiP + share + close */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
+        {pipSupported && (
+          <button
+            onClick={togglePip}
+            aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
+            className={`flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
+              pipActive ? 'bg-primary text-white' : 'bg-black/50 text-white'
+            }`}
+          >
+            <PictureInPicture2 className="h-4 w-4" />
+          </button>
+        )}
         <button
           onClick={share}
           aria-label="Share stream"
