@@ -205,6 +205,6 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   viewCount: VIEW_COUNTS[s.id] ?? 0,
   bookingCount: BOOKING_COUNTS[s.id] ?? 0,
   videos: ['mock-01', 'mock-03', 'mock-07'].includes(s.id)
-    ? ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4']
+    ? ['https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4']
     : [],
 }));
