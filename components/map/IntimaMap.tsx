@@ -122,6 +122,8 @@ export default function IntimaMap() {
   const [providersReady, setProvidersReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  /** Why the map fell back, shown under Technical details in the fallback. */
+  const [mapFailReason, setMapFailReason] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
   const [selected, setSelected] = useState<MapProvider | null>(null);
   const [connectionTarget, setConnectionTarget] = useState<MapProvider | null>(null);
@@ -187,29 +189,45 @@ export default function IntimaMap() {
 
   // Initialise the map once. maplibre-gl is imported lazily so a failed
   // download degrades to the honest fallback list instead of a crash.
+  // Every failure path records a reason, surfaced under Technical details
+  // in the fallback so a real device can report what actually broke.
   useEffect(() => {
     let cancelled = false;
     let map: MLMap | null = null;
     let bundleTimer: ReturnType<typeof setTimeout> | undefined;
     let styleTimer: ReturnType<typeof setTimeout> | undefined;
 
+    const failMap = (reason: string) => {
+      if (cancelled) return;
+      setMapFailReason(reason);
+      setMapFailed(true);
+    };
+
     async function init() {
       try {
         // Stage 1: the maplibre bundle itself. If it cannot download in
         // 45s the connection is truly dead → list fallback.
         bundleTimer = setTimeout(() => {
-          if (!cancelled && !map) setMapFailed(true);
+          if (!cancelled && !map)
+            failMap('maplibre bundle download timed out after 45s');
         }, 45000);
         const maplibre = await import('maplibre-gl');
         clearTimeout(bundleTimer);
         if (cancelled || !containerRef.current) return;
-        map = new maplibre.Map({
-          container: containerRef.current,
-          style: CARTO_DARK,
-          center: LAGOS_CENTER,
-          zoom: 11,
-          attributionControl: true,
-        });
+        try {
+          map = new maplibre.Map({
+            container: containerRef.current,
+            style: CARTO_DARK,
+            center: LAGOS_CENTER,
+            zoom: 11,
+            attributionControl: true,
+          });
+        } catch (err) {
+          failMap(
+            `map init threw: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return;
+        }
         map.on('load', () => {
           if (!cancelled) {
             if (styleTimer) clearTimeout(styleTimer);
@@ -222,16 +240,28 @@ export default function IntimaMap() {
         // the style has loaded (mapRef set), failed tiles are retried by the
         // renderer and the map stays up. On flaky connections a single slow
         // tile must not nuke the whole map into the list fallback.
-        map.on('error', () => {
-          if (!cancelled && !mapRef.current) setMapFailed(true);
+        map.on('error', (e) => {
+          if (cancelled || mapRef.current) return;
+          const detail =
+            e && typeof e === 'object' && 'error' in e
+              ? (e as { error?: { message?: string; status?: number } }).error
+              : undefined;
+          failMap(
+            `style error before load: ${detail?.message ?? 'unknown'}${
+              detail?.status ? ` (status ${detail.status})` : ''
+            }`,
+          );
         });
         // Stage 2: the style itself. A generous 60s for slow connections —
         // a slow map shows the loading state, only a dead one falls back.
         styleTimer = setTimeout(() => {
-          if (!cancelled && !mapRef.current) setMapFailed(true);
+          if (!cancelled && !mapRef.current)
+            failMap('style did not reach load within 60s');
         }, 60000);
-      } catch {
-        if (!cancelled) setMapFailed(true);
+      } catch (err) {
+        failMap(
+          `bundle import threw: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
@@ -502,11 +532,26 @@ export default function IntimaMap() {
           {mapFailed && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-              <p>
-                The live map could not load on this connection, so here are the
-                companions as a list instead. Nothing is broken, the map simply
-                needs a stronger connection.
-              </p>
+              <div className="min-w-0">
+                <p>
+                  The live map could not load on this connection, so here are
+                  the companions as a list instead. Nothing is broken, the map
+                  simply needs a stronger connection.
+                </p>
+                <details className="mt-2 text-xs text-amber-700/80">
+                  <summary className="cursor-pointer underline">
+                    Technical details
+                  </summary>
+                  <p className="mt-1 break-all font-mono">
+                    {mapFailReason ?? 'no reason recorded'}
+                  </p>
+                  <p className="mt-1 font-mono">
+                    build{' '}
+                    {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ??
+                      'local'}
+                  </p>
+                </details>
+              </div>
             </div>
           )}
           <div className="mb-3 flex items-baseline justify-between px-1">
