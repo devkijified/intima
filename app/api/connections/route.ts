@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, alreadyConnected: true, id: existing.id });
   }
 
+  const now = new Date();
   const { data: inserted, error } = await svc
     .from('connections')
     .insert({
@@ -133,6 +134,11 @@ export async function POST(req: NextRequest) {
       provider_id: body.provider_id,
       fee_ngn: fee,
       status: 'active',
+      // The fee sits in its 24 hour protection window from the moment
+      // the connection activates; either side can dispute it in chat.
+      fee_state: 'held',
+      paid_at: now.toISOString(),
+      dispute_deadline: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
       payment_ref: body.payment_ref,
       proposed_rate_ngn:
         typeof body.proposed_rate_ngn === 'number' && body.proposed_rate_ngn > 0
