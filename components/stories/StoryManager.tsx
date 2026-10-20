@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Plus, Loader2, Trash2, Eye } from 'lucide-react';
-import { containsPhoneNumber, CONTACT_WARNING } from '@/lib/moderation/contactCheck';
+import { CONTACT_WARNING, scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 
 /**
  * Provider story manager: post a 24h story (photo/video URL + caption),
@@ -17,6 +17,7 @@ export function StoryManager() {
   const [isVideo, setIsVideo] = useState(false);
   const [posting, setPosting] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [blockedMsg, setBlockedMsg] = useState('');
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -47,7 +48,9 @@ export function StoryManager() {
   const post = async () => {
     const media = url.trim();
     if (!media || posting) return;
-    if (containsPhoneNumber(caption)) {
+    const scan = scanForLeaks(caption);
+    if (!scan.clean) {
+      setBlockedMsg(leakWarning(scan.leaks));
       setBlocked(true);
       return;
     }
@@ -108,7 +111,7 @@ export function StoryManager() {
           </label>
           {blocked && (
             <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {CONTACT_WARNING}
+              {blockedMsg || CONTACT_WARNING}
             </p>
           )}
           <button

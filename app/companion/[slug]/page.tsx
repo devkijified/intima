@@ -23,6 +23,7 @@ type PageTab = 'posts' | 'services' | 'rates' | 'reviews'
 interface Provider {
   id: string
   username: string | null
+  bio: string | null
   displayName: string
   avatar: string | null
   verified: boolean
@@ -196,7 +197,7 @@ export default function ModelDetailPage() {
       // then raw id as fallback.
       const base = () => supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, video_urls, view_count')
+        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, video_urls, view_count')
         .eq('role', 'model')
       const { data: byName } = await base().eq('username', slug).maybeSingle()
       const { data: byId } = byName ? { data: null } : await base().eq('id', slug).maybeSingle()
@@ -273,6 +274,7 @@ export default function ModelDetailPage() {
       setProvider({
         id: p.id,
         username: p.username ?? null,
+        bio: p.bio ?? null,
         displayName: p.display_name ?? 'Intima companion',
         avatar: p.avatar_url,
         verified: p.is_verified === true,
@@ -457,6 +459,9 @@ export default function ModelDetailPage() {
           <MapPin className="h-3.5 w-3.5" />
           {provider.area}{provider.city ? `, ${provider.city}` : ''}
         </p>
+        {provider.bio && (
+          <p className="mt-2 text-sm leading-relaxed text-charcoal/85">{provider.bio}</p>
+        )}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {provider.available && (
             <span className="flex items-center gap-1 font-medium text-green-700">

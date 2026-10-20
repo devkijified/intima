@@ -19,6 +19,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { SERVICE_CATALOG, SERVICE_CATEGORIES } from '@/lib/services'
+import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 
 const CITIES = ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Kano', 'Enugu'] as const
 
@@ -42,6 +43,7 @@ interface ProviderForm {
   services: string[]
   ratesNegotiable: boolean
   whatsappNumber: string
+  bio: string
   galleryUrls: string
   showOnMap: boolean
   isAvailable: boolean
@@ -57,6 +59,7 @@ const EMPTY_FORM: ProviderForm = {
   services: [],
   ratesNegotiable: true,
     whatsappNumber: '',
+  bio: '',
   galleryUrls: '',
   showOnMap: true,
   isAvailable: true,
@@ -70,6 +73,7 @@ function parseRate(v: string): number | null {
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [bioWarning, setBioWarning] = useState('')
   const [savedTick, setSavedTick] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [role, setRole] = useState<string>('client')
@@ -94,7 +98,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, whatsapp_number'
+          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, whatsapp_number, bio'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -119,6 +123,7 @@ export default function ProfilePage() {
           services: profile?.services ?? [],
           ratesNegotiable: profile?.rates_negotiable ?? true,
     whatsappNumber: profile?.whatsapp_number ?? '',
+    bio: profile?.bio ?? '',
           galleryUrls: (profile?.gallery_urls ?? []).join('\n'),
           showOnMap: presence?.show_on_map ?? true,
           isAvailable: presence?.is_available ?? true,
@@ -160,6 +165,13 @@ export default function ProfilePage() {
 
   const saveProvider = async () => {
     if (!userId) return
+    const scan = scanForLeaks(form.bio)
+    if (!scan.clean) {
+      setBioWarning(leakWarning(scan.leaks))
+      setError('Please remove contact details from your bio before saving.')
+      return
+    }
+    setBioWarning('')
     setSaving(true)
     setError(null)
     try {
@@ -181,6 +193,7 @@ export default function ProfilePage() {
           services: form.services,
           rates_negotiable: form.ratesNegotiable,
           whatsapp_number: form.whatsappNumber.trim() || null,
+          bio: form.bio.trim() || null,
           gallery_urls: gallery,
         },
         { onConflict: 'id' }
@@ -325,6 +338,27 @@ export default function ProfilePage() {
                   onChange={(e) => setForm({ ...form, displayName: e.target.value })}
                   placeholder="e.g. Adaeze"
                 />
+              </div>
+              <div>
+                <label className={labelCls}>Bio</label>
+                <textarea
+                  className={`${inputCls} min-h-[96px]`}
+                  value={form.bio}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setForm({ ...form, bio: v })
+                    const scan = scanForLeaks(v)
+                    setBioWarning(scan.clean ? '' : leakWarning(scan.leaks))
+                  }}
+                  placeholder="Tell clients about yourself, your vibe, what to expect..."
+                  maxLength={500}
+                />
+                <p className="mt-1 text-xs text-neutral-400">{form.bio.length}/500 · No phone numbers or social handles — clients reach you through Intima.</p>
+                {bioWarning && (
+                  <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {bioWarning}
+                  </p>
+                )}
               </div>
               <div>
                 <label className={labelCls}>Profile photo URL</label>
