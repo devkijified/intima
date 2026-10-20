@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Users, UserCheck, UserX, Video, Star } from '@/lib/icons'
 
 export default function AdminPage() {
+  const [activity, setActivity] = useState<any[]>([])
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalModels: 0,
@@ -30,14 +31,20 @@ export default function AdminPage() {
           .eq('role', 'model')
 
         const { count: pendingCount } = await supabase
-          .from('profiles')
+          .from('verifications')
           .select('*', { count: 'exact', head: true })
-          .eq('is_verified', false)
-          .eq('role', 'model')
+          .eq('status', 'pending')
 
         const { count: reviewsCount } = await supabase
           .from('reviews')
           .select('*', { count: 'exact', head: true })
+
+        const { data: recent } = await supabase
+          .from('admin_audit_logs')
+          .select('id, action, details, created_at')
+          .order('created_at', { ascending: false })
+          .limit(8)
+        setActivity(recent ?? [])
 
         setStats({
           totalUsers: usersCount || 0,
@@ -96,7 +103,23 @@ export default function AdminPage() {
             <CardTitle>Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500">No recent activity to display</p>
+            {activity.length === 0 ? (
+              <p className="text-sm text-gray-500">No recent activity to display</p>
+            ) : (
+              <div className="space-y-3">
+                {activity.map((a: any) => (
+                  <div key={a.id} className="flex items-start justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium text-charcoal">{a.action?.replace(/_/g, ' ')}</p>
+                      <p className="truncate text-xs text-neutral-500">{a.details ?? ''}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-neutral-400">
+                      {new Date(a.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
