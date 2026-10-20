@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
+import ConnectionCare from '@/components/connections/ConnectionCare'
 import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock, Timer } from '@/lib/icons'
 
 interface Msg {
@@ -37,6 +38,8 @@ export default function ThreadPage() {
   const [me, setMe] = useState<string | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [other, setOther] = useState<Counterpart | null>(null)
+  const [otherRating, setOtherRating] = useState<{ avg: number; count: number } | null>(null)
+  const [connInfo, setConnInfo] = useState<{ feeNgn: number | null; feeState: string | null; disputeDeadline: string | null } | null>(null)
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -59,13 +62,20 @@ export default function ThreadPage() {
 
       const { data: conn } = await supabase
         .from('connections')
-        .select('id, client_id, provider_id, status')
+        .select('id, client_id, provider_id, status, fee_ngn, fee_state, dispute_deadline')
         .eq('id', connectionId)
         .single()
       if (!conn || (conn.client_id !== user.id && conn.provider_id !== user.id)) {
         router.replace('/messages'); return
       }
-      if (live) setActive(conn.status === 'active')
+      if (live) {
+        setActive(conn.status === 'active')
+        setConnInfo({
+          feeNgn: conn.fee_ngn ?? null,
+          feeState: conn.fee_state ?? null,
+          disputeDeadline: conn.dispute_deadline ?? null,
+        })
+      }
 
       const otherId = conn.client_id === user.id ? conn.provider_id : conn.client_id
       const { data: prof } = await supabase
@@ -82,6 +92,18 @@ export default function ThreadPage() {
           whatsapp_number: conn.status === 'active' ? (prof.whatsapp_number ?? null) : null,
           isProvider: prof.role === 'model',
         })
+      }
+
+      // Their published rating, so both sides see who they are dealing
+      // with (the Bybit habit). RLS only returns published reviews.
+      const { data: theirReviews } = await supabase
+        .from('reviews')
+        .select('rating')
+        .eq('reviewee_id', otherId)
+        .eq('status', 'published')
+      if (live && theirReviews && theirReviews.length > 0) {
+        const avg = theirReviews.reduce((s, r) => s + (r.rating ?? 0), 0) / theirReviews.length
+        setOtherRating({ avg: Math.round(avg * 10) / 10, count: theirReviews.length })
       }
 
       const { data: history } = await supabase
@@ -163,6 +185,9 @@ export default function ThreadPage() {
           </p>
           <p className={`text-xs ${active ? 'text-emerald-600' : 'text-neutral-400'}`}>
             {active ? 'Connection active' : 'Connection not active'}
+            {otherRating && (
+              <span className="text-neutral-500"> · ★ {otherRating.avg} ({otherRating.count} review{otherRating.count === 1 ? '' : 's'})</span>
+            )}
           </p>
         </div>
         {other?.whatsapp_number && (
@@ -177,6 +202,17 @@ export default function ThreadPage() {
           </a>
         )}
       </div>
+
+      {/* Fee protection + double-blind reviews */}
+      {active && connInfo && (
+        <ConnectionCare
+          connectionId={connectionId}
+          feeState={connInfo.feeState}
+          disputeDeadline={connInfo.disputeDeadline}
+          feeNgn={connInfo.feeNgn}
+          otherName={other?.display_name ?? 'them'}
+        />
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-cream/40 px-4 py-4">

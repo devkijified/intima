@@ -243,11 +243,14 @@ export default function ModelDetailPage() {
         .eq('provider_id', id)
         .maybeSingle()
 
-      // Reviews: count, average, latest rows.
+      // Reviews: count, average, latest rows. Double-blind release runs
+      // first so due reviews land; RLS only ever returns published rows
+      // to visitors, and reviewee_id keeps client reviews out of this list.
+      await supabase.rpc('publish_due_reviews')
       const { data: reviewRows, count: reviewCount } = await supabase
         .from('reviews')
         .select('id, rating, comment, created_at', { count: 'exact' })
-        .eq('provider_id', id)
+        .eq('reviewee_id', id)
         .order('created_at', { ascending: false })
         .limit(10)
 
