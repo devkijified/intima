@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, Star } from '@/lib/icons';
+import { BadgeCheck, Star, Zap, Crown } from '@/lib/icons';
 import { formatPrice } from '@/lib/utils/helpers';
 import { formatRecency } from '@/lib/utils/recency';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
@@ -36,7 +36,12 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-300 group-active:scale-105"
           />
-          {provider.verified && (
+          {provider.trustTier === 'elite' ? (
+            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-gold px-2 py-1 text-[10px] font-bold text-charcoal shadow-md">
+              <Crown className="h-3 w-3" />
+              Elite
+            </span>
+          ) : provider.verified && (
             <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-[#AC244D] px-2 py-1 text-[10px] font-semibold text-white shadow-md">
               <BadgeCheck className="h-3 w-3" />
               Verified
@@ -46,6 +51,11 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
             <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
               Available
+            </span>
+          )}
+          {provider.boosted && (
+            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-gold px-2 py-1 text-[10px] font-bold text-charcoal">
+              <Zap className="h-3 w-3" /> Boosted
             </span>
           )}
           <PhotoWatermark />

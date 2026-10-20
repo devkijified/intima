@@ -174,6 +174,7 @@ export default function ModelDetailPage() {
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
   const [following, setFollowing] = useState(false)
+  const [tours, setTours] = useState<{ city: string; start_date: string; end_date: string }[]>([])
   const [followBusy, setFollowBusy] = useState(false)
 
   // Stories + live.
@@ -479,6 +480,16 @@ export default function ModelDetailPage() {
         </p>
         {provider.bio && (
           <p className="mt-2 text-sm leading-relaxed text-charcoal/85">{provider.bio}</p>
+        )}
+        {tours.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tours.map((t: { city: string; start_date: string; end_date: string }, i: number) => (
+              <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-3 py-1 text-xs font-semibold text-charcoal">
+                <MapPin className="h-3 w-3 text-primary" />
+                Touring {t.city} · {new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })} – {new Date(t.end_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })}
+              </span>
+            ))}
+          </div>
         )}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {provider.available && (

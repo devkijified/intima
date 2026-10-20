@@ -14,6 +14,8 @@ import { MOCK_PROVIDERS, type MockProvider } from './mockProviders';
 
 export interface MapProvider {
   id: string;
+  boosted?: boolean;
+  trustTier?: string;
   displayName: string;
   age: number | null;
   city: string;
@@ -113,6 +115,7 @@ function hashToImg(id: string): number {
 function rowToMapProvider(row: MapProviderRow): MapProvider {
   return {
     id: `db-${row.provider_id}`,
+    trustTier: (row as any).trust_tier ?? 'verified',
     displayName: row.display_name || 'Intima companion',
     age: null,
     city: row.city,
@@ -150,12 +153,23 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, username, display_name, avatar_url, is_verified, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls',
+        'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls',
       )
       .limit(300);
     if (error) throw error;
     const rows = (data ?? []) as MapProviderRow[];
-    if (rows.length > 0) return rows.map(rowToMapProvider);
+    if (rows.length > 0) {
+      const mapped = rows.map(rowToMapProvider);
+      // Boosts: active boosts pin providers to the front.
+      const { data: boosts } = await supabase
+        .from('boosts')
+        .select('provider_id')
+        .gt('ends_at', new Date().toISOString());
+      const boostedIds = new Set<string>(((boosts ?? []) as { provider_id: string }[]).map((b) => b.provider_id));
+      for (const p of mapped) p.boosted = boostedIds.has(p.id.replace(/^db-/, ''));
+      mapped.sort((a, b) => Number(b.boosted ?? false) - Number(a.boosted ?? false));
+      return mapped;
+    }
   } catch {
     // Fall through to mocks: map stays useful before migration / offline.
   }

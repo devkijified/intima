@@ -1,6 +1,8 @@
 'use client'
 
-import { StoryManager } from '@/components/stories/StoryManager';
+import { StoryManager } from '@/components/stories/StoryManager'
+import { TouringPanel } from '@/components/profile/TouringPanel'
+import { BoostPanel } from '@/components/profile/BoostPanel';
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -599,6 +601,10 @@ export default function ProfilePage() {
               </label>
             </div>
           </div>
+
+          <TouringPanel />
+
+          <BoostPanel />
 
           {/* Save */}
           <button

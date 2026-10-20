@@ -54,6 +54,7 @@ import {
   ProfileAdd as SaxProfileAdd,
   ProfileRemove as SaxProfileRemove,
   Radio as SaxRadio,
+  Crown1 as SaxCrown1,
   Refresh as SaxRefresh,
   Save2 as SaxSave2,
   SearchNormal1 as SaxSearchNormal1,
@@ -89,6 +90,7 @@ function wrap(Sax: ComponentType<any>) {
 export const X = wrap(SaxCloseSquare)
 export const Timer = wrap(SaxClock)
 export const Radio = wrap(SaxRadio)
+export const Crown = wrap(SaxCrown1)
 export const XCircle = wrap(SaxCloseCircle)
 export const CheckCircle = wrap(SaxTickCircle)
 export const CheckCircle2 = wrap(SaxTickCircle)
