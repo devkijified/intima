@@ -22,7 +22,7 @@ function service() {
 }
 
 /**
- * GET /api/admin/cashouts?status=pending — list requests for review.
+ * GET /api/admin/cashouts?status=pending: list requests for review.
  */
 export async function GET(req: NextRequest) {
   const admin = await requireAdmin();

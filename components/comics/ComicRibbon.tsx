@@ -41,7 +41,7 @@ export function ComicRibbon() {
       >
         <BookOpen className="h-4 w-4 text-gold" />
         <span className="text-[13px] font-medium">
-          New comic episode — <span className="font-semibold">{ep.title}</span>
+          New comic episode: <span className="font-semibold">{ep.title}</span>
         </span>
         <button
           aria-label="Dismiss"

@@ -405,7 +405,7 @@ export default function IntimaMap() {
             }`,
           );
         });
-        // Stage 2: the style itself. A generous 60s for slow connections —
+        // Stage 2: the style itself. A generous 60s for slow connections,
         // a slow map shows the loading state, only a dead one falls back.
         styleTimer = setTimeout(() => {
           if (!cancelled && !mapRef.current)

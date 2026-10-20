@@ -64,7 +64,7 @@ export default function StreamEndedPage() {
             <div className="mt-6 grid grid-cols-3 gap-3">
               <div className="rounded-2xl bg-cream p-4">
                 <Clock className="mx-auto h-5 w-5 text-neutral-400" />
-                <p className="mt-1 text-lg font-bold text-charcoal">{minutes ?? '–'}</p>
+                <p className="mt-1 text-lg font-bold text-charcoal">{minutes ?? '…'}</p>
                 <p className="text-xs text-neutral-500">minutes</p>
               </div>
               <div className="rounded-2xl bg-cream p-4">

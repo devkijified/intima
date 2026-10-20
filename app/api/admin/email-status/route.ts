@@ -3,7 +3,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * GET /api/admin/email-status — whether Gmail polling is connected.
+ * GET /api/admin/email-status: whether Gmail polling is connected.
  */
 export async function GET() {
   const supabase = createClient();

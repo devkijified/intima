@@ -22,7 +22,7 @@ export function BoostPanel() {
     setBusy(false)
     if (res.ok) {
       setActiveUntil(d.endsAt)
-      setMsg('Boosted — you are pinned to the top of the map for 30 minutes.')
+      setMsg('Boosted. You are pinned to the top of the map for 30 minutes.')
     } else if (res.status === 402) {
       setMsg(d.error ?? 'Not enough coins. Top up from Coins or your earnings.')
     } else {

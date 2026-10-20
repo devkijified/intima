@@ -20,7 +20,7 @@ function svc() {
   );
 }
 
-/** GET /api/admin/comics — list with per-episode stats. */
+/** GET /api/admin/comics: list with per-episode stats. */
 export async function GET() {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
@@ -43,7 +43,7 @@ export async function GET() {
   return NextResponse.json({ episodes: eps ?? [], stats });
 }
 
-/** POST /api/admin/comics — create draft. Body: { title, synopsis?, coverUrl?, panelUrls } */
+/** POST /api/admin/comics: create draft. Body: { title, synopsis?, coverUrl?, panelUrls } */
 export async function POST(req: NextRequest) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, episode: data });
 }
 
-/** PATCH /api/admin/comics — publish (fans out push) or unpublish. Body: { id, action } */
+/** PATCH /api/admin/comics: publish (fans out push) or unpublish. Body: { id, action } */
 export async function PATCH(req: NextRequest) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
@@ -112,7 +112,7 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-/** DELETE /api/admin/comics?id= — remove a draft (published episodes stay). */
+/** DELETE /api/admin/comics?id=: remove a draft (published episodes stay). */
 export async function DELETE(req: NextRequest) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });

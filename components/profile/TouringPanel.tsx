@@ -46,7 +46,7 @@ export function TouringPanel() {
     })
     setBusy(false)
     if (error) { setMsg('Could not add. Check the dates.'); return }
-    setMsg('Tour added — clients in ' + city + ' will see you.')
+    setMsg('Tour added. Clients in ' + city + ' will see you.')
     setStart(''); setEnd('')
     load()
   }

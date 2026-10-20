@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/coins/transfer-intent — user's active intent, if any.
+ * GET /api/coins/transfer-intent: user's active intent, if any.
  */
 export async function GET() {
   const supabase = createClient();

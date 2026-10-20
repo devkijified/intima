@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 /**
  * POST /api/coins/transfer-confirm
  * Called by the email poller when a UBA credit alert matches a pending intent.
- * Body: { reference, amountNgn, alertId } — alertId for idempotency/dedup.
+ * Body: { reference, amountNgn, alertId }: alertId for idempotency/dedup.
  *
  * Matches a pending, unexpired intent by reference (case-insensitive) and
  * exact amount, then credits the coins. Safe to call repeatedly.

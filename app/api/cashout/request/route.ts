@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * GET /api/cashout/mine — companion's cash-out history.
+ * GET /api/cashout/mine: companion's cash-out history.
  */
 export async function GET() {
   const supabase = createClient();
