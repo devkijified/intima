@@ -23,6 +23,9 @@ export default function AdminComicsPage() {
   const [panels, setPanels] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [feedUrl, setFeedUrl] = useState('')
+  const [preview, setPreview] = useState<{ name: string; items: Array<{ guid: string; title: string; images: string[] }> } | null>(null)
+  const [feeds, setFeeds] = useState<Array<{ id: string; name: string; url: string }>>([])
 
   async function load() {
     const res = await fetch('/api/admin/comics')
@@ -34,7 +37,55 @@ export default function AdminComicsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadFeeds() }, [])
+
+  async function loadFeeds() {
+    const res = await fetch('/api/admin/comics/import')
+    const d = await res.json()
+    if (res.ok) setFeeds(d.feeds ?? [])
+  }
+
+  async function previewFeed() {
+    setBusy(true); setMsg('')
+    const res = await fetch('/api/admin/comics/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'preview', url: feedUrl.trim() }),
+    })
+    const d = await res.json()
+    setBusy(false)
+    if (res.ok) setPreview(d); else setMsg(d.error ?? 'Could not read that feed.')
+  }
+
+  async function addFeed() {
+    const res = await fetch('/api/admin/comics/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add-feed', url: feedUrl.trim() }),
+    })
+    const d = await res.json()
+    if (res.ok) { setFeeds(d.feeds); setMsg('Feed added. New episodes auto-publish daily.') }
+    else setMsg(d.error ?? 'Could not add that feed.')
+  }
+
+  async function removeFeed(id: string) {
+    const res = await fetch('/api/admin/comics/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove-feed', id }),
+    })
+    const d = await res.json()
+    if (res.ok) setFeeds(d.feeds)
+  }
+
+  async function importItem(guid: string) {
+    setBusy(true)
+    const res = await fetch('/api/admin/comics/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'import', feedUrl: feedUrl.trim(), feedName: preview?.name, guid }),
+    })
+    const d = await res.json()
+    setBusy(false)
+    if (res.ok) { setMsg(`Imported as Episode ${d.episode.episode_no} (draft). Publish when ready.`); load() }
+    else setMsg(d.error ?? 'Import failed.')
+  }
 
   async function create() {
     setBusy(true); setMsg('')
@@ -129,6 +180,43 @@ export default function AdminComicsPage() {
           </button>
           {msg && <p className="text-xs text-neutral-600">{msg}</p>}
         </div>
+      </div>
+
+      {/* Feed import */}
+      <div className="card-luxe mt-6 p-5">
+        <h2 className="font-display text-xl font-semibold text-charcoal">Import from a feed</h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Paste an RSS feed URL from a comic you own or are licensed to republish.
+          Add it as a feed and new episodes publish automatically each day, with credit to the source.
+        </p>
+        <div className="mt-3 flex gap-2">
+          <input value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} placeholder="https://example.com/feed.xml"
+            className="min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-primary" />
+          <button onClick={previewFeed} disabled={busy || !feedUrl.trim()} className="btn-soft px-4 py-2.5 text-sm disabled:opacity-50">Preview</button>
+          <button onClick={addFeed} disabled={busy || !feedUrl.trim()} className="btn-luxe px-4 py-2.5 text-sm disabled:opacity-50">Add feed</button>
+        </div>
+        {feeds.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {feeds.map((f) => (
+              <div key={f.id} className="flex items-center justify-between rounded-xl bg-cream px-3 py-2 text-xs">
+                <span className="min-w-0 truncate"><span className="font-semibold text-charcoal">{f.name}</span> · <span className="text-neutral-500">{f.url}</span></span>
+                <button onClick={() => removeFeed(f.id)} className="ml-2 shrink-0 font-semibold text-red-500">Remove</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {preview && (
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-semibold text-neutral-500">{preview.name}: {preview.items.length} items found</p>
+            {preview.items.slice(0, 12).map((i) => (
+              <div key={i.guid} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100 px-3 py-2">
+                <span className="min-w-0 truncate text-sm text-charcoal">{i.title}</span>
+                <span className="shrink-0 text-[11px] text-neutral-400">{i.images.length} panels</span>
+                <button onClick={() => importItem(i.guid)} disabled={busy || i.images.length === 0} className="btn-luxe shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">Import</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Episode list */}

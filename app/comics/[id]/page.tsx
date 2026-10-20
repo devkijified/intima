@@ -13,6 +13,8 @@ interface Episode {
   synopsis: string | null
   panel_urls: string[]
   view_count: number
+  source_name: string | null
+  source_link: string | null
 }
 
 /** Vertical-scroll reader: panels stack, reading is tracked for analytics. */
@@ -42,7 +44,7 @@ export default function ComicReaderPage() {
     let live = true
     ;(async () => {
       const { data } = await supabase.from('comic_episodes')
-        .select('id, episode_no, title, synopsis, panel_urls, view_count')
+        .select('id, episode_no, title, synopsis, panel_urls, view_count, source_name, source_link')
         .eq('id', id)
         .eq('status', 'published')
         .maybeSingle()
@@ -135,6 +137,15 @@ export default function ComicReaderPage() {
           <Link href="/comics" className="btn-soft mt-6 inline-flex px-6 py-3 text-sm">All episodes</Link>
         )}
         <p className="mt-6 text-xs text-neutral-400">New episodes drop regularly — follow Intima and you will never miss one.</p>
+        {ep?.source_name && (
+          <p className="mt-2 text-[11px] text-neutral-400">
+            Source: {ep.source_link ? (
+              <a href={ep.source_link} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">{ep.source_name}</a>
+            ) : (
+              <span className="font-semibold">{ep.source_name}</span>
+            )}
+          </p>
+        )}
       </div>
     </div>
   )
