@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Wallet, Info, Coins, ArrowRight } from 'lucide-react'
+import { Wallet, Info, Coins, ArrowRight } from '@/lib/icons'
 
 export default function WalletPage() {
   const [role, setRole] = useState('client')

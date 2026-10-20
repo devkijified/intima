@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, Gift, Clock, Coins, Loader2 } from 'lucide-react'
+import { Eye, Gift, Clock, Coins, Loader2 } from '@/lib/icons'
 
 interface Summary {
   title: string

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { pushState, subscribePush, unsubscribePush, PushState, iosNeedsInstall } from '@/lib/push-client'
-import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck, Smartphone } from 'lucide-react'
+import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck, Smartphone } from '@/lib/icons'
 
 interface Notif {
   id: string

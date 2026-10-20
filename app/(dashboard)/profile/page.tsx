@@ -17,7 +17,7 @@ import {
   Eye,
   EyeOff,
   Zap,
-} from 'lucide-react'
+} from '@/lib/icons'
 import { SERVICE_CATALOG, SERVICE_CATEGORIES } from '@/lib/services'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 

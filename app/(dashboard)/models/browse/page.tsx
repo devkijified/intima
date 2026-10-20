@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ModelCard } from '@/components/models/ModelCard'
 import { ModelFilters } from '@/components/models/ModelFilters'
 import { Input } from '@/components/ui/Input'
-import { Search, Sparkles, Filter, Grid, List } from 'lucide-react'
+import { Search, Sparkles, Filter, Grid, List } from '@/lib/icons'
 import { Button } from '@/components/ui/Button'
 
 interface Model {

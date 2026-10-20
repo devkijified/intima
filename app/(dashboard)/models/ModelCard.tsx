@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { Star, MapPin } from 'lucide-react'
+import { Star, MapPin } from '@/lib/icons'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
 
 interface ModelCardProps {

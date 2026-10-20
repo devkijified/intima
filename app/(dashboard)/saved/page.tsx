@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Heart, MapPin, Star, Trash2 } from 'lucide-react'
+import { Heart, MapPin, Star, Trash2 } from '@/lib/icons'
 
 interface SavedProvider {
   provider_id: string

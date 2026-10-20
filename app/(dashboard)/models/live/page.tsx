@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Room, createLocalVideoTrack, createLocalAudioTrack, type LocalVideoTrack, type LocalAudioTrack } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
-import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift } from 'lucide-react'
+import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift } from '@/lib/icons'
 
 type Phase = 'setup' | 'publishing' | 'live'
 
