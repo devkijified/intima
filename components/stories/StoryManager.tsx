@@ -11,10 +11,11 @@ import { CONTACT_WARNING, scanForLeaks, leakWarning } from '@/lib/moderation/con
  * Media hosting: paste a URL for now (same pattern as gallery).
  */
 export function StoryManager() {
-  const [stories, setStories] = useState<{ id: string; media_url: string; media_type: string; caption: string | null; created_at: string; views: number }[]>([]);
+  const [stories, setStories] = useState<{ id: string; media_url: string; media_type: string; caption: string | null; created_at: string; is_subscribers_only: boolean; views: number }[]>([]);
   const [url, setUrl] = useState('');
   const [caption, setCaption] = useState('');
   const [isVideo, setIsVideo] = useState(false);
+  const [subscribersOnly, setSubscribersOnly] = useState(false);
   const [posting, setPosting] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [blockedMsg, setBlockedMsg] = useState('');
@@ -26,7 +27,7 @@ export function StoryManager() {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase
       .from('stories')
-      .select('id, media_url, media_type, caption, created_at')
+      .select('id, media_url, media_type, caption, created_at, is_subscribers_only')
       .eq('provider_id', user.id)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false });
@@ -64,9 +65,11 @@ export function StoryManager() {
         media_url: media,
         media_type: isVideo ? 'video' : 'photo',
         caption: caption.trim() || null,
+        is_subscribers_only: subscribersOnly,
       });
       setUrl('');
       setCaption('');
+      setSubscribersOnly(false);
       await load();
     }
     setPosting(false);
@@ -109,6 +112,15 @@ export function StoryManager() {
             />
             This is a video
           </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-600">
+            <input
+              type="checkbox"
+              checked={subscribersOnly}
+              onChange={(e) => setSubscribersOnly(e.target.checked)}
+              className="h-4 w-4 accent-[#C9A84C]"
+            />
+            Subscribers only
+          </label>
           {blocked && (
             <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {blockedMsg || CONTACT_WARNING}
@@ -142,6 +154,11 @@ export function StoryManager() {
                 <span className="absolute bottom-1 left-1 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white">
                   <Eye className="h-2.5 w-2.5" /> {s.views}
                 </span>
+                {s.is_subscribers_only && (
+                  <span className="absolute left-1 top-1 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold text-charcoal">
+                    Fan club
+                  </span>
+                )}
                 <button
                   onClick={() => remove(s.id)}
                   aria-label="Delete story"

@@ -29,13 +29,39 @@ export function StoryTray() {
       const { data: { user } } = await supabase.auth.getUser();
       if (live) setMyId(user?.id ?? null);
 
-      const { data: rows } = await supabase
+      const { data: allRows } = await supabase
         .from('stories')
-        .select('id, provider_id, media_url, media_type, caption, created_at')
+        .select('id, provider_id, media_url, media_type, caption, created_at, is_subscribers_only')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(100);
-      if (!rows || !live) return;
+      if (!allRows || !live) return;
+
+      // Subscribers only stories: visible only to the provider herself
+      // and to viewers with an effective fan club subscription to her
+      // (status 'active', or 'cancelled' with the period still running).
+      const subscribedProviders = new Set<string>();
+      if (user) {
+        const { data: mySubs } = await supabase
+          .from('subscriptions')
+          .select('provider_id, status, current_period_end')
+          .eq('subscriber_id', user.id);
+        const nowMs = Date.now();
+        for (const s of mySubs ?? []) {
+          if (
+            s.status === 'active' ||
+            (s.status === 'cancelled' && new Date(s.current_period_end).getTime() > nowMs)
+          ) {
+            subscribedProviders.add(s.provider_id as string);
+          }
+        }
+      }
+      const rows = allRows.filter(
+        (r) =>
+          !(r as { is_subscribers_only?: boolean }).is_subscribers_only ||
+          r.provider_id === user?.id ||
+          subscribedProviders.has(r.provider_id)
+      );
 
       // Group by provider.
       const byProvider = new Map<string, typeof rows>();

@@ -51,6 +51,8 @@ interface ProviderForm {
   galleryUrls: string[]
   showOnMap: boolean
   isAvailable: boolean
+  intakeQuestions: string[]
+  subPriceCoins: string
 }
 
 const EMPTY_FORM: ProviderForm = {
@@ -67,9 +69,17 @@ const EMPTY_FORM: ProviderForm = {
   galleryUrls: [],
   showOnMap: true,
   isAvailable: true,
+  intakeQuestions: ['', '', ''],
+  subPriceCoins: '',
 }
 
 function parseRate(v: string): number | null {
+  const n = parseInt(v.replace(/[^0-9]/g, ''), 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Fan club price: blank or 0 saves as null, which means fan club off. */
+function parseSubPrice(v: string): number | null {
   const n = parseInt(v.replace(/[^0-9]/g, ''), 10)
   return Number.isFinite(n) && n > 0 ? n : null
 }
@@ -102,7 +112,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, whatsapp_number, bio'
+          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -131,6 +141,13 @@ export default function ProfilePage() {
           galleryUrls: profile?.gallery_urls ?? [],
           showOnMap: presence?.show_on_map ?? true,
           isAvailable: presence?.is_available ?? true,
+          intakeQuestions: [0, 1, 2].map(
+            (i) =>
+              (Array.isArray((profile as any)?.intake_questions)
+                ? (profile as any).intake_questions[i]
+                : '') ?? ''
+          ),
+          subPriceCoins: (profile as any)?.sub_price_coins?.toString() ?? '',
         })
       } else {
         setClientName(profile?.display_name ?? '')
@@ -202,6 +219,11 @@ export default function ProfilePage() {
           whatsapp_number: form.whatsappNumber.trim() || null,
           bio: form.bio.trim() || null,
           gallery_urls: gallery,
+          sub_price_coins: parseSubPrice(form.subPriceCoins),
+          intake_questions: form.intakeQuestions
+            .map((q) => q.trim().slice(0, 120))
+            .filter(Boolean)
+            .slice(0, 3),
         },
         { onConflict: 'id' }
       )
@@ -495,6 +517,26 @@ export default function ProfilePage() {
             </label>
           </div>
 
+          {/* ---- Fan club ---- */}
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
+            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+              <Sparkles className="h-4 w-4 text-[#C9A84C]" /> Fan club
+            </h2>
+            <div>
+              <label className={labelCls}>Monthly price in coins</label>
+              <input
+                className={inputCls}
+                inputMode="numeric"
+                value={form.subPriceCoins}
+                onChange={(e) => setForm({ ...form, subPriceCoins: e.target.value })}
+                placeholder="e.g. 500. Blank or 0 turns your fan club off"
+              />
+              <p className="mt-1.5 text-xs text-neutral-500">
+                Fans pay this many coins per month. You receive your share after the platform cut.
+              </p>
+            </div>
+          </div>
+
           {/* ---- Services ---- */}
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
             <h2 className="mb-1 flex items-center gap-2 font-serif text-lg text-neutral-900">
@@ -529,6 +571,45 @@ export default function ProfilePage() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* ---- Screening questions ---- */}
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
+            <h2 className="mb-1 flex items-center gap-2 font-serif text-lg text-neutral-900">
+              <ShieldCheck className="h-4 w-4 text-[#AC244D]" /> Questions for new clients
+            </h2>
+            <p className="mb-4 text-xs text-neutral-500">
+              Ask up to 3 short questions. Clients answer when they request a connection.
+            </p>
+            <div className="space-y-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i}>
+                  <label className={labelCls}>Question {i + 1}{i > 0 ? ' (optional)' : ''}</label>
+                  <input
+                    className={inputCls}
+                    value={form.intakeQuestions[i] ?? ''}
+                    maxLength={120}
+                    onChange={(e) =>
+                      setForm((f) => {
+                        const next = [...f.intakeQuestions]
+                        next[i] = e.target.value
+                        return { ...f, intakeQuestions: next }
+                      })
+                    }
+                    placeholder={
+                      i === 0
+                        ? 'e.g. What are you looking for?'
+                        : i === 1
+                          ? 'e.g. When would you like to meet?'
+                          : 'e.g. Anything I should know first?'
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-neutral-400">
+              Screening only. Answers stay inside Intima and are checked for contact details before they reach you.
+            </p>
           </div>
 
           {/* ---- Gallery ---- */}
