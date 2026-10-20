@@ -167,6 +167,12 @@ export default function ProfilePage() {
 
   const saveProvider = async () => {
     if (!userId) return
+    // Fence: display names render on every card, pin, and chat. Scan both.
+    const nameScan = scanForLeaks(form.displayName)
+    if (!nameScan.clean) {
+      setError(`Please remove ${leakWarning(nameScan.leaks).toLowerCase()} from your display name before saving.`)
+      return
+    }
     const scan = scanForLeaks(form.bio)
     if (!scan.clean) {
       setBioWarning(leakWarning(scan.leaks))
@@ -227,6 +233,12 @@ export default function ProfilePage() {
 
   const saveClient = async () => {
     if (!userId) return
+    // Fence: your name is visible to companions, keep contact details off it.
+    const nameScan = scanForLeaks(clientName)
+    if (!nameScan.clean) {
+      setError(`Please remove ${leakWarning(nameScan.leaks).toLowerCase()} from your display name before saving.`)
+      return
+    }
     setSaving(true)
     setError(null)
     try {

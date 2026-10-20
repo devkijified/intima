@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Send, Radio } from '@/lib/icons'
+import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 
 interface Update {
   id: string
@@ -19,6 +20,8 @@ export default function ChannelPage() {
   const [isProvider, setIsProvider] = useState(false)
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
+  const [postMsg, setPostMsg] = useState('')
+  const [postErr, setPostErr] = useState(false)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -57,12 +60,30 @@ export default function ChannelPage() {
   async function post() {
     const body = draft.trim()
     if (!body || posting) return
+    const scan = scanForLeaks(body)
+    if (!scan.clean) {
+      setPostErr(true)
+      setPostMsg(leakWarning(scan.leaks))
+      return
+    }
     setPosting(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setPosting(false); return }
-    const { error } = await supabase.from('broadcasts').insert({ provider_id: user.id, body })
+    setPostMsg('')
+    const res = await fetch('/api/broadcasts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    })
+    const d = await res.json().catch(() => ({}))
     setPosting(false)
-    if (!error) { setDraft(''); load() }
+    if (res.ok) {
+      setDraft('')
+      setPostErr(false)
+      setPostMsg('Posted to your channel.')
+      load()
+    } else {
+      setPostErr(true)
+      setPostMsg(d.error ?? 'Could not post. Please try again.')
+    }
   }
 
   if (loading) {
@@ -93,10 +114,18 @@ export default function ChannelPage() {
           <button
             onClick={post}
             disabled={!draft.trim() || posting}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            className="btn-luxe mt-2 px-4 py-2 text-sm"
           >
             <Send className="h-3.5 w-3.5" /> {posting ? 'Posting…' : 'Post update'}
           </button>
+          {postMsg && (
+            <p className={'mt-2 text-xs ' + (postErr ? 'font-medium text-red-600' : 'text-emerald-600')}>
+              {postMsg}
+            </p>
+          )}
+          <p className="mt-2 text-[11px] text-neutral-400">
+            Keep it on Intima: contact details in posts are blocked, clients connect through the platform.
+          </p>
         </div>
       )}
 
