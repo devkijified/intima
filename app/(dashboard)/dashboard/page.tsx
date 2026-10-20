@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
-  Banknote} from 'lucide-react'
+  Banknote} from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 export default function DashboardPage() {

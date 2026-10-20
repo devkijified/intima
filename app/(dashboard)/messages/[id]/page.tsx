@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
-import { ArrowLeft, Loader2, Send, Sparkles, Phone } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, Sparkles, Phone } from '@/lib/icons'
 
 interface Msg {
   id: string

@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon, Radio, Heart,
   MessageCircle,
   Coins,
-  Banknote,} from 'lucide-react'
+  Banknote,} from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 

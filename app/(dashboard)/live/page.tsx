@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, Lock, Radio, X } from 'lucide-react'
+import { Eye, Lock, Radio, X } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface LiveStream {

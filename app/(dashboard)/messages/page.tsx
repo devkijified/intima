@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { MessageCircle, ChevronRight, Loader2 } from 'lucide-react'
+import { MessageCircle, ChevronRight, Loader2 } from '@/lib/icons'
 
 interface ThreadRow {
   connectionId: string

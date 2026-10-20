@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Coins, Loader2, Banknote, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { Coins, Loader2, Banknote, Clock, CheckCircle2, XCircle } from '@/lib/icons'
 
 interface CashoutRequest {
   id: string

@@ -1,12 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, Gift, Heart, Lock, Radio, Send, Share2, X,
-  PictureInPicture2,} from 'lucide-react'
+  PictureInPicture2,} from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 /* ---------------------------------- types --------------------------------- */
@@ -66,6 +67,7 @@ export default function StreamRoomPage() {
   const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid'>('loading')
   const [stream, setStream] = useState<Stream | null>(null)
   const [paidPrice, setPaidPrice] = useState(0)
+  const [showConnectModal, setShowConnectModal] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const [pipActive, setPipActive] = useState(false)
@@ -480,6 +482,7 @@ export default function StreamRoomPage() {
 
   if (phase === 'paid') {
     return (
+      <>
       <div className="relative flex h-[calc(100dvh-4rem)] items-center justify-center overflow-hidden bg-charcoal px-6">
         {stream?.provider?.avatar_url && (
           <img
@@ -497,19 +500,32 @@ export default function StreamRoomPage() {
           </p>
           <p className="mt-3 text-3xl font-bold text-charcoal">₦{paidPrice.toLocaleString()}</p>
           <button
-            disabled
-            className="mt-4 w-full cursor-not-allowed rounded-full bg-gold/60 py-3 text-sm font-bold text-charcoal"
+            onClick={() => setShowConnectModal(true)}
+            className="mt-4 w-full rounded-full bg-gold py-3 text-sm font-bold text-charcoal hover:bg-gold/90"
           >
-            Pay to join
+            Connect to join
           </button>
           <p className="mt-2 text-xs text-neutral-400">
-            Test mode: payments are not wired yet. Ask the host for access.
+            Connecting unlocks chat, calls, and this stream.
           </p>
           <Link href="/live" className="mt-4 inline-block text-sm font-medium text-primary">
             Back to live
           </Link>
         </div>
       </div>
+      {showConnectModal && stream?.provider && (
+        <RequestConnectionModal
+          providerId={stream.provider_id}
+          providerName={stream.provider.display_name ?? 'Host'}
+          providerAvatarUrl={stream.provider.avatar_url ?? null}
+          onClose={() => setShowConnectModal(false)}
+          onConnected={() => {
+            setShowConnectModal(false)
+            window.location.reload()
+          }}
+        />
+      )}
+    </>
     )
   }
 
