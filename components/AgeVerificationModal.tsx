@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, ShieldAlert } from 'lucide-react'
+import { X, ShieldAlert } from '@/lib/icons'
 
 interface AgeVerificationModalProps {
   isOpen: boolean

@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { X } from '@/lib/icons';
 import { SERVICE_CATALOG, type ServiceCategory } from '@/lib/services';
 import { cn } from '@/lib/utils/helpers';
 import type { Filters } from './IntimaMap';

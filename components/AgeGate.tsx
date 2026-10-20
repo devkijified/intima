@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from '@/lib/icons'
 import { AgeVerificationModal } from './AgeVerificationModal'
 
 const COOKIE_NAME = 'intima_age_ok'

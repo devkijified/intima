@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, ShieldCheck, Phone, Video, MessageCircle, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { X, ShieldCheck, Phone, Video, MessageCircle, Loader2, CheckCircle2, AlertTriangle } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings'
 import { getPaymentProvider, newPaymentReference } from '@/lib/payments/provider'

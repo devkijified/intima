@@ -11,7 +11,7 @@ import {
   Video,
   VideoOff,
   Volume2,
-} from 'lucide-react';
+} from '@/lib/icons';
 import type { CallKind } from './CallProvider';
 import { getInitials } from '@/lib/utils/helpers';
 

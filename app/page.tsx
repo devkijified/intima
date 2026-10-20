@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Loader2 } from 'lucide-react'
+import { Loader2 } from '@/lib/icons'
 
 // The map IS the landing page: full-screen, guest-accessible discovery.
 // See first, order second. Lazy-loaded so the first paint stays light.

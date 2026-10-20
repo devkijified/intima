@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, BadgeCheck, ChevronUp, Heart, LayoutGrid, ListChecks,
   MapPin, Phone, Play, Star, Tag, Video, X,
-} from 'lucide-react'
+} from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { RateCard } from '@/components/rates/RateCard'
 import { ServiceChips } from '@/components/services/ServiceChips'
