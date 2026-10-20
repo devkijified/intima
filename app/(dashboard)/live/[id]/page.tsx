@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard'
+import { GiftGlyph } from '@/components/live/GiftGlyph'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client'
@@ -697,7 +698,7 @@ export default function StreamRoomPage() {
             key={g.id}
             className="gift-toast flex items-center gap-2 rounded-full bg-black/55 py-1.5 pl-2 pr-3 backdrop-blur-sm"
           >
-            <span className="text-2xl">{g.emoji}</span>
+            <GiftGlyph name={g.name} tier={g.tier} size="sm" />
             <div className="leading-tight">
               <p className="text-[11px] font-semibold text-white">{g.senderName}</p>
               <p className="text-[10px] text-white/70">sent {g.name}</p>
@@ -710,7 +711,7 @@ export default function StreamRoomPage() {
       {megaGift && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
           <div className="mega-gift text-center">
-            <div className="text-8xl drop-shadow-2xl">{megaGift.emoji}</div>
+            <div className="flex justify-center drop-shadow-2xl"><GiftGlyph name={megaGift.name} tier={megaGift.tier} size="mega" /></div>
             <p className="mt-3 rounded-full bg-black/60 px-5 py-2 text-sm font-bold text-gold backdrop-blur-sm">
               {megaGift.senderName} sent {megaGift.name}!
             </p>
@@ -841,7 +842,7 @@ export default function StreamRoomPage() {
                         : 'border-white/10 bg-white/5'
                   }`}
                 >
-                  <span className="text-3xl">{g.emoji}</span>
+                  <GiftGlyph name={g.name} tier={g.tier} size="md" />
                   <span className="mt-1 text-[11px] font-medium text-white">{g.name}</span>
                   <span className="text-[10px] font-bold text-gold">
                     {sendingGift === g.id ? '…' : `${g.coin_cost.toLocaleString()}`}

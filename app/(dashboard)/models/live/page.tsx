@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Room, createLocalVideoTrack, createLocalAudioTrack, type LocalVideoTrack, type LocalAudioTrack } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
-import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift } from '@/lib/icons'
+import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift, Eye } from '@/lib/icons'
 
 type Phase = 'setup' | 'publishing' | 'live'
 
@@ -256,8 +256,8 @@ export default function GoLivePage() {
         <span className="flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
         </span>
-        <span className="rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-          👁 {viewerCount} watching
+        <span className="flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+          <Eye className="h-3.5 w-3.5" /> {viewerCount} watching
         </span>
       </div>
       {/* Gift earnings pill */}

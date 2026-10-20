@@ -186,7 +186,7 @@ export default function ThreadPage() {
           </div>
         ) : msgs.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <p className="font-display text-lg font-semibold text-charcoal">Say hello 👋</p>
+            <p className="font-display text-lg font-semibold text-charcoal">Say hello</p>
             <p className="mt-1 max-w-xs text-sm text-neutral-500">
               Pick a template below to start the conversation. Keep it respectful.
             </p>
