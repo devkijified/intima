@@ -100,7 +100,7 @@ export default function ComicReaderPage() {
   return (
     <div className="mx-auto max-w-2xl pb-24 animate-fade-in">
       {/* Reader top bar */}
-      <div className="sticky top-0 z-20 border-b border-black/[0.04] bg-cream/85 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 border-b border-black/[0.04] bg-cream/85 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-3 px-4 py-2.5">
           <Link href="/comics" aria-label="Back to episodes"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] active:scale-95">

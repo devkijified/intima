@@ -1355,7 +1355,7 @@ export default function StreamRoomPage() {
       {/* Host moderation sheet */}
       {modTarget && (
         <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/60" onClick={() => setModTarget(null)}>
-          <div className="w-full rounded-t-3xl bg-white p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full rounded-t-3xl bg-white p-5 pb-[max(2rem,env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
             <p className="text-center text-sm font-bold text-charcoal">{modTarget.name}</p>
             <div className="mt-4 space-y-2">
               <button
@@ -1433,7 +1433,7 @@ export default function StreamRoomPage() {
       {panelOpen && (
         <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/60" onClick={() => setPanelOpen(false)}>
           <div
-            className="max-h-[85%] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-8"
+            className="max-h-[85%] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(2rem,env(safe-area-inset-bottom))]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -1878,7 +1878,7 @@ export default function StreamRoomPage() {
       {giftOpen && (
         <div className="absolute inset-0 z-30 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/60" onClick={() => setGiftOpen(false)} />
-          <div className="gift-sheet relative animate-sheet-up rounded-t-[28px] bg-[#141419] px-4 pb-8 pt-3 shadow-sheet">
+          <div className="gift-sheet relative animate-sheet-up rounded-t-[28px] bg-[#141419] px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 shadow-sheet">
             <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/20" />
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-bold text-white">Send a gift</p>

@@ -38,7 +38,7 @@ export default function ComicsPage() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-28 pt-6 md:pb-10 animate-rise-in">
+    <div className="mx-auto max-w-3xl px-4 pb-28 pt-[max(1.5rem,env(safe-area-inset-top))] md:pb-10 animate-rise-in">
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
           <BookOpen className="h-5 w-5 text-primary" />

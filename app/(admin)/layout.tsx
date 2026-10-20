@@ -29,7 +29,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-dvh bg-gray-50">
-      <header className="border-b bg-white shadow-sm">
+      <header className="border-b bg-white shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="mx-auto max-w-7xl px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/admin" className="text-2xl font-bold text-[#AC244D]">
