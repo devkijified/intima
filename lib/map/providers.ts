@@ -15,6 +15,11 @@ import { MOCK_PROVIDERS, type MockProvider } from './mockProviders';
 export interface MapProvider {
   id: string;
   boosted?: boolean;
+  /** Standing travel setting: 'none' | 'selected' | 'nationwide'. */
+  travelMode: string;
+  travelCities: string[];
+  /** Earliest current or upcoming tour, for "In {city}" chips. */
+  nextTour: { city: string; start: string; end: string } | null;
   trustTier?: string;
   displayName: string;
   age: number | null;
@@ -73,10 +78,18 @@ interface MapProviderRow {
   avg_rating: number | null;
   booking_count: number | null;
   video_urls: string[] | null;
+  travel_mode?: string | null;
+  travel_cities?: string[] | null;
 }
 
+const MOCK_TRAVEL: Record<string, { mode: string; cities: string[] }> = {};
+
 export function mockToMapProvider(m: MockProvider): MapProvider {
+  const t = MOCK_TRAVEL[m.id] ?? { mode: 'none', cities: [] as string[] };
   return {
+    travelMode: t.mode,
+    travelCities: t.cities,
+    nextTour: null,
     id: m.id,
     displayName: m.displayName,
     age: m.age,
@@ -140,6 +153,9 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     viewCount: row.view_count ?? 0,
     bookingCount: row.booking_count ?? 0,
     videos: row.video_urls ?? [],
+    travelMode: row.travel_mode ?? 'none',
+    travelCities: row.travel_cities ?? [],
+    nextTour: null,
   };
 }
 
@@ -153,7 +169,7 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls',
+        'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls, travel_mode, travel_cities',
       )
       .limit(300);
     if (error) throw error;
@@ -167,6 +183,18 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
         .gt('ends_at', new Date().toISOString());
       const boostedIds = new Set<string>(((boosts ?? []) as { provider_id: string }[]).map((b) => b.provider_id));
       for (const p of mapped) p.boosted = boostedIds.has(p.id.replace(/^db-/, ''));
+      // Tours: attach each provider's earliest current/upcoming tour so
+      // cards can say "In Abuja, Oct 18 to 22" and city filters can match.
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: tours } = await supabase
+        .from('tour_dates')
+        .select('provider_id, city, start_date, end_date')
+        .gte('end_date', today)
+        .order('start_date', { ascending: true });
+      for (const t of (tours ?? []) as { provider_id: string; city: string; start_date: string; end_date: string }[]) {
+        const p = mapped.find((x) => x.id === `db-${t.provider_id}`);
+        if (p && !p.nextTour) p.nextTour = { city: t.city, start: t.start_date, end: t.end_date };
+      }
       mapped.sort((a, b) => Number(b.boosted ?? false) - Number(a.boosted ?? false));
       return mapped;
     }
