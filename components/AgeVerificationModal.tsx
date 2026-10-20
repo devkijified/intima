@@ -34,7 +34,7 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end justify-center md:items-center md:p-4">
-      <div className="bg-white rounded-t-3xl md:rounded-3xl max-w-md w-full p-8 shadow-2xl animate-sheet-up md:animate-none">
+      <div className="bg-white rounded-t-3xl md:rounded-3xl max-w-md w-full px-8 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl animate-sheet-up md:animate-none">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-charcoal">Age Verification</h2>

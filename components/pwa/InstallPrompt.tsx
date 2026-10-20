@@ -116,7 +116,7 @@ export function InstallPrompt() {
         onClick={later}
         className="absolute inset-0 h-full w-full cursor-default bg-black/50"
       />
-      <div className="relative w-full max-w-md rounded-t-[28px] bg-white p-6 pb-8 text-charcoal shadow-2xl sm:rounded-[28px]">
+      <div className="relative w-full max-w-md rounded-t-[28px] bg-white p-6 pb-[max(2rem,env(safe-area-inset-bottom))] text-charcoal shadow-2xl sm:rounded-[28px]">
         <button
           onClick={later}
           aria-label="Not now"

@@ -356,7 +356,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
         </div>
 
         {/* Scrollable content */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
           {/* TikTok-style profile header: avatar + stats */}
           <div className="px-4 pt-3">
             <div className="flex items-center gap-4">

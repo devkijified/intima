@@ -616,7 +616,7 @@ export default function ModelDetailPage() {
     <div className="mx-auto max-w-2xl pb-28 md:pb-10">
       <ProfileViewTracker providerId={provider.id} />
       {/* Top bar: back */}
-      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-black/[0.04] bg-cream/85 px-4 py-2.5 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-black/[0.04] bg-cream/85 px-4 py-2.5 backdrop-blur-xl" style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top, 0px))' }}>
         <button
           onClick={() => router.back()}
           aria-label="Back"
@@ -916,7 +916,7 @@ export default function ModelDetailPage() {
           onClick={() => { if (!reportBusy) setShowReport(false) }}
         >
           <div
-            className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8 sm:rounded-3xl sm:pb-5"
+            className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-[max(2rem,env(safe-area-inset-bottom))] sm:rounded-3xl sm:pb-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
