@@ -78,9 +78,24 @@ export default function LiveFeedPage() {
   const router = useRouter()
   const supabase = createClient()
 
+  // A failed query must never masquerade as an empty feed again (the
+  // missing live_sessions to profiles foreign key hid behind "No one
+  // is live" for weeks). Send failures to the error log.
+  const reportQueryError = (where: string, err: unknown) => {
+    if (!err) return
+    void fetch('/api/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `live page query failed (${where}): ${(err as any)?.message ?? 'unknown error'}`,
+        route: '/live',
+      }),
+    }).catch(() => {})
+  }
+
   useEffect(() => {
     async function fetchLive() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('live_sessions')
         .select(`
           id, provider_id, title, price_ngn, access_mode, viewer_count, featured, started_at,
@@ -92,6 +107,7 @@ export default function LiveFeedPage() {
         .eq('is_public', true)
         .order('featured', { ascending: false })
         .order('viewer_count', { ascending: false })
+      reportQueryError('live', error)
 
       // Attach city from provider_presence.
       const list: LiveStream[] = (data ?? []) as any
@@ -150,7 +166,7 @@ export default function LiveFeedPage() {
           )
         )
       }
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('live_sessions')
         .select(`
           id, provider_id, title, price_ngn, access_mode, scheduled_for,
@@ -163,6 +179,7 @@ export default function LiveFeedPage() {
         .gte('scheduled_for', new Date(Date.now() - 60 * 60 * 1000).toISOString())
         .order('scheduled_for', { ascending: true })
         .limit(20)
+      reportQueryError('scheduled', error)
       // RLS on live_sessions already limits what a caller can read, so
       // every scheduled row returned here is safe to list.
       setScheduled((data ?? []) as any)
