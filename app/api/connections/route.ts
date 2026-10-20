@@ -7,6 +7,7 @@ import {
   type CompanionRequirements,
 } from '@/lib/connections/eligibility';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
+import { notifyUsers } from '@/lib/push-server';
 
 function service() {
   return createServiceClient(
@@ -336,6 +337,17 @@ export async function POST(req: NextRequest) {
 
   // Genuinely new connection: the only path that can pay a referral.
   await maybeGrantReferralReward(svc, user.id, inserted.id);
+
+  // Tell the companion right away (bell row plus push, best effort): a new
+  // paid connection is the moment this platform exists for, and a companion
+  // who hears about it late is a client left waiting.
+  await notifyUsers({
+    userIds: [body.provider_id],
+    type: 'new_connection',
+    title: 'New connection',
+    body: 'A client just connected with you. Say hello in Messages.',
+    link: '/bookings',
+  });
 
   return NextResponse.json({ success: true, id: inserted.id });
 }

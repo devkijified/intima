@@ -2,8 +2,9 @@
 // Body: { user_ids: string[], type, title, body?, link? }.
 // Writes notification rows and fans out Web Push.
 //
-// v1 authorization: the caller must be a provider with an ACTIVE connection
-// to every target (covers live_started, booking_*, new_review). System
+// v1 authorization: the caller must share an ACTIVE connection with every
+// target, in either direction (covers live_started from providers, plus
+// booking_message and incoming_call between connected pairs). System
 // events stay server-side only.
 import { createClient } from '@/lib/supabase/server'
 import { notifyUsers } from '@/lib/push-server'
@@ -15,6 +16,7 @@ const ALLOWED_TYPES = new Set([
   'booking_accepted',
   'booking_message',
   'new_review',
+  'incoming_call',
 ])
 
 export async function POST(request: Request) {
@@ -41,14 +43,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'no valid user ids' }, { status: 400 })
   }
 
-  // Caller must be a provider with an active connection to every target.
+  // Caller must share an active connection with every target, either as
+  // the provider or as the client of that connection.
   const { data: conns } = await supabase
     .from('connections')
-    .select('client_id')
-    .eq('provider_id', user.id)
+    .select('client_id, provider_id')
     .eq('status', 'active')
-    .in('client_id', ids)
-  const covered = new Set((conns ?? []).map((c: { client_id: string }) => c.client_id))
+    .or(`provider_id.eq.${user.id},client_id.eq.${user.id}`)
+  const covered = new Set(
+    (conns ?? []).map((c: { client_id: string; provider_id: string }) =>
+      c.provider_id === user.id ? c.client_id : c.provider_id,
+    ),
+  )
   const unauthorized = ids.filter((id) => !covered.has(id))
   if (unauthorized.length > 0) {
     return NextResponse.json({ error: 'No active connection to some recipients' }, { status: 403 })

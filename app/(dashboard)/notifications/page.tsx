@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { pushState, subscribePush, unsubscribePush, PushState, iosNeedsInstall } from '@/lib/push-client'
-import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck, Smartphone } from '@/lib/icons'
+import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck, Smartphone, Phone } from '@/lib/icons'
 
 interface Notif {
   id: string
@@ -20,7 +20,9 @@ const ICONS: Record<string, any> = {
   live_started: Radio,
   booking_request: Calendar,
   booking_accepted: Calendar,
+  new_connection: Calendar,
   booking_message: MessageCircle,
+  incoming_call: Phone,
   new_review: Star,
   system: Info,
 }

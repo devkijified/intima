@@ -93,6 +93,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const myAvatarRef = useRef<string | undefined>(undefined);
   const inboundRef = useRef<RealtimeChannel | null>(null);
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reringRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const peerChannelsRef = useRef(new Map<string, RealtimeChannel>());
 
   useEffect(() => {
@@ -107,6 +108,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
     if (ringTimerRef.current) {
       clearTimeout(ringTimerRef.current);
       ringTimerRef.current = null;
+    }
+    if (reringRef.current) {
+      clearInterval(reringRef.current);
+      reringRef.current = null;
     }
   }, []);
 
@@ -242,6 +247,31 @@ export function CallProvider({ children }: { children: ReactNode }) {
           kind,
           room,
         });
+        // Push as well as ring: the realtime ring only reaches a callee
+        // whose app is already open. The push wakes everyone else, and the
+        // re-ring below means a callee who opens the app from the push
+        // still catches the call instead of a missed broadcast.
+        void fetch('/api/push/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [peerId],
+            type: 'incoming_call',
+            title: 'Incoming call',
+            body: `${myNameRef.current} is calling you`,
+            link: '/dashboard',
+          }),
+        }).catch(() => {});
+        if (reringRef.current) clearInterval(reringRef.current);
+        reringRef.current = setInterval(() => {
+          void signalPeer(peerId, 'call:ring', {
+            from: myIdRef.current,
+            fromName: myNameRef.current,
+            fromAvatar: myAvatarRef.current,
+            kind,
+            room,
+          });
+        }, 4000);
         ringTimerRef.current = setTimeout(() => {
           void endCall(peerId, room);
         }, RING_TIMEOUT_MS);
@@ -351,6 +381,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
       ch.on('broadcast', { event: 'call:ring' }, ({ payload }) => {
         const ring = payload as IncomingRing;
         if (!ring || ring.from === myIdRef.current) return;
+        // A re-ring for the call already ringing here is not a new call:
+        // the caller repeats the ring so late joiners still catch it.
+        if (incomingRef.current && incomingRef.current.room === ring.room) return;
         if (callRef.current || incomingRef.current) {
           // Busy: tell the caller.
           void getPeerChannel(ring.from).send({

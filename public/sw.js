@@ -78,8 +78,22 @@ self.addEventListener('notificationclick', (event) => {
     (async () => {
       try {
         const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // Prefer a window already on the target page: just focus it.
         for (const w of wins) {
-          if ('focus' in w) { await w.focus(); return; }
+          try {
+            if (new URL(w.url).pathname === new URL(url, self.location.origin).pathname) {
+              await w.focus();
+              return;
+            }
+          } catch { /* fall through */ }
+        }
+        // Otherwise navigate an existing window to the notification's page.
+        for (const w of wins) {
+          if ('navigate' in w && 'focus' in w) {
+            await w.navigate(url);
+            await w.focus();
+            return;
+          }
         }
         await self.clients.openWindow(url);
       } catch { /* ignore */ }

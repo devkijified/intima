@@ -267,6 +267,21 @@ export default function ThreadPage() {
       }
       setInput('')
       setShowTemplates(false)
+      // Push the other side (best effort): a message nobody hears about
+      // until they happen to open the app is a message half delivered.
+      if (other?.id) {
+        void fetch('/api/push/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [other.id],
+            type: 'booking_message',
+            title: 'New message',
+            body: text.slice(0, 80),
+            link: `/messages/${connectionId}`,
+          }),
+        }).catch(() => {})
+      }
     }
   }
 
@@ -482,6 +497,19 @@ export default function ThreadPage() {
                     setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
                   }
                   setPpvUrl(''); setShowPpv(false)
+                  if (other?.id) {
+                    void fetch('/api/push/notify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        user_ids: [other.id],
+                        type: 'booking_message',
+                        title: 'New locked media',
+                        body: 'You received locked media in your chat.',
+                        link: `/messages/${connectionId}`,
+                      }),
+                    }).catch(() => {})
+                  }
                 }
               }}
               className="rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal"
