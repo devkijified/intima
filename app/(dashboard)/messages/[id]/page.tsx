@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
 import ConnectionCare from '@/components/connections/ConnectionCare'
+import { FanBadge } from '@/components/social/FanBadge'
 import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock, Timer } from '@/lib/icons'
 
 interface Msg {
@@ -18,6 +19,7 @@ interface Msg {
   ppv_price_coins?: number | null
   unlocked_by?: string[]
   expires_at?: string | null
+  view_once?: boolean | null
 }
 
 interface Counterpart {
@@ -40,6 +42,10 @@ export default function ThreadPage() {
   const [other, setOther] = useState<Counterpart | null>(null)
   const [otherRating, setOtherRating] = useState<{ avg: number; count: number } | null>(null)
   const [connInfo, setConnInfo] = useState<{ feeNgn: number | null; feeState: string | null; disputeDeadline: string | null } | null>(null)
+  const [intakeAnswers, setIntakeAnswers] = useState<{ q: string; a: string }[]>([])
+  const [viewerIsProvider, setViewerIsProvider] = useState(false)
+  const [otherIsFan, setOtherIsFan] = useState(false)
+  const [showIntake, setShowIntake] = useState(false)
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -52,6 +58,58 @@ export default function ThreadPage() {
   const [templateTab, setTemplateTab] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Media privacy (migration 044): who has viewed shared media.
+  const [mediaViews, setMediaViews] = useState<{ message_id: string; viewer_id: string }[]>([])
+  const [viewerMsg, setViewerMsg] = useState<Msg | null>(null)
+  const [screenshotNotice, setScreenshotNotice] = useState(false)
+
+  // Record that I viewed their media. Best effort: the primary key
+  // makes repeats harmless, and duplicate errors are ignored.
+  const recordMediaView = async (msg: Msg) => {
+    if (!me || msg.sender_id === me || !msg.media_url) return
+    setMediaViews((prev) =>
+      prev.some((v) => v.message_id === msg.id && v.viewer_id === me)
+        ? prev
+        : [...prev, { message_id: msg.id, viewer_id: me }]
+    )
+    try {
+      await createClient()
+        .from('media_views')
+        .insert({ message_id: msg.id, viewer_id: me })
+    } catch {
+      // Duplicate or offline: the local state already reflects the view.
+    }
+  }
+
+  // Opening media in the viewer counts as the view (this is also the
+  // single allowed open for view-once media).
+  const openMediaViewer = (msg: Msg) => {
+    void recordMediaView(msg)
+    setViewerMsg(msg)
+  }
+
+  // Screenshot deterrent while the viewer is open: a PrintScreen
+  // keypress or the window losing focus closes the viewer and leaves
+  // a notice in the thread. This deters casual captures only; the
+  // viewer footer says so honestly.
+  useEffect(() => {
+    if (!viewerMsg) return
+    const flagAttempt = () => {
+      setViewerMsg(null)
+      setScreenshotNotice(true)
+      setTimeout(() => setScreenshotNotice(false), 5000)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'PrintScreen') flagAttempt()
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('blur', flagAttempt)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('blur', flagAttempt)
+    }
+  }, [viewerMsg])
+
   useEffect(() => {
     let live = true
     ;(async () => {
@@ -62,7 +120,7 @@ export default function ThreadPage() {
 
       const { data: conn } = await supabase
         .from('connections')
-        .select('id, client_id, provider_id, status, fee_ngn, fee_state, dispute_deadline')
+        .select('id, client_id, provider_id, status, fee_ngn, fee_state, dispute_deadline, intake_answers')
         .eq('id', connectionId)
         .single()
       if (!conn || (conn.client_id !== user.id && conn.provider_id !== user.id)) {
@@ -75,9 +133,37 @@ export default function ThreadPage() {
           feeState: conn.fee_state ?? null,
           disputeDeadline: conn.dispute_deadline ?? null,
         })
+        setViewerIsProvider(conn.provider_id === user.id)
+        const rawAnswers = (conn as { intake_answers?: unknown }).intake_answers
+        setIntakeAnswers(
+          Array.isArray(rawAnswers)
+            ? rawAnswers
+                .filter(
+                  (x): x is { q: string; a: string } =>
+                    !!x && typeof x === 'object' && typeof (x as { q?: unknown }).q === 'string' && typeof (x as { a?: unknown }).a === 'string'
+                )
+                .slice(0, 3)
+            : []
+        )
       }
 
       const otherId = conn.client_id === user.id ? conn.provider_id : conn.client_id
+
+      // Fan badge: when the viewer is the provider, check whether the
+      // client has an effective fan club subscription to her.
+      if (conn.provider_id === user.id) {
+        try {
+          const res = await fetch(
+            `/api/subscriptions/subscribers?provider_id=${encodeURIComponent(user.id)}`
+          )
+          if (res.ok) {
+            const j = await res.json()
+            if (live && Array.isArray(j.subscriberIds) && j.subscriberIds.includes(otherId)) {
+              setOtherIsFan(true)
+            }
+          }
+        } catch { /* badge is best effort */ }
+      }
       const { data: prof } = await supabase
         .from('profiles')
         .select('display_name, avatar_url, whatsapp_number, role')
@@ -108,11 +194,25 @@ export default function ThreadPage() {
 
       const { data: history } = await supabase
         .from('messages')
-        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by')
+        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
         .eq('connection_id', connectionId)
         .order('created_at', { ascending: true })
       const fresh = (history ?? []).filter((m: any) => !m.expires_at || new Date(m.expires_at).getTime() > Date.now())
       if (live) { setMsgs(fresh as Msg[]); setLoading(false) }
+
+      // Media view state for this thread: drives my view-once blur
+      // and the sender side Seen labels. RLS returns only rows I am
+      // allowed to see (my own views, plus views of my media).
+      const mediaIds = (fresh as Msg[]).filter((m) => m.media_url).map((m) => m.id)
+      if (mediaIds.length > 0) {
+        const { data: views } = await supabase
+          .from('media_views')
+          .select('message_id, viewer_id')
+          .in('message_id', mediaIds)
+        if (live && views) {
+          setMediaViews(views as { message_id: string; viewer_id: string }[])
+        }
+      }
       // Mark their messages as read (best effort; read_at drives unread badges).
       supabase
         .from('messages')
@@ -154,7 +254,7 @@ export default function ThreadPage() {
       sender_id: me,
       body: text.slice(0, 1000),
       ...(disappearing ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() } : {}),
-    }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by').single()
+    }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once').single()
     setSending(false)
     if (!error) {
       // Show the message immediately from the insert result. Relying on
@@ -190,6 +290,7 @@ export default function ThreadPage() {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-charcoal">
             {other?.display_name ?? 'Member'}
+            {otherIsFan && <FanBadge className="ml-1.5" />}
           </p>
           <p className={`text-xs ${!loading && active ? 'text-emerald-600' : 'text-neutral-400'}`}>
             {loading ? 'Loading…' : active ? 'Connection active' : 'Connection not active'}
@@ -223,6 +324,30 @@ export default function ThreadPage() {
         />
       )}
 
+      {/* Screening answers: providers only, so she can screen before chatting */}
+      {viewerIsProvider && intakeAnswers.length > 0 && (
+        <div className="shrink-0 border-b border-black/[0.05] bg-white px-4 py-3">
+          <button
+            onClick={() => setShowIntake((v) => !v)}
+            className="flex w-full items-center justify-between text-left"
+            aria-expanded={showIntake}
+          >
+            <span className="text-[13px] font-semibold text-charcoal">Client answers</span>
+            <span className="text-xs font-medium text-primary">{showIntake ? 'Hide' : 'View'}</span>
+          </button>
+          {showIntake && (
+            <div className="mt-2 space-y-2.5">
+              {intakeAnswers.map((item, i) => (
+                <div key={i} className="rounded-xl bg-cream/70 px-3 py-2.5">
+                  <p className="text-xs font-semibold text-neutral-500">{item.q}</p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-charcoal">{item.a}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-cream/40 px-4 py-4">
         {loading ? (
@@ -250,10 +375,23 @@ export default function ThreadPage() {
                     }`}
                   >
                     <p>{m.body}</p>
-                    {m.media_url && <PpvMedia msg={m} me={me} />}
+                    {m.media_url && (
+                      <PpvMedia
+                        msg={m}
+                        me={me}
+                        hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
+                        onOpen={openMediaViewer}
+                        onViewed={recordMediaView}
+                      />
+                    )}
                     <p className={`mt-1 text-right text-[10px] ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
                       {fmtTime(m.created_at)}
                     </p>
+                    {mine && m.media_url && mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me) && (
+                      <p className={`text-right text-[10px] font-medium ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
+                        Seen
+                      </p>
+                    )}
                   </div>
                 </div>
               )
@@ -262,6 +400,12 @@ export default function ThreadPage() {
           </div>
         )}
       </div>
+
+      {screenshotNotice && (
+        <div className="shrink-0 border-t border-amber-100 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-700">
+          Screenshot attempt detected. Shared media is private between you two.
+        </div>
+      )}
 
       {/* Templates (Lagos Life style) */}
       {showTemplates && active && (
@@ -331,7 +475,7 @@ export default function ThreadPage() {
                   media_url: url,
                   media_type: isVideo ? 'video' : 'image',
                   ppv_price_coins: price,
-                }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by').single()
+                }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once').single()
                 if (!error) {
                   if (row) {
                     const m = row as Msg
@@ -403,12 +547,50 @@ export default function ThreadPage() {
           </button>
         </div>
       </div>
+
+      {/* Media viewer overlay: the one place shared media opens big.
+          PrintScreen or a window blur closes it (see effect above). */}
+      {viewerMsg && viewerMsg.media_url && (
+        <div
+          className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/95"
+          onClick={() => setViewerMsg(null)}
+        >
+          <button
+            aria-label="Close"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-lg text-white"
+          >
+            ×
+          </button>
+          <div className="max-h-[82vh] w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
+            {viewerMsg.media_type === 'video' ? (
+              <video src={viewerMsg.media_url} controls autoPlay className="max-h-[76vh] w-full rounded-2xl object-contain" />
+            ) : (
+              <img src={viewerMsg.media_url} alt="" className="max-h-[76vh] w-full rounded-2xl object-contain" draggable={false} />
+            )}
+          </div>
+          <p className="px-6 pb-5 text-center text-[11px] text-white/50">
+            We discourage screenshots, but no app can fully prevent them.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
 /** Locked media in chat: unlock with coins via the server. */
-function PpvMedia({ msg, me }: { msg: Msg; me: string | null }) {
+function PpvMedia({
+  msg,
+  me,
+  hasViewed,
+  onOpen,
+  onViewed,
+}: {
+  msg: Msg
+  me: string | null
+  hasViewed: boolean
+  onOpen: (msg: Msg) => void
+  onViewed: (msg: Msg) => void
+}) {
   const [busy, setBusy] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
   const price = msg.ppv_price_coins ?? 0
@@ -426,6 +608,14 @@ function PpvMedia({ msg, me }: { msg: Msg; me: string | null }) {
     setBusy(false)
     if (res.ok) {
       setUnlocked(true)
+      // Unlocking is the view for paid media: record it for the
+      // sender. View-once media opens in the viewer instead, so the
+      // single allowed open is a real look, not just the unlock.
+      if (msg.view_once) {
+        onOpen(msg)
+      } else {
+        onViewed(msg)
+      }
     } else if (res.status === 402) {
       alert(`Not enough coins. You need ${price} coins. Top up from Coins.`)
     } else {
@@ -450,8 +640,65 @@ function PpvMedia({ msg, me }: { msg: Msg; me: string | null }) {
     )
   }
 
-  if (msg.media_type === 'video') {
-    return <video src={msg.media_url!} controls className="mt-2 max-h-64 w-56 rounded-xl object-cover" />
+  // View-once, already opened by me: the media stays blurred for
+  // good. The sender keeps her normal view of her own media.
+  if (!isMine && msg.view_once && hasViewed) {
+    return (
+      <div className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800">
+        {msg.media_type === 'video' ? (
+          <video src={msg.media_url!} className="h-full w-full object-cover blur-xl" muted playsInline />
+        ) : (
+          <img src={msg.media_url!} alt="" className="h-full w-full object-cover blur-xl" draggable={false} />
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/45 px-4 text-center">
+          <span className="text-xs font-semibold text-white">
+            Already viewed. View once media can only be opened once.
+          </span>
+        </div>
+      </div>
+    )
   }
-  return <img src={msg.media_url!} alt="" className="mt-2 max-h-64 w-56 rounded-xl object-cover" />
+
+  // View-once, not opened yet: a deliberate tap is the one open, so
+  // loading the thread never burns it.
+  if (!isMine && msg.view_once && !hasViewed) {
+    return (
+      <button
+        onClick={() => onOpen(msg)}
+        className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800 text-left"
+      >
+        {msg.media_type === 'video' ? (
+          <video src={msg.media_url!} className="h-full w-full object-cover blur-xl" muted playsInline />
+        ) : (
+          <img src={msg.media_url!} alt="" className="h-full w-full object-cover blur-xl" draggable={false} />
+        )}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/45">
+          <span className="text-sm font-semibold text-white">View once</span>
+          <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-charcoal">
+            Tap to open
+          </span>
+        </div>
+      </button>
+    )
+  }
+
+  if (msg.media_type === 'video') {
+    return (
+      <video
+        src={msg.media_url!}
+        controls
+        onPlay={() => onViewed(msg)}
+        className="mt-2 max-h-64 w-56 rounded-xl object-cover"
+      />
+    )
+  }
+  return (
+    <img
+      src={msg.media_url!}
+      alt=""
+      onClick={() => onOpen(msg)}
+      className="mt-2 max-h-64 w-56 cursor-pointer rounded-xl object-cover"
+      draggable={false}
+    />
+  )
 }

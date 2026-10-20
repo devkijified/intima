@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, BadgeCheck, CheckCircle2, ChevronUp, Heart, LayoutGrid, ListChecks,
+  ArrowLeft, BadgeCheck, CheckCircle2, ChevronUp, Flag, Heart, LayoutGrid, ListChecks,
   MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
@@ -18,6 +18,8 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 import { evaluateEligibility, hasRequirements, type Eligibility } from '@/lib/connections/eligibility'
 import { companionShareLink, shareLink } from '@/lib/links'
 import { StoryViewer, type Story } from '@/components/stories/StoryViewer'
+import { SubscribeCard } from '@/components/social/SubscribeCard'
+import { ProfileViewTracker } from '@/components/analytics/ProfileViewTracker'
 import type { MockReview } from '@/lib/map/mockReviews'
 
 type PageTab = 'posts' | 'services' | 'rates' | 'reviews'
@@ -49,6 +51,27 @@ interface Provider {
   reqVerified: boolean
   reqMinConnections: number
   reqMinDays: number
+  responseRate: number | null
+  avgFirstResponseMinutes: number | null
+  cancellationRate: number | null
+  repeatClientRate: number | null
+  eligibleConnectionCount: number
+  respondedConnectionCount: number
+  distinctClientCount: number
+  isHidden: boolean
+}
+
+/** Plain reply time wording: minutes, then hours, then days. */
+function formatReplyTime(minutes: number): string {
+  if (minutes < 60) {
+    return `about ${Math.max(1, Math.round(minutes))} min`
+  }
+  if (minutes < 60 * 24) {
+    const hours = Math.round(minutes / 60)
+    return hours === 1 ? 'about 1 hr' : `about ${hours} hrs`
+  }
+  const days = Math.round(minutes / (60 * 24))
+  return days === 1 ? 'about 1 day' : `about ${days} days`
 }
 
 /** One requirement row: green check when met, red cross when not, neutral when unknown (guest). */
@@ -193,6 +216,7 @@ export default function ModelDetailPage() {
   const [toast, setToast] = useState<string | null>(null)
   const [loggedIn, setLoggedIn] = useState(false)
   const [viewerId, setViewerId] = useState<string | null>(null)
+  const [isOwner, setIsOwner] = useState(false)
   const [eligibility, setEligibility] = useState<Eligibility | null>(null)
   const showToast = (msg: string) => {
     setToast(msg)
@@ -240,6 +264,15 @@ export default function ModelDetailPage() {
       }
       const id = p.id
 
+      // Hidden flag (migration 044): fetched separately so the page
+      // keeps working before the migration runs; a missing column
+      // just reads as not hidden.
+      const { data: hiddenRow } = await supabase
+        .from('profiles')
+        .select('is_hidden')
+        .eq('id', id)
+        .maybeSingle()
+
       // Presence: city + availability + recency.
       const { data: presence } = await supabase
         .from('provider_presence')
@@ -265,10 +298,19 @@ export default function ModelDetailPage() {
         .eq('provider_id', id)
         .eq('status', 'active')
 
+      // Trust metrics from the public view (migration 038). When the
+      // view has no row for her, or the migration has not run yet,
+      // every value stays null and the Trust section stays hidden.
+      const { data: trustRow } = await supabase
+        .from('map_providers')
+        .select('response_rate, avg_first_response_minutes, cancellation_rate, repeat_client_rate, eligible_connection_count, responded_connection_count, distinct_client_count')
+        .eq('provider_id', id)
+        .maybeSingle()
+
       // Active stories for the story ring.
       const { data: storyRows } = await supabase
         .from('stories')
-        .select('id, provider_id, media_url, media_type, caption, created_at')
+        .select('id, provider_id, media_url, media_type, caption, created_at, is_subscribers_only')
         .eq('provider_id', id)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: true })
@@ -283,6 +325,7 @@ export default function ModelDetailPage() {
 
       // Connected already?
       const { data: { user } } = await supabase.auth.getUser()
+      if (live) setIsOwner(!!user && user.id === id)
       if (user && user.id !== id) {
         const req = {
           req_verified_client: (p as any).req_verified_client === true,
@@ -344,6 +387,14 @@ export default function ModelDetailPage() {
         reqVerified: (p as any).req_verified_client === true,
         reqMinConnections: (p as any).req_min_connections ?? 0,
         reqMinDays: (p as any).req_min_account_days ?? 0,
+        responseRate: (trustRow as any)?.response_rate ?? null,
+        avgFirstResponseMinutes: (trustRow as any)?.avg_first_response_minutes ?? null,
+        cancellationRate: (trustRow as any)?.cancellation_rate ?? null,
+        repeatClientRate: (trustRow as any)?.repeat_client_rate ?? null,
+        eligibleConnectionCount: (trustRow as any)?.eligible_connection_count ?? 0,
+        respondedConnectionCount: (trustRow as any)?.responded_connection_count ?? 0,
+        distinctClientCount: (trustRow as any)?.distinct_client_count ?? 0,
+        isHidden: (hiddenRow as any)?.is_hidden === true,
       })
       setReviews(
         (reviewRows ?? []).map((r) => ({
@@ -354,8 +405,35 @@ export default function ModelDetailPage() {
           date: new Date(r.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }),
         }))
       )
+      // Subscribers only stories stay hidden unless the viewer is her
+      // or has an effective fan club subscription to her.
+      let visibleStoryRows = storyRows ?? []
+      if (
+        user?.id !== id &&
+        visibleStoryRows.some((s) => (s as { is_subscribers_only?: boolean }).is_subscribers_only)
+      ) {
+        let isFan = false
+        if (user) {
+          const { data: mySubs } = await supabase
+            .from('subscriptions')
+            .select('status, current_period_end')
+            .eq('subscriber_id', user.id)
+            .eq('provider_id', id)
+          const nowMs = Date.now()
+          isFan = (mySubs ?? []).some(
+            (s) =>
+              s.status === 'active' ||
+              (s.status === 'cancelled' && new Date(s.current_period_end).getTime() > nowMs)
+          )
+        }
+        if (!isFan) {
+          visibleStoryRows = visibleStoryRows.filter(
+            (s) => !(s as { is_subscribers_only?: boolean }).is_subscribers_only
+          )
+        }
+      }
       setStories(
-        (storyRows ?? []).map((s) => ({
+        visibleStoryRows.map((s) => ({
           id: s.id,
           provider_id: s.provider_id,
           media_url: s.media_url,
@@ -376,6 +454,40 @@ export default function ModelDetailPage() {
     })()
     return () => { live = false }
   }, [params.slug, supabase])
+
+  // Safety report (POST /api/reports): private, leak-scanned
+  // server-side; 3 open reports in 30 days hides the profile
+  // pending admin review (migration 044 threshold).
+  const [showReport, setShowReport] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportBusy, setReportBusy] = useState(false)
+  const submitReport = async () => {
+    if (!provider || reportBusy) return
+    if (!reportReason) { showToast('Pick what best describes the problem'); return }
+    setReportBusy(true)
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_id: provider.id,
+          reason: reportReason,
+          details: reportDetails.trim() || undefined,
+        }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) { showToast(data.error ?? 'Could not file the report'); return }
+      setShowReport(false)
+      setReportReason('')
+      setReportDetails('')
+      showToast('Report sent. Our team will review it.')
+    } catch {
+      showToast('Could not file the report')
+    } finally {
+      setReportBusy(false)
+    }
+  }
 
   const toggleFollow = async () => {
     const supabase = createClient()
@@ -445,9 +557,33 @@ export default function ModelDetailPage() {
     )
   }
 
+  // Hidden by the report threshold (migration 044): everyone but the
+  // owner gets a neutral unavailable state with no profile details.
+  // The owner still sees her page, with the review banner below.
+  const viewerIsOwner = isOwner || (viewerId !== null && viewerId === provider.id)
+  if (provider.isHidden && !viewerIsOwner) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-semibold text-charcoal">This profile is not available right now.</h1>
+        <Link href="/" className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white">
+          Back to map
+        </Link>
+      </div>
+    )
+  }
+
   const recency = formatRecency(provider.lastActiveAt)
   const offersVoice = provider.services.includes('voice-call')
   const offersVideo = provider.services.includes('video-call')
+
+  // Trust section guards: small samples stay hidden so a handful of
+  // early connections never reads as a verdict. Cancellation needs
+  // the biggest sample because it is the harshest number.
+  const showResponseRate = provider.responseRate !== null && provider.eligibleConnectionCount >= 3
+  const showReplyTime = provider.avgFirstResponseMinutes !== null && provider.respondedConnectionCount >= 3
+  const showCancellationRate = provider.cancellationRate !== null && provider.eligibleConnectionCount >= 5
+  const showRepeatRate = provider.repeatClientRate !== null && provider.distinctClientCount >= 3
+  const showTrust = showResponseRate || showReplyTime || showCancellationRate || showRepeatRate
 
   const photos = [provider.avatar, ...provider.gallery].filter(Boolean) as string[]
   const slides: Array<{ kind: 'photo' | 'video'; src: string }> = [
@@ -458,6 +594,7 @@ export default function ModelDetailPage() {
 
   return (
     <div className="mx-auto max-w-2xl pb-28 md:pb-10">
+      <ProfileViewTracker providerId={provider.id} />
       {/* Top bar: back */}
       <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-black/[0.04] bg-cream/85 px-4 py-2.5 backdrop-blur-xl">
         <button
@@ -469,6 +606,12 @@ export default function ModelDetailPage() {
         </button>
         <span className="text-sm font-semibold text-charcoal">{provider.displayName}</span>
       </div>
+
+      {provider.isHidden && viewerIsOwner && (
+        <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Your profile is hidden from the map right now while our team reviews reports about it. Contact support if you think this is a mistake.
+        </div>
+      )}
 
       {/* TikTok-style profile header */}
       <div className="px-4 pt-2">
@@ -564,6 +707,29 @@ export default function ModelDetailPage() {
           {recency && <span className="text-neutral-500">{recency}</span>}
           <span className="text-neutral-500">{provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}</span>
         </div>
+
+        {/* Trust: how she shows up once a connection starts */}
+        {showTrust && (
+          <div className="card-luxe mt-4 p-4">
+            <p className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.1em] text-neutral-400">
+              <ShieldCheck className="h-4 w-4 text-primary" /> Trust
+            </p>
+            <div className="mt-2.5 space-y-1.5 text-sm text-charcoal">
+              {showResponseRate && provider.responseRate !== null && (
+                <p>Responds to {Math.round(provider.responseRate * 100)}% of connections</p>
+              )}
+              {showReplyTime && provider.avgFirstResponseMinutes !== null && (
+                <p>Typically replies in {formatReplyTime(provider.avgFirstResponseMinutes)}</p>
+              )}
+              {showCancellationRate && provider.cancellationRate !== null && (
+                <p>Cancellation rate {Math.round(provider.cancellationRate * 100)}%</p>
+              )}
+              {showRepeatRate && provider.repeatClientRate !== null && (
+                <p>{Math.round(provider.repeatClientRate * 100)}% of clients book again</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Who can book her: Bybit-style counterparty requirements */}
         {(provider.reqVerified || provider.reqMinConnections > 0 || provider.reqMinDays > 0) && (
@@ -693,13 +859,92 @@ export default function ModelDetailPage() {
           >
             <Share className="h-4 w-4 text-charcoal" />
           </button>
+          {viewerId !== provider.id && (
+            <button
+              onClick={() => {
+                if (!loggedIn) { showToast('Log in to file a report'); router.push('/signup?next=/companion/' + (provider.username ?? provider.id)); return }
+                setShowReport(true)
+              }}
+              aria-label="Report this profile"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90"
+            >
+              <Flag className="h-4 w-4 text-neutral-400" />
+            </button>
+          )}
         </div>
+
+        {/* Fan club: hidden for her own page; the card itself renders
+            nothing when she has not set a price */}
+        {viewerId !== provider.id && (
+          <SubscribeCard providerId={provider.id} providerName={provider.displayName} />
+        )}
       </div>
 
       {toast && (
         <div className="fixed inset-x-0 bottom-24 z-[70] flex justify-center px-4">
           <div className="rounded-full bg-charcoal/95 px-5 py-2.5 text-sm text-white shadow-2xl backdrop-blur-md">
             {toast}
+          </div>
+        </div>
+      )}
+
+      {/* Report sheet: files POST /api/reports. Text is leak-scanned
+          server-side, so the copy warns against contact details. */}
+      {showReport && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
+          onClick={() => { if (!reportBusy) setShowReport(false) }}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white p-5 pb-8 sm:rounded-3xl sm:pb-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-charcoal">Report {provider.displayName}</h3>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+                  Private. Our team reviews every report. Please do not include phone numbers or social handles here.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowReport(false)}
+                aria-label="Close report"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream ring-1 ring-black/[0.06]"
+              >
+                <X className="h-4 w-4 text-charcoal" />
+              </button>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {['Fake profile', 'Scam or fraud', 'Harassment', 'Underage concern', 'Impersonation', 'Other'].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setReportReason(r)}
+                  className={
+                    'rounded-full px-3.5 py-2 text-xs font-semibold ring-1 transition-all ' +
+                    (reportReason === r
+                      ? 'bg-primary text-white ring-primary'
+                      : 'bg-cream text-charcoal ring-black/[0.06]')
+                  }
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              rows={4}
+              maxLength={1000}
+              placeholder="Tell us what happened (optional, but it helps)"
+              className="mt-4 w-full rounded-2xl bg-cream px-4 py-3 text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40"
+            />
+            <button
+              onClick={submitReport}
+              disabled={reportBusy}
+              className="btn-luxe mt-4 h-12 w-full text-[15px] disabled:opacity-50"
+            >
+              {reportBusy ? 'Sending...' : 'Send report'}
+            </button>
           </div>
         </div>
       )}
