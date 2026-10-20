@@ -291,7 +291,12 @@ export default function ModelDetailPage() {
         .order('created_at', { ascending: false })
         .limit(10)
 
-      // Bookings: active connection count.
+      // Bookings: active connection count. The direct count is
+      // RLS-bound (only the two parties can read a connection), so
+      // for everyone else it reads 0; the public view's booking_count
+      // below is the number visitors should see, and this direct
+      // count remains only as a fallback for profiles the view does
+      // not carry (not on the map yet).
       const { count: bookingCount } = await supabase
         .from('connections')
         .select('id', { count: 'exact', head: true })
@@ -303,7 +308,7 @@ export default function ModelDetailPage() {
       // every value stays null and the Trust section stays hidden.
       const { data: trustRow } = await supabase
         .from('map_providers')
-        .select('response_rate, avg_first_response_minutes, cancellation_rate, repeat_client_rate, eligible_connection_count, responded_connection_count, distinct_client_count')
+        .select('booking_count, response_rate, avg_first_response_minutes, cancellation_rate, repeat_client_rate, eligible_connection_count, responded_connection_count, distinct_client_count')
         .eq('provider_id', id)
         .maybeSingle()
 
@@ -372,7 +377,7 @@ export default function ModelDetailPage() {
         available: presence?.is_available === true,
         rating: avg,
         reviewCount: reviewCount ?? 0,
-        bookingCount: bookingCount ?? 0,
+        bookingCount: (trustRow as any)?.booking_count ?? bookingCount ?? 0,
         viewCount: p.view_count ?? 0,
         rateShortTime: p.rate_short_time_ngn,
         rateOvernight: p.rate_overnight_ngn,
