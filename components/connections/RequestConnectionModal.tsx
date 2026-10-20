@@ -51,6 +51,8 @@ export function RequestConnectionModal({
   const [activeAvatar, setActiveAvatar] = useState<string | null>(providerAvatarUrl ?? null)
   const [eligibility, setEligibility] = useState<{ eligible: boolean; checks: { key: string; label: string; ok: boolean; have: string }[] } | null>(null)
   const [cardEnabled, setCardEnabled] = useState(false)
+  const [intakeQuestions, setIntakeQuestions] = useState<string[]>([])
+  const [intakeAnswers, setIntakeAnswers] = useState<string[]>([])
   const supabase = createClient()
 
   useEffect(() => {
@@ -73,6 +75,33 @@ export function RequestConnectionModal({
     return () => { cancelled = true }
   }, [activeId])
 
+  // Her screening questions: clients answer before paying.
+  useEffect(() => {
+    let cancelled = false
+    setIntakeQuestions([])
+    setIntakeAnswers([])
+    supabase
+      .from('profiles')
+      .select('intake_questions')
+      .eq('id', activeId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        const raw = (data as { intake_questions?: unknown } | null)?.intake_questions
+        const qs = Array.isArray(raw)
+          ? raw.filter((q): q is string => typeof q === 'string' && q.trim().length > 0).slice(0, 3)
+          : []
+        setIntakeQuestions(qs)
+        setIntakeAnswers(qs.map(() => ''))
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
+
+  const intakeComplete =
+    intakeQuestions.length === 0 ||
+    intakeQuestions.every((_, i) => (intakeAnswers[i] ?? '').trim().length > 0)
+
   /** Switch the modal to a recommended companion (fee already paid). */
   function onPickSimilar(sp: SimilarProvider) {
     setActiveId(sp.providerId)
@@ -80,6 +109,7 @@ export function RequestConnectionModal({
     setActiveAvatar(sp.avatar)
     setSimilar([])
     setProposedRate('')
+    setIntakeAnswers([])
     setStep('summary')
   }
 
@@ -166,6 +196,10 @@ export function RequestConnectionModal({
             ratesNegotiable && proposedRate.trim() !== ''
               ? Math.max(0, parseInt(proposedRate.replace(/[^0-9]/g, ''), 10) || 0)
               : null,
+          intakeAnswers:
+            intakeQuestions.length > 0
+              ? intakeQuestions.map((q, i) => ({ q, a: (intakeAnswers[i] ?? '').trim() }))
+              : undefined,
         }),
       })
       if (!res.ok) {
@@ -217,6 +251,16 @@ export function RequestConnectionModal({
   async function handleCardPay() {
     setError('')
     try {
+      // The card rail leaves the page, so stash the screening answers
+      // for the callback page to forward when it creates the connection.
+      try {
+        if (intakeQuestions.length > 0) {
+          sessionStorage.setItem(
+            `intima_intake_${activeId}`,
+            JSON.stringify(intakeQuestions.map((q, i) => ({ q, a: (intakeAnswers[i] ?? '').trim() })))
+          )
+        }
+      } catch { /* storage unavailable: answers are best-effort on this rail */ }
       const res = await fetch('/api/payments/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -377,6 +421,45 @@ export function RequestConnectionModal({
               </p>
             )}
 
+            {intakeQuestions.length > 0 && (
+              <div className="mb-5 rounded-2xl bg-cream p-4 ring-1 ring-black/[0.04]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">
+                  {activeName} asks
+                </p>
+                <div className="mt-3 space-y-3">
+                  {intakeQuestions.map((q, i) => (
+                    <div key={i}>
+                      <label htmlFor={`intake-${i}`} className="text-sm font-medium text-charcoal">
+                        {q}
+                      </label>
+                      <textarea
+                        id={`intake-${i}`}
+                        value={intakeAnswers[i] ?? ''}
+                        onChange={(e) =>
+                          setIntakeAnswers((prev) => {
+                            const next = [...prev]
+                            next[i] = e.target.value
+                            return next
+                          })
+                        }
+                        rows={2}
+                        maxLength={300}
+                        required
+                        placeholder="Your answer"
+                        className="mt-1.5 w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-charcoal outline-none focus:border-primary transition-colors"
+                      />
+                      <p className="mt-1 text-right text-[11px] text-gray-400">
+                        {(intakeAnswers[i] ?? '').length}/300
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Keep answers inside Intima. No phone numbers or social handles.
+                </p>
+              </div>
+            )}
+
             {eligibility && eligibility.checks.length > 0 && (
               <div className="mb-5 rounded-2xl bg-cream p-4 ring-1 ring-black/[0.04]">
                 <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Her requirements</p>
@@ -404,20 +487,22 @@ export function RequestConnectionModal({
 
             <button
               onClick={cardEnabled ? handleCardPay : handlePay}
-              disabled={fee === null || (eligibility !== null && !eligibility.eligible)}
+              disabled={fee === null || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
               className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-3.5 rounded-2xl transition-colors disabled:opacity-50"
             >
               {fee === null
                 ? 'Loading fee...'
                 : eligibility && !eligibility.eligible
                   ? 'Requirements not met yet'
-                  : cardEnabled
-                    ? `Pay ${formatPrice(fee)} with card`
-                    : `Pay ${formatPrice(fee)} (Test mode)`}
+                  : !intakeComplete
+                    ? 'Answer her questions first'
+                    : cardEnabled
+                      ? `Pay ${formatPrice(fee)} with card`
+                      : `Pay ${formatPrice(fee)} (Test mode)`}
             </button>
             <button
               onClick={handleCryptoPay}
-              disabled={eligibility !== null && !eligibility.eligible}
+              disabled={(eligibility !== null && !eligibility.eligible) || !intakeComplete}
               className="mt-3 w-full rounded-2xl border-2 border-charcoal/80 py-3 text-sm font-semibold text-charcoal transition-all hover:bg-charcoal hover:text-white disabled:opacity-40"
             >
               Or pay with crypto (USDT)
