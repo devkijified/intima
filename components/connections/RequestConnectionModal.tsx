@@ -335,7 +335,7 @@ export function RequestConnectionModal({
           <button
             onClick={onClose}
             disabled={step === 'processing'}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-40"
+            className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-gray-400 hover:text-gray-600 disabled:opacity-40"
             aria-label="Close"
           >
             <X className="w-6 h-6" />
