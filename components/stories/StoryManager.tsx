@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Loader2, Trash2, Eye } from 'lucide-react';
+import { Plus, Loader2, Trash2, Eye } from '@/lib/icons';
 import { CONTACT_WARNING, scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 
 /**

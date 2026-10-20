@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Sliders, X } from 'lucide-react'
+import { Sliders, X } from '@/lib/icons'
 
 interface Filters {
   city: string

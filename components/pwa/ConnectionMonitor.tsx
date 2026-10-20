@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { WifiOff, Wifi, RefreshCw } from 'lucide-react';
+import { WifiOff, Wifi, RefreshCw } from '@/lib/icons';
 
 /**
  * Connection monitor. `navigator.onLine` alone lies (it only checks for a

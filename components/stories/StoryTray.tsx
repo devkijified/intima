@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { StoryViewer, type Story } from './StoryViewer';
-import { Plus } from 'lucide-react';
+import { Plus } from '@/lib/icons';
 
 interface TrayProvider {
   provider_id: string;

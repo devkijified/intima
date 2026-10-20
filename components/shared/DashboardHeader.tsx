@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, User, Settings, Video, Calendar, LayoutDashboard, Compass } from 'lucide-react'
+import { LogOut, User, Settings, Video, Calendar, LayoutDashboard, Compass } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Eye } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
 
 export interface Story {

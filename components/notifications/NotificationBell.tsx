@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Bell } from 'lucide-react'
+import { Bell } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 
 export function NotificationBell() {

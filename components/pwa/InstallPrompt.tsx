@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Share, PlusSquare } from 'lucide-react';
+import { X, Share, PlusSquare } from '@/lib/icons';
 
 /**
  * PWA install prompt. Android Chrome fires `beforeinstallprompt`,
