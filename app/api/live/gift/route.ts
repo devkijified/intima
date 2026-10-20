@@ -56,20 +56,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Gift not found' }, { status: 404 });
     }
 
-    // Balance check.
-    const { data: balance } = await service
-      .from('coin_balances')
-      .select('balance')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    const current = balance?.balance ?? 0;
-    if (current < gift.coin_cost) {
-      return NextResponse.json(
-        { error: 'Not enough coins', balance: current, cost: gift.coin_cost },
-        { status: 402 }
-      );
-    }
-
     // Platform cut (default 50%, TikTok-style).
     const { data: settings } = await service
       .from('platform_settings')
@@ -79,14 +65,22 @@ export async function POST(req: NextRequest) {
     const cutPct = Number(settings?.value ?? 50);
     const hostEarnings = Math.floor(gift.coin_cost * (100 - cutPct) / 100);
 
-    // Deduct sender.
-    const { error: deductErr } = await service
-      .from('coin_balances')
-      .upsert(
-        { user_id: user.id, balance: current - gift.coin_cost, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      );
-    if (deductErr) throw deductErr;
+    // Atomic deduct: one statement, balance-checked in the database, so
+    // concurrent requests cannot double-spend.
+    const { data: spent, error: spendErr } = await service.rpc('spend_coins', {
+      p_user_id: user.id,
+      p_amount: gift.coin_cost,
+    });
+    if (spendErr) {
+      if (String(spendErr.message).includes('insufficient_balance')) {
+        return NextResponse.json(
+          { error: 'Not enough coins', cost: gift.coin_cost },
+          { status: 402 }
+        );
+      }
+      throw spendErr;
+    }
+    const newSenderBalance = Array.isArray(spent) ? spent[0]?.new_balance : (spent as any)?.new_balance;
 
     // Credit host.
     const { data: hostBal } = await service
@@ -130,7 +124,7 @@ export async function POST(req: NextRequest) {
       transactionId: tx.id,
       gift: { id: gift.id, name: gift.name, emoji: gift.emoji, tier: gift.tier },
       senderName: sender?.display_name ?? 'Someone',
-      newBalance: current - gift.coin_cost,
+      newBalance: newSenderBalance ?? null,
     });
   } catch (e) {
     console.error('[live/gift]', e);

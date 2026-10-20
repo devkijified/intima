@@ -57,26 +57,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Balance check.
-    const { data: bal } = await service
-      .from('coin_balances')
-      .select('balance')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    const current = bal?.balance ?? 0;
-    if (current < coinAmount) {
-      return NextResponse.json({ error: 'Not enough coins' }, { status: 400 });
+    // Atomic deduct: one statement, balance-checked in the database, so
+    // concurrent requests cannot double-spend. Create the request AFTER,
+    // so a failed insert never burns coins.
+    const { error: spendErr } = await service.rpc('spend_coins', {
+      p_user_id: user.id,
+      p_amount: coinAmount,
+    });
+    if (spendErr) {
+      if (String(spendErr.message).includes('insufficient_balance')) {
+        return NextResponse.json({ error: 'Not enough coins' }, { status: 400 });
+      }
+      throw spendErr;
     }
-
-    // Deduct coins + create request atomically-ish (service role, sequential).
-    await service.from('coin_balances').upsert(
-      {
-        user_id: user.id,
-        balance: current - coinAmount,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    );
 
     const { data: request, error } = await service
       .from('cashout_requests')

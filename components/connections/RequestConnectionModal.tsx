@@ -19,7 +19,17 @@ interface RequestConnectionModalProps {
   onConnected: () => void
 }
 
-type Step = 'summary' | 'processing' | 'success' | 'error'
+type Step = 'summary' | 'processing' | 'success' | 'error' | 'unavailable'
+
+interface SimilarProvider {
+  providerId: string
+  username: string | null
+  name: string
+  avatar: string | null
+  city: string | null
+  rateShortTime: number | null
+  services: string[]
+}
 
 export function RequestConnectionModal({
   providerId,
@@ -35,7 +45,21 @@ export function RequestConnectionModal({
   const [error, setError] = useState('')
   /** inDrive-style: client proposes a rate when she is open to offers. */
   const [proposedRate, setProposedRate] = useState('')
+  const [similar, setSimilar] = useState<SimilarProvider[]>([])
+  const [activeId, setActiveId] = useState(providerId)
+  const [activeName, setActiveName] = useState(providerName)
+  const [activeAvatar, setActiveAvatar] = useState<string | null>(providerAvatarUrl ?? null)
   const supabase = createClient()
+
+  /** Switch the modal to a recommended companion (fee already paid). */
+  function onPickSimilar(sp: SimilarProvider) {
+    setActiveId(sp.providerId)
+    setActiveName(sp.name)
+    setActiveAvatar(sp.avatar)
+    setSimilar([])
+    setProposedRate('')
+    setStep('summary')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -46,6 +70,43 @@ export function RequestConnectionModal({
       cancelled = true
     }
   }, [])
+
+  /** Similar available companions: same city first, overlapping services. */
+  async function findSimilar(currentId: string, city: string | null): Promise<SimilarProvider[]> {
+    const { data: me } = await supabase
+      .from('profiles')
+      .select('services')
+      .eq('id', currentId)
+      .maybeSingle()
+    const myServices: string[] = Array.isArray(me?.services) ? me.services : []
+
+    let q = supabase
+      .from('map_providers')
+      .select('provider_id, username, display_name, avatar_url, city, rate_short_time_ngn, services')
+      .eq('is_available', true)
+      .neq('provider_id', currentId)
+      .limit(20)
+    if (city) q = q.eq('city', city)
+    const { data } = await q
+    if (!data) return []
+
+    const scored = data.map((r: any) => {
+      const svc: string[] = Array.isArray(r.services) ? r.services : []
+      const overlap = myServices.length > 0 ? svc.filter((x) => myServices.includes(x)).length : 0
+      return {
+        providerId: r.provider_id,
+        username: r.username ?? null,
+        name: r.display_name ?? 'Intima companion',
+        avatar: r.avatar_url ?? null,
+        city: r.city ?? null,
+        rateShortTime: r.rate_short_time_ngn ?? null,
+        services: svc,
+        score: overlap,
+      }
+    })
+    scored.sort((a, b) => b.score - a.score)
+    return scored.slice(0, 3).map(({ score, ...rest }) => rest)
+  }
 
   async function handlePay() {
     if (fee === null) return
@@ -64,7 +125,7 @@ export function RequestConnectionModal({
       const reference = newPaymentReference()
       const init = await provider.initialize(fee, reference, {
         client_id: user.id,
-        provider_id: providerId,
+        provider_id: activeId,
         kind: 'connection_fee',
       })
       const status = await provider.verify(init.reference)
@@ -72,9 +133,22 @@ export function RequestConnectionModal({
         throw new Error('Payment was not completed. Please try again.')
       }
 
+      // Availability check after payment: if she is offline, recommend similar providers.
+      const { data: presence } = await supabase
+        .from('provider_presence')
+        .select('is_available, city')
+        .eq('provider_id', activeId)
+        .maybeSingle()
+      if (presence && presence.is_available === false) {
+        const picks = await findSimilar(activeId, presence.city ?? null)
+        setSimilar(picks)
+        setStep('unavailable')
+        return
+      }
+
       const { error: insertError } = await supabase.from('connections').insert({
         client_id: user.id,
-        provider_id: providerId,
+        provider_id: activeId,
         fee_ngn: fee,
         status: 'active',
         payment_ref: init.reference,
@@ -120,19 +194,19 @@ export function RequestConnectionModal({
         {step === 'summary' && (
           <>
             <div className="flex items-center gap-4 mb-5">
-              {providerAvatarUrl ? (
+              {activeAvatar ? (
                 <img
-                  src={providerAvatarUrl}
-                  alt={providerName}
+                  src={activeAvatar}
+                  alt={activeName}
                   className="w-16 h-16 rounded-full object-cover border-2 border-primary/20"
                 />
               ) : (
                 <div className="w-16 h-16 rounded-full bg-primary-muted flex items-center justify-center text-primary font-bold text-xl">
-                  {getInitials(providerName)}
+                  {getInitials(activeName)}
                 </div>
               )}
               <div>
-                <p className="font-semibold text-charcoal">{providerName}</p>
+                <p className="font-semibold text-charcoal">{activeName}</p>
                 <p className="text-sm text-gray-500">Verified provider</p>
               </div>
             </div>
@@ -147,7 +221,7 @@ export function RequestConnectionModal({
               <ul className="space-y-2 text-sm text-gray-600">
                 <li className="flex items-start gap-2">
                   <MessageCircle className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
-                  <span>Unlocks in-platform chat with {providerName}</span>
+                  <span>Unlocks in-platform chat with {activeName}</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Phone className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
@@ -221,7 +295,7 @@ export function RequestConnectionModal({
             <CheckCircle2 className="w-14 h-14 text-green-600" />
             <h3 className="text-lg font-bold text-charcoal">You are connected</h3>
             <p className="text-sm text-gray-600 max-w-xs">
-              You can now chat and call {providerName} directly from her profile. No middleman, no extra cuts.
+              You can now chat and call {activeName} directly from her profile. No middleman, no extra cuts.
             </p>
             <div className="flex gap-2 w-full mt-2">
               <button
@@ -232,6 +306,56 @@ export function RequestConnectionModal({
                 Start a call
               </button>
             </div>
+          </div>
+        )}
+
+        {step === 'unavailable' && (
+          <div className="py-6 flex flex-col gap-4">
+            <div className="text-center">
+              <h3 className="text-lg font-bold text-charcoal">{activeName} is not available right now</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Your payment is safe. Pick an available companion below and your connection switches to her instantly.
+              </p>
+            </div>
+            {similar.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">
+                No similar companions are online at the moment. Try again later.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {similar.map((sp) => (
+                  <button
+                    key={sp.providerId}
+                    onClick={() => onPickSimilar(sp)}
+                    className="w-full flex items-center gap-3 rounded-2xl border border-gray-200 p-3 hover:border-primary/50 hover:bg-cream/50 transition-colors text-left"
+                  >
+                    {sp.avatar ? (
+                      <img src={sp.avatar} alt={sp.name} className="w-14 h-14 rounded-xl object-cover" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-primary-muted flex items-center justify-center text-primary font-bold">
+                        {getInitials(sp.name)}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-charcoal truncate">{sp.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {sp.city}{sp.rateShortTime ? ` · ${formatPrice(sp.rateShortTime)}` : ''}
+                      </p>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 mt-0.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                        Available now
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              className="w-full border border-gray-300 text-gray-600 font-medium py-3 rounded-2xl hover:bg-gray-50 transition-colors"
+            >
+              Not now
+            </button>
           </div>
         )}
 

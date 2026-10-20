@@ -53,18 +53,25 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .eq('status', 'pending');
 
-    const reference = makeReference();
-    const { data: intent, error } = await svc
-      .from('transfer_intents')
-      .insert({
-        user_id: user.id,
-        reference,
-        amount_ngn: pkg.priceNgn,
-        coins: pkg.coins,
-      })
-      .select('reference, amount_ngn, coins, expires_at')
-      .single();
-    if (error) throw error;
+    // Insert with retry: the reference is UNIQUE in the DB.
+    type IntentRow = { reference: string; amount_ngn: number; coins: number; expires_at: string };
+    let intent: IntentRow | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const reference = makeReference();
+      const { data, error } = await svc
+        .from('transfer_intents')
+        .insert({
+          user_id: user.id,
+          reference,
+          amount_ngn: pkg.priceNgn,
+          coins: pkg.coins,
+        })
+        .select('reference, amount_ngn, coins, expires_at')
+        .single();
+      if (!error && data) { intent = data as IntentRow; break; }
+      if (error && !String(error.message).toLowerCase().includes('duplicate')) throw error;
+    }
+    if (!intent) throw new Error('Could not allocate a transfer reference');
 
     return NextResponse.json({
       reference: intent.reference,

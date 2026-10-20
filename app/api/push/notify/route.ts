@@ -19,8 +19,8 @@ const ALLOWED_TYPES = new Set([
 
 export async function POST(request: Request) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
   const userIds: unknown = body?.user_ids
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   const { data: conns } = await supabase
     .from('connections')
     .select('client_id')
-    .eq('provider_id', session.user.id)
+    .eq('provider_id', user.id)
     .eq('status', 'active')
     .in('client_id', ids)
   const covered = new Set((conns ?? []).map((c: { client_id: string }) => c.client_id))

@@ -14,8 +14,8 @@ function serviceDb() {
 
 export async function POST(request: Request) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
   const sub = body?.subscription
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const db = serviceDb()
   const { error } = await db.from('push_subscriptions').upsert(
     {
-      user_id: session.user.id,
+      user_id: user.id,
       endpoint: sub.endpoint,
       p256dh: sub.keys.p256dh,
       auth: sub.keys.auth,
@@ -39,8 +39,8 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => ({}))
   if (!body?.endpoint) {
@@ -51,7 +51,7 @@ export async function DELETE(request: Request) {
   await db
     .from('push_subscriptions')
     .delete()
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .eq('endpoint', body.endpoint)
   return NextResponse.json({ ok: true })
 }

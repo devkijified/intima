@@ -49,6 +49,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Atomic status flip: only the first caller wins. Concurrent poller
+    // runs see status != 'pending' and back off, so no double-credit.
+    const { data: flipped } = await svc
+      .from('transfer_intents')
+      .update({ status: 'credited', credited_at: new Date().toISOString() })
+      .eq('id', intent.id)
+      .eq('status', 'pending')
+      .select('id');
+    if (!flipped || flipped.length === 0) {
+      return NextResponse.json({ matched: false, reason: 'already handled' });
+    }
+
     // Credit the coins.
     const { data: bal } = await svc
       .from('coin_balances')
@@ -63,12 +75,6 @@ export async function POST(req: NextRequest) {
       },
       { onConflict: 'user_id' }
     );
-
-    // Mark credited + audit in coin_topups (reference = transfer ref).
-    await svc.from('transfer_intents').update({
-      status: 'credited',
-      credited_at: new Date().toISOString(),
-    }).eq('id', intent.id);
 
     await svc.from('coin_topups').insert({
       user_id: intent.user_id,
