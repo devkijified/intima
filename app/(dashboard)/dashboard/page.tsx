@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { computeSetupSteps, isLiveOnMap, setupProgress, type SetupProfile } from '@/lib/setup/completeness'
 import { Walkthrough } from '@/components/setup/Walkthrough'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
-  Banknote, BookOpen } from '@/lib/icons'
+  Banknote, BookOpen, Gift } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 export default function DashboardPage() {
@@ -16,6 +16,8 @@ export default function DashboardPage() {
     bookings: 0,
     saved: 0,
     coins: 0,
+    referralCoins: 0,
+    referralCount: 0,
   })
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -57,6 +59,15 @@ export default function DashboardPage() {
       setUserRole(role)
       setUserName(name)
 
+      // Referral earnings (migration 043): total coins plus friends joined.
+      const { data: referralRows } = await supabase
+        .from('referral_rewards')
+        .select('coins')
+        .eq('referrer_id', user.id)
+        .eq('reward_kind', 'coins')
+      const referralCoins = (referralRows ?? []).reduce((s, r) => s + (r.coins ?? 0), 0)
+      const referralCount = referralRows?.length ?? 0
+
       if (role === 'model') {
         // Availability lives in provider_presence.
         const { data: presence } = await supabase
@@ -87,6 +98,8 @@ export default function DashboardPage() {
           reviews: reviewsCount ?? 0,
           bookings: bookingsCount ?? 0,
           saved: 0,
+          referralCoins,
+          referralCount,
         })
       } else {
         const { count: clientBookingsCount } = await supabase
@@ -107,6 +120,8 @@ export default function DashboardPage() {
           reviews: 0,
           bookings: clientBookingsCount ?? 0,
           saved: savedCount ?? 0,
+          referralCoins,
+          referralCount,
         })
       }
 
@@ -259,6 +274,17 @@ export default function DashboardPage() {
               <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.bookings}</p>
               <p className="mt-1 text-xs text-neutral-400">Clients you are chatting with</p>
             </div>
+
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Referral earnings</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15">
+                  <Gift className="h-4 w-4 text-[#C9A84C]" />
+                </span>
+              </div>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.referralCoins.toLocaleString()}<span className="ml-1 text-base font-normal text-neutral-400">coins</span></p>
+              <p className="mt-1 text-xs text-neutral-400">From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -295,6 +321,10 @@ export default function DashboardPage() {
                   <span className="text-sm font-medium">Gift Earnings & Cash Out</span>
                   <Banknote className="h-4 w-4 text-[#AC244D]" />
                 </Link>
+                <Link href="/analytics" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
+                  <span className="text-sm font-medium">Analytics: Views, Bookings & Gifts</span>
+                  <Eye className="h-4 w-4 text-[#AC244D]" />
+                </Link>
               </div>
             </div>
           </div>
@@ -328,6 +358,15 @@ export default function DashboardPage() {
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.saved}</p>
               <p className="text-xs text-neutral-400 mt-1">Favorite companions</p>
+            </div>
+
+            <div className="card-luxe p-4 sm:p-6">
+              <div className="flex items-center justify-between text-neutral-500 mb-2">
+                <span className="text-xs font-medium uppercase tracking-wider">Referral earnings</span>
+                <Gift className="h-4 w-4 text-[#C9A84C]" />
+              </div>
+              <p className="text-3xl font-serif text-neutral-900">{stats.referralCoins.toLocaleString()} coins</p>
+              <p className="text-xs text-neutral-400 mt-1">From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
             </div>
           </div>
 
