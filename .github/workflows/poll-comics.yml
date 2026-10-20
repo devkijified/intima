@@ -1,0 +1,15 @@
+name: poll-comics
+# Daily auto-publish for Intima comic feeds. Vercel Hobby only allows
+# daily crons, so this runs off-platform like the transfer poller.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger comic feed poll
+        run: |
+          curl -fsS "https://intima-snowy.vercel.app/api/cron/comics-poll" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"
