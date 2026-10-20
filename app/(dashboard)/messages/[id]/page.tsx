@@ -5,13 +5,17 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
-import { ArrowLeft, Loader2, Send, Sparkles, Phone } from '@/lib/icons'
+import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock } from '@/lib/icons'
 
 interface Msg {
   id: string
   sender_id: string
   body: string
   created_at: string
+  media_url?: string | null
+  media_type?: string | null
+  ppv_price_coins?: number | null
+  unlocked_by?: string[]
 }
 
 interface Counterpart {
@@ -37,6 +41,9 @@ export default function ThreadPage() {
   const [sending, setSending] = useState(false)
   const [input, setInput] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showPpv, setShowPpv] = useState(false)
+  const [ppvUrl, setPpvUrl] = useState('')
+  const [ppvPrice, setPpvPrice] = useState('100')
   const [templateTab, setTemplateTab] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -77,7 +84,7 @@ export default function ThreadPage() {
 
       const { data: history } = await supabase
         .from('messages')
-        .select('id, sender_id, body, created_at')
+        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by')
         .eq('connection_id', connectionId)
         .order('created_at', { ascending: true })
       if (live) { setMsgs(history ?? []); setLoading(false) }
@@ -116,7 +123,7 @@ export default function ThreadPage() {
     if (!text || !me || sending || !active) return
     setSending(true)
     const supabase = createClient()
-    const { error } = await supabase.from('messages').insert({
+    const { error } = await createClient().from('messages').insert({
       connection_id: connectionId,
       sender_id: me,
       body: text.slice(0, 1000),
@@ -193,6 +200,7 @@ export default function ThreadPage() {
                     }`}
                   >
                     <p>{m.body}</p>
+                    {m.media_url && <PpvMedia msg={m} me={me} />}
                     <p className={`mt-1 text-right text-[10px] ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
                       {fmtTime(m.created_at)}
                     </p>
@@ -253,6 +261,38 @@ export default function ThreadPage() {
         </div>
       )}
 
+      {/* PPV panel */}
+      {showPpv && active && (
+        <div className="shrink-0 border-t border-neutral-100 bg-gold/5 px-4 py-3">
+          <p className="text-xs font-semibold text-charcoal">Send locked media (PPV)</p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input value={ppvUrl} onChange={(e) => setPpvUrl(e.target.value)} placeholder="Photo or video URL" className="flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
+            <input value={ppvPrice} onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Coins" inputMode="numeric" className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
+            <button
+              onClick={async () => {
+                const url = ppvUrl.trim()
+                const price = parseInt(ppvPrice, 10)
+                if (!url || !price || price <= 0 || !me) return
+                const isVideo = /\.mp4|\.webm/i.test(url)
+                const { error } = await createClient().from('messages').insert({
+                  connection_id: connectionId,
+                  sender_id: me,
+                  body: 'Locked media',
+                  media_url: url,
+                  media_type: isVideo ? 'video' : 'image',
+                  ppv_price_coins: price,
+                })
+                if (!error) { setPpvUrl(''); setShowPpv(false) }
+              }}
+              className="rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal"
+            >
+              Send locked
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-neutral-500">Clients pay coins to view. You keep your share automatically.</p>
+        </div>
+      )}
+
       {/* Composer */}
       <div className="shrink-0 border-t border-neutral-100 bg-white px-4 py-3">
         {!active && (
@@ -280,6 +320,15 @@ export default function ThreadPage() {
             maxLength={1000}
             className="min-w-0 flex-1 rounded-full border border-neutral-200 bg-cream/60 px-4 py-2.5 text-sm text-charcoal outline-none placeholder:text-neutral-400 focus:border-primary disabled:opacity-50"
           />
+          {!other?.isProvider && active && (
+            <button
+              onClick={() => setShowPpv((v) => !v)}
+              aria-label="Send locked media"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold"
+            >
+              <Lock className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={() => send(input)}
             disabled={!active || sending || !input.trim()}
@@ -292,4 +341,53 @@ export default function ThreadPage() {
       </div>
     </div>
   )
+}
+
+/** Locked media in chat: unlock with coins via the server. */
+function PpvMedia({ msg, me }: { msg: Msg; me: string | null }) {
+  const [busy, setBusy] = useState(false)
+  const [unlocked, setUnlocked] = useState(false)
+  const price = msg.ppv_price_coins ?? 0
+  const isMine = msg.sender_id === me
+  const isOpen = isMine || unlocked || (msg.unlocked_by ?? []).includes(me ?? '') || price <= 0
+
+  async function unlock() {
+    if (busy) return
+    setBusy(true)
+    const res = await fetch('/api/chat/ppv/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId: msg.id }),
+    })
+    setBusy(false)
+    if (res.ok) {
+      setUnlocked(true)
+    } else if (res.status === 402) {
+      alert(`Not enough coins. You need ${price} coins — top up from Coins.`)
+    } else {
+      alert('Could not unlock. Please try again.')
+    }
+  }
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={unlock}
+        disabled={busy}
+        className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800 text-left"
+      >
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 backdrop-blur-md">
+          <span className="text-sm font-semibold text-white">Locked {msg.media_type === 'video' ? 'video' : 'photo'}</span>
+          <span className="rounded-full bg-gold px-3 py-1 text-xs font-bold text-charcoal">
+            {busy ? 'Unlocking…' : `Unlock · ${price} coins`}
+          </span>
+        </div>
+      </button>
+    )
+  }
+
+  if (msg.media_type === 'video') {
+    return <video src={msg.media_url!} controls className="mt-2 max-h-64 w-56 rounded-xl object-cover" />
+  }
+  return <img src={msg.media_url!} alt="" className="mt-2 max-h-64 w-56 rounded-xl object-cover" />
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
+import { GiftLeaderboard } from '@/components/live/GiftLeaderboard'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client'
@@ -535,6 +536,7 @@ export default function StreamRoomPage() {
 
   return (
     <div className="relative mx-auto h-[calc(100dvh-4rem)] w-full max-w-md overflow-hidden bg-black md:h-[calc(100dvh-5rem)]">
+      <GiftLeaderboard sessionId={id} />
       {/* Video layer */}
       <video
         ref={videoRef}
