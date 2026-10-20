@@ -55,7 +55,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
       <head>
         {/* Critical paint: burgundy before any CSS/JS loads, kills the white flash. */}
-        <style dangerouslySetInnerHTML={{ __html: `html,body{background:#8F1D40;margin:0;padding:0}#app-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#C22A57 0%,#8F1D40 100%)}` }} />
+        <style dangerouslySetInnerHTML={{ __html: `html,body{background:#FDF9F6;margin:0;padding:0;min-height:100dvh}#app-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#C22A57 0%,#8F1D40 100%)}` }} />
       </head>
       <body>
         {/* In-app splash: server-rendered so it paints before JS loads. */}
