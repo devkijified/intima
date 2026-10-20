@@ -33,14 +33,14 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end justify-center md:items-center md:p-4">
+      <div className="bg-white rounded-t-3xl md:rounded-3xl max-w-md w-full p-8 shadow-2xl animate-sheet-up md:animate-none">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-charcoal">Age Verification</h2>
             <p className="text-gray-500 text-sm mt-1">Please confirm you are 18 or older</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-gray-600">
             <X className="w-6 h-6" />
           </button>
         </div>

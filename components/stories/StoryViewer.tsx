@@ -125,7 +125,7 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
             {new Date(story.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        <button onClick={onClose} aria-label="Close" className="rounded-full bg-white/15 p-2 text-white">
+        <button onClick={onClose} aria-label="Close" className="rounded-full bg-white/15 p-3 text-white">
           <X className="h-5 w-5" />
         </button>
       </div>

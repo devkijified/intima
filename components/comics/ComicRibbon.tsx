@@ -50,7 +50,7 @@ export function ComicRibbon() {
             try { localStorage.setItem('comic_dismissed', ep.id) } catch { /* ignore */ }
             setEp(null)
           }}
-          className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-[11px] text-white/80"
+          className="ml-1 -my-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/15 p-3 text-[11px] text-white/80"
         >
           ×
         </button>

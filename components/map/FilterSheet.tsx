@@ -75,7 +75,7 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
                 <button
                   onClick={onClose}
                   aria-label="Close filters"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-charcoal transition-colors hover:bg-black/10"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-black/5 text-charcoal transition-colors hover:bg-black/10"
                 >
                   <X className="h-4 w-4" />
                 </button>

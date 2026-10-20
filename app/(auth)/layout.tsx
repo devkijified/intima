@@ -11,8 +11,8 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-cream">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col md:flex-row">
+    <div className="min-h-dvh bg-cream">
+      <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col md:flex-row">
         {/* Brand panel */}
         <div className="relative hidden w-[46%] shrink-0 overflow-hidden md:block">
           <div

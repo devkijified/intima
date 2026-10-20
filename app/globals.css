@@ -23,6 +23,19 @@
     font-family: var(--font-figtree), system-ui, sans-serif;
   }
 
+  /* iOS Safari auto-zooms the page when a focused field renders under
+     16px. Hold every form field at 16px on phone widths (below the
+     Tailwind md breakpoint at 768px); the designed sizes apply from
+     md up. This covers raw inputs that do not use the shared Input
+     component, which carries text-base md:text-sm itself. */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
   h1, h2, h3, h4, h5 {
     font-family: var(--font-fraunces), Georgia, serif;
     letter-spacing: -0.01em;
@@ -229,7 +242,7 @@
 }
 
 @layer components {
-  /* Primary action: burgundy with depth — gradient, top highlight,
+  /* Primary action: burgundy with depth, gradient, top highlight,
      warm shadow, gentle press. */
   .btn-luxe {
     @apply inline-flex items-center justify-center rounded-full font-semibold text-white

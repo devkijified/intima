@@ -52,7 +52,7 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FDF9F6] flex items-center justify-center">
+      <div className="min-h-dvh bg-[#FDF9F6] flex items-center justify-center">
         <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[#AC244D] border-t-transparent"></div>
       </div>
     )
@@ -62,7 +62,7 @@ export default function DashboardLayout({
   const isAdmin = userRole === 'admin' || userRole === 'super_admin'
 
   return (
-    <div className="min-h-screen bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
+    <div className="min-h-dvh bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
       <header
         className="border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md sticky top-0 z-50"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}

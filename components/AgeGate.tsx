@@ -37,7 +37,7 @@ export function AgeGate({ children }: { children: React.ReactNode }) {
 
   if (!verified) {
     return (
-      <div className="min-h-screen bg-cream flex flex-col items-center justify-center px-4">
+      <div className="min-h-dvh bg-cream flex flex-col items-center justify-center px-4">
         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
           <ShieldCheck className="w-8 h-8 text-primary" />
         </div>

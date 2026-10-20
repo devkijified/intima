@@ -19,6 +19,28 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     setError(null)
     try {
+      // Verify the account exists before sending, so a typo gets an
+      // honest answer instead of a fake "Check your email". If the
+      // check itself fails (network or server error), fall through
+      // and send anyway: an infra hiccup must never block a real reset.
+      let exists: boolean | null = null
+      try {
+        const res = await fetch('/api/auth/check-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          exists = data.exists === true
+        }
+      } catch {
+        exists = null
+      }
+      if (exists === false) {
+        setError('No account uses that email. Check the spelling, or create an account instead.')
+        return
+      }
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       })

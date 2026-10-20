@@ -73,7 +73,7 @@ export function InstallPrompt() {
               </p>
             )}
           </div>
-          <button onClick={dismiss} aria-label="Dismiss" className="rounded-full p-1 text-white/60">
+          <button onClick={dismiss} aria-label="Dismiss" className="rounded-full p-3.5 text-white/60">
             <X className="h-4 w-4" />
           </button>
         </div>
