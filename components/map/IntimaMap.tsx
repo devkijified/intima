@@ -22,6 +22,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { MAP_CITIES } from '@/lib/map/mockProviders';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
+import { ComicRibbon } from '@/components/comics/ComicRibbon';
 import { ProviderSheet } from './ProviderSheet';
 import { FilterSheet } from './FilterSheet';
 import { ProviderListCard, ProviderListSkeleton } from './ProviderListCard';
@@ -762,6 +763,11 @@ export default function IntimaMap() {
       {/* Story tray: WhatsApp Status-style, below the header. */}
       <div className="absolute left-0 right-0 top-[calc(68px+env(safe-area-inset-top))] z-30 sm:top-[calc(76px+env(safe-area-inset-top))]">
         <StoryTray />
+      </div>
+
+      {/* New-episode retention pill, below the story tray. */}
+      <div className="absolute left-0 right-0 top-[calc(128px+env(safe-area-inset-top))] z-30 sm:top-[calc(136px+env(safe-area-inset-top))]">
+        <ComicRibbon />
       </div>
 
       {/* Build tag: tiny, bottom-right. Tells us exactly what version is running. */}

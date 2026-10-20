@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
-  Banknote} from '@/lib/icons'
+  Banknote, BookOpen } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 export default function DashboardPage() {
@@ -243,6 +243,10 @@ export default function DashboardPage() {
                   <span className="text-sm font-medium">Broadcast Live Show</span>
                   <Video className="h-4 w-4 text-[#AC244D]" />
                 </Link>
+                <Link href="/comics" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
+                  <span className="text-sm font-medium">Read Intima Comics</span>
+                  <BookOpen className="h-4 w-4 text-[#AC244D]" />
+                </Link>
               </div>
             </div>
 
@@ -308,6 +312,10 @@ export default function DashboardPage() {
                 <Link href="/bookings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">View Booking History</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                </Link>
+                <Link href="/comics" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
+                  <span className="text-sm font-medium">Read Intima Comics</span>
+                  <BookOpen className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
