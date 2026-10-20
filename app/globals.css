@@ -4,6 +4,10 @@
 
 @layer base {
   :root {
+    /* Display face: Aeonik Pro Bold (stylesheet linked in the root
+       layout). The variable keeps its historical name: Tailwind's
+       display/serif stacks and the heading rules read --font-inter. */
+    --font-inter: "Aeonik Pro Bold", "Inter", system-ui, sans-serif;
     --primary: #AC244D;
     --primary-dark: #8F1D40;
     --primary-light: #D43A6B;

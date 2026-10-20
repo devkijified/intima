@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Figtree } from 'next/font/google'
+import { Figtree } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { SplashDismiss } from '@/components/SplashDismiss'
@@ -11,21 +11,15 @@ import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 import ErrorReporter from '@/components/observability/ErrorReporter'
 
-// One pairing for the whole product: Inter for display (wordmark,
-// headings, prices, sheet titles) and Figtree for everything else. Loaded
-// once via next/font, latin subset, display=swap, no CSS @imports.
+// One pairing for the whole product: Aeonik Pro Bold for display
+// (wordmark, headings, prices, sheet titles; loaded from the
+// onlinewebfonts stylesheet linked in <head>, exposed as --font-inter
+// in globals.css) and Figtree for everything else via next/font.
 const figtree = Figtree({
   subsets: ['latin'],
   variable: '--font-figtree',
   display: 'swap',
   weight: ['400', '500', '600', '700', '800'],
-})
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-  weight: ['500', '600', '700', '800', '900'],
 })
 
 export const viewport = { viewportFit: 'cover', themeColor: '#AC244D' };
@@ -56,8 +50,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${figtree.variable} ${inter.variable}`}>
+    <html lang="en" className={`${figtree.variable}`}>
       <head>
+        <link rel="preconnect" href="https://db.onlinewebfonts.com" crossOrigin="anonymous" />
+        <link
+          href="https://db.onlinewebfonts.com/c/362636484f8ad521fec5a297fdc0ab12?family=Aeonik+Pro+Bold"
+          rel="stylesheet"
+        />
         {/* Critical paint: burgundy before any CSS/JS loads, kills the white flash. */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background:#FDF9F6;margin:0;padding:0;min-height:100dvh}#app-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#C22A57 0%,#8F1D40 100%)}` }} />
       </head>
