@@ -550,7 +550,7 @@ export default function IntimaMap() {
   return (
     <div
       className="fixed left-0 right-0 top-0 w-full overflow-hidden bg-[#111118]"
-      style={{ height: 'calc(100dvh + env(safe-area-inset-bottom, 0px))' }}
+      style={{ height: 'calc(100dvh + 120px)', marginBottom: '-120px' }}
     >
       <div
         ref={containerRef}
