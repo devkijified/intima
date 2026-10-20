@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { reencodeImage } from '@/lib/uploads/reencode';
-import { Camera, Loader2, Lock, Play, Trash2, X } from '@/lib/icons';
+import { Camera, Loader2, Lock, PictureInPicture2, Play, Trash2, X } from '@/lib/icons';
 import { SubscribeCard } from '@/components/social/SubscribeCard';
+import { useDock } from '@/components/dock/FloatingDock';
 
 const BUCKET = 'private-snaps';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -82,6 +83,7 @@ export function PrivateSnaps({
   active = true,
   onVisibilityChange,
 }: PrivateSnapsProps) {
+  const dock = useDock();
   const [summary, setSummary] = useState<SnapsResponse | null>(null);
   const [summaryError, setSummaryError] = useState(false);
   const [snaps, setSnaps] = useState<SnapItem[] | null>(null);
@@ -505,6 +507,22 @@ export function PrivateSnaps({
           >
             <X className="h-5 w-5" />
           </button>
+          {lightbox.mediaType === 'video' && (
+            <button
+              aria-label="Minimize player"
+              onClick={(e) => {
+                e.stopPropagation();
+                dock.showMedia({
+                  src: lightbox.url,
+                  title: lightbox.collection,
+                });
+                setLightbox(null);
+              }}
+              className="absolute right-16 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+            >
+              <PictureInPicture2 className="h-5 w-5" />
+            </button>
+          )}
           <div
             className="max-h-full w-full max-w-lg p-4"
             onClick={(e) => e.stopPropagation()}

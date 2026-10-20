@@ -6,6 +6,7 @@ import { SplashDismiss } from '@/components/SplashDismiss'
 import PushAutoSubscribe from '@/components/PushAutoSubscribe'
 import RefCapture from '@/components/RefCapture'
 import { CallProvider } from '@/components/calls/CallProvider'
+import { DockProvider } from '@/components/dock/FloatingDock'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 import ErrorReporter from '@/components/observability/ErrorReporter'
@@ -75,7 +76,9 @@ export default function RootLayout({
             inside it so voice/video calls work on every route, including the
             public map landing page. */}
         <AgeGate>
-          <CallProvider>{children}</CallProvider>
+          <CallProvider>
+            <DockProvider>{children}</DockProvider>
+          </CallProvider>
           <InstallPrompt />
           <ConnectionMonitor />
         </AgeGate>

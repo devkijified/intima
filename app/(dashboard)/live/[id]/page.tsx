@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard'
+import { useDock } from '@/components/dock/FloatingDock'
 import { FanBadge } from '@/components/social/FanBadge'
 import { GiftGlyph } from '@/components/live/GiftGlyph'
 import { useParams, useRouter } from 'next/navigation'
@@ -80,8 +81,16 @@ function uid(): string {
 export default function StreamRoomPage() {
   const params = useParams()
   const router = useRouter()
+  const dock = useDock()
   const supabase = createClient()
   const id = params.id as string
+
+  // The full room takes over from the floating dock: if this session
+  // is docked, undock it (the dock's own connection closes).
+  useEffect(() => {
+    dock.clearLiveSession(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
 
   const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid' | 'fansonly'>('loading')
   const [stream, setStream] = useState<Stream | null>(null)
@@ -1071,7 +1080,23 @@ export default function StreamRoomPage() {
             <Settings className="h-4 w-4" />
           </button>
         )}
-        {pipSupported && (
+        {!isHostMe && (
+          <button
+            onClick={() => {
+              dock.showLive({
+                sessionId: id,
+                title: stream?.title ?? 'Live stream',
+                hostName,
+              })
+              router.push('/live')
+            }}
+            aria-label="Minimize player"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          >
+            <PictureInPicture2 className="h-4 w-4" />
+          </button>
+        )}
+        {isHostMe && pipSupported && (
           <button
             onClick={togglePip}
             aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
