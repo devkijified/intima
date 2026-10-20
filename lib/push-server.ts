@@ -3,6 +3,7 @@
 // Never import this module from client components.
 import webpush from 'web-push'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { sendWhatsAppText } from './notify/whatsapp'
 
 let configured = false
 
@@ -110,6 +111,28 @@ export async function notifyUsers(opts: NotifyOpts): Promise<void> {
     })
   } catch {
     // Push is best effort; the in-app notification is the source of truth.
+  }
+  // Best-effort WhatsApp pass for recipients who shared a phone
+  // number. Dormant until WHATSAPP_TOKEN and WHATSAPP_PHONE_ID are
+  // set (sendWhatsAppText returns not_configured and sends nothing),
+  // and wrapped so it can never break the notification flow above.
+  try {
+    const { data: phoneRows } = await db
+      .from('profiles')
+      .select('id, phone')
+      .in('id', opts.userIds)
+    const text = opts.body
+      ? `${opts.title}\n${opts.body}`
+      : opts.title
+    const fullText = opts.link ? `${text}\n${opts.link}` : text
+    for (const row of phoneRows ?? []) {
+      const phone = (row as { phone?: string | null }).phone
+      if (phone) {
+        await sendWhatsAppText(phone, fullText)
+      }
+    }
+  } catch {
+    // WhatsApp is best effort only.
   }
 }
 

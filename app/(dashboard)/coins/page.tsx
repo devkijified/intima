@@ -19,6 +19,9 @@ interface Topup {
  */
 export default function CoinsPage() {
   const [balance, setBalance] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [referralCoins, setReferralCoins] = useState(0)
+  const [referralCount, setReferralCount] = useState(0)
   const [topups, setTopups] = useState<Topup[]>([])
   const [buying, setBuying] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +49,10 @@ export default function CoinsPage() {
     ;(async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        if (live) setLoading(false)
+        return
+      }
       const { data: bal } = await supabase
         .from('coin_balances')
         .select('balance')
@@ -58,12 +64,20 @@ export default function CoinsPage() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20)
+      const { data: rewards } = await supabase
+        .from('referral_rewards')
+        .select('coins')
+        .eq('referrer_id', user.id)
+        .eq('reward_kind', 'coins')
       const intentRes = await fetch('/api/coins/transfer-intent')
       const intentData = intentRes.ok ? await intentRes.json() : { intent: null }
       if (live) {
         setBalance(bal?.balance ?? 0)
         setTopups(history ?? [])
         setIntent(intentData.intent)
+        setReferralCount(rewards?.length ?? 0)
+        setReferralCoins((rewards ?? []).reduce((s, r) => s + (r.coins ?? 0), 0))
+        setLoading(false)
       }
     })()
     return () => { live = false }
@@ -167,6 +181,27 @@ export default function CoinsPage() {
           {error}
         </p>
       )}
+
+      {/* Referral rewards */}
+      <div className="mt-4 rounded-3xl border border-neutral-200/70 bg-white px-5 py-4">
+        <p className="text-xs font-medium uppercase tracking-widest text-neutral-400">Referral rewards</p>
+        {loading ? (
+          <div className="mt-2 space-y-2">
+            <div className="h-4 w-2/3 animate-pulse rounded-full bg-neutral-100" />
+            <div className="h-3 w-1/2 animate-pulse rounded-full bg-neutral-100" />
+          </div>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-charcoal">
+              <span className="font-bold">{referralCoins.toLocaleString()} coins</span> earned from{' '}
+              {referralCount} friend{referralCount === 1 ? '' : 's'} who joined and connected.
+            </p>
+            <p className="mt-0.5 text-xs text-neutral-400">
+              Share your link. When a friend you brought opens their first connection, your reward lands here.
+            </p>
+          </>
+        )}
+      </div>
 
       {/* Packages */}
       <h2 className="mt-6 text-sm font-bold uppercase tracking-widest text-neutral-400">Buy coins</h2>
@@ -278,8 +313,16 @@ export default function CoinsPage() {
         </>
       )}
 
-      {/* History */}
-      {topups.length > 0 && (
+      {/* History: skeleton while the first fetch resolves, so the
+          section never pops in from nothing or flashes empty. */}
+      {loading && (
+        <div className="mt-6 space-y-2" aria-hidden="true">
+          <div className="h-4 w-24 animate-pulse rounded-full bg-neutral-100" />
+          <div className="h-14 animate-pulse rounded-3xl bg-neutral-100" />
+          <div className="h-14 animate-pulse rounded-3xl bg-neutral-100" />
+        </div>
+      )}
+      {!loading && topups.length > 0 && (
         <>
           <h2 className="mt-6 flex items-center gap-1.5 text-sm font-bold uppercase tracking-widest text-neutral-400">
             <History className="h-4 w-4" /> History
