@@ -357,8 +357,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
         peerAvatar: ring.fromAvatar,
         room,
       });
-      await joinRoom(token, url, room, ring.kind);
+      // Signal the accept BEFORE joining the room: the caller's
+      // ring timer stops on this signal, and a slow room join must
+      // not let that timer kill a call the callee already accepted.
       await signalPeer(ring.from, 'call:accept', { room });
+      await joinRoom(token, url, room, ring.kind);
     } catch (e) {
       setCallError(e instanceof Error ? e.message : 'Could not join call');
       await signalPeer(ring.from, 'call:decline', { room: ring.room });
