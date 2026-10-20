@@ -12,7 +12,7 @@ async function requireAdmin() {
   return profile && ['admin', 'super_admin'].includes(profile.role) ? user : null;
 }
 
-/** GET /api/admin/comics/import — list configured feeds. */
+/** GET /api/admin/comics/import: list configured feeds. */
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   return NextResponse.json({ feeds: await getComicFeeds() });
@@ -20,10 +20,10 @@ export async function GET() {
 
 /**
  * POST /api/admin/comics/import
- *  { action: 'preview', url } — fetch a feed, return its items.
- *  { action: 'add-feed', url, name? } — save feed for daily auto-publish.
- *  { action: 'remove-feed', id } — stop polling a feed.
- *  { action: 'import', feedUrl, feedName, guid } — import one item now (draft).
+ *  { action: 'preview', url }: fetch a feed, return its items.
+ *  { action: 'add-feed', url, name? }: save feed for daily auto-publish.
+ *  { action: 'remove-feed', id }: stop polling a feed.
+ *  { action: 'import', feedUrl, feedName, guid }: import one item now (draft).
  */
 export async function POST(req: NextRequest) {
   if (!(await requireAdmin())) return NextResponse.json({ error: 'Admin only' }, { status: 403 });

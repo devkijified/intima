@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 /**
- * POST /api/comics/track — record an episode view / completion.
+ * POST /api/comics/track: record an episode view / completion.
  * Body: { episodeId, viewerKey?, completed? }.
  * Guests track with a device viewer key; signed-in users with their id.
  * view_count increments once per viewer (first read), not per reload.

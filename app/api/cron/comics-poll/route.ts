@@ -3,7 +3,7 @@ import { fetchFeed } from '@/lib/comics/rss';
 import { getComicFeeds, saveComicFeeds, importFeedItem } from '@/lib/comics/import';
 
 /**
- * GET /api/cron/comics-poll — daily auto-publish for configured feeds.
+ * GET /api/cron/comics-poll: daily auto-publish for configured feeds.
  * Called by the GitHub Action (daily, Hobby-safe). Guarded by CRON_SECRET.
  * Only import from feeds you own or are licensed to republish.
  */

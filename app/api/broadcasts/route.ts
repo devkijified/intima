@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { scanForLeaks, leakWarning, CONTACT_WARNING } from '@/lib/moderation/contactCheck';
 
 /**
- * POST /api/broadcasts — companions post to their channel.
+ * POST /api/broadcasts: companions post to their channel.
  *
  * THE FENCE: broadcasts are free text seen by every follower, so they go
  * through the same contact-leak scanner as bios and story captions.

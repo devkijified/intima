@@ -5,7 +5,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 const BOOST_COST_COINS = 500; // 30 minutes, top of map
 const BOOST_MINUTES = 30;
 
-/** POST /api/boost — companions buy top-of-map placement with coins. */
+/** POST /api/boost: companions buy top-of-map placement with coins. */
 export async function POST(_req: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

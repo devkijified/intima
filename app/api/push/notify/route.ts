@@ -1,4 +1,4 @@
-// POST /api/push/notify — reusable primitive for app events.
+// POST /api/push/notify: reusable primitive for app events.
 // Body: { user_ids: string[], type, title, body?, link? }.
 // Writes notification rows and fans out Web Push.
 //

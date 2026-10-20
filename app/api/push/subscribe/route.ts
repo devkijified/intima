@@ -1,5 +1,5 @@
-// POST /api/push/subscribe — save this device's Web Push subscription.
-// DELETE /api/push/subscribe — remove it (push turned off on this device).
+// POST /api/push/subscribe: save this device's Web Push subscription.
+// DELETE /api/push/subscribe: remove it (push turned off on this device).
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'

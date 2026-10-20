@@ -7,7 +7,7 @@ import { google } from 'googleapis';
  * Admin only. Redirects to Google's consent screen.
  */
 export async function GET(req: NextRequest) {
-  // Basic admin check via query param is NOT enough — verify session.
+  // Basic admin check via query param is NOT enough: verify session.
   const { createClient } = await import('@/lib/supabase/server');
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

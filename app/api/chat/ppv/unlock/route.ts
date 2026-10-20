@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 /**
- * POST /api/chat/ppv/unlock — spend coins to unlock a PPV message.
+ * POST /api/chat/ppv/unlock: spend coins to unlock a PPV message.
  * Body: { messageId }.
  */
 export async function POST(req: NextRequest) {

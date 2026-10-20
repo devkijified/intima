@@ -1,4 +1,4 @@
-// POST /api/push/test — send a test push to the caller's own devices.
+// POST /api/push/test: send a test push to the caller's own devices.
 // Lets a user verify push works end to end from the notifications page.
 import { createClient } from '@/lib/supabase/server'
 import { sendPushToUsers } from '@/lib/push-server'

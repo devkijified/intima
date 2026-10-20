@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
-/** GET /api/boost/status — your latest active boost, if any. */
+/** GET /api/boost/status: your latest active boost, if any. */
 export async function GET() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
