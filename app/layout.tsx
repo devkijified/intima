@@ -8,6 +8,7 @@ import RefCapture from '@/components/RefCapture'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { DockProvider } from '@/components/dock/FloatingDock'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { UpdatePrompt } from '@/components/pwa/UpdatePrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 import ErrorReporter from '@/components/observability/ErrorReporter'
 
@@ -79,6 +80,7 @@ export default function RootLayout({
             <DockProvider>{children}</DockProvider>
           </CallProvider>
           <InstallPrompt />
+          <UpdatePrompt />
           <ConnectionMonitor />
         </AgeGate>
         <script

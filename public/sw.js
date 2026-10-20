@@ -7,13 +7,22 @@
  * has occurred". Cached responses are now only an offline fallback,
  * and the cache name is versioned so old caches are purged on activate.
  */
-const CACHE = 'intima-shell-v3';
+const CACHE = 'intima-shell-v4';
 const SHELL = ['/icons/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
+  // No self.skipWaiting here: a new worker waits until the page's
+  // UpdatePrompt offers a reload and posts SKIP_WAITING, so nobody
+  // gets a half-swapped app mid-session.
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) => cache.addAll(SHELL))
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {
