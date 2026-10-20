@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, Star, Zap, Crown } from '@/lib/icons';
+import { BadgeCheck, Star, Zap, Crown, Plane } from '@/lib/icons';
 import { formatPrice } from '@/lib/utils/helpers';
 import { formatRecency } from '@/lib/utils/recency';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
@@ -9,6 +9,8 @@ import type { MapProvider } from '@/lib/map/providers';
 interface ProviderListCardProps {
   provider: MapProvider;
   onSelect: (provider: MapProvider) => void;
+  /** Why she matches the active city filter despite being based elsewhere. */
+  travelNote?: string | null;
 }
 
 /**
@@ -17,7 +19,7 @@ interface ProviderListCardProps {
  * short-time rate. Tapping opens the same bottom sheet as a map pin,
  * so selection stays synced across views.
  */
-export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) {
+export function ProviderListCard({ provider, onSelect, travelNote }: ProviderListCardProps) {
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
   const recency = formatRecency(provider.lastActiveAt);
@@ -78,6 +80,19 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
           <p className="mt-0.5 truncate text-xs text-neutral-500">
             {provider.area}, {provider.city}
           </p>
+          {travelNote ? (
+            <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#AC244D]/[0.08] px-2 py-0.5 text-[11px] font-semibold text-[#AC244D]">
+              <Plane className="h-3 w-3" /> {travelNote}
+            </p>
+          ) : provider.nextTour ? (
+            <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[11px] font-semibold text-charcoal">
+              <Plane className="h-3 w-3 text-[#AC244D]" /> In {provider.nextTour.city} soon
+            </p>
+          ) : provider.travelMode === 'nationwide' ? (
+            <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#AC244D]/[0.08] px-2 py-0.5 text-[11px] font-semibold text-[#AC244D]">
+              <Plane className="h-3 w-3" /> Can travel anywhere in Nigeria
+            </p>
+          ) : null}
           {recency && (
             <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-green-700">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />

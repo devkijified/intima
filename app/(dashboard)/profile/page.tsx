@@ -3,6 +3,7 @@
 import { StoryManager } from '@/components/stories/StoryManager'
 import { TouringPanel } from '@/components/profile/TouringPanel'
 import { BoostPanel } from '@/components/profile/BoostPanel';
+import { TravelRequirementsPanel } from '@/components/profile/TravelRequirementsPanel';
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -615,6 +616,8 @@ export default function ProfilePage() {
           </div>
 
           <TouringPanel />
+
+          <TravelRequirementsPanel />
 
           <BoostPanel />
 

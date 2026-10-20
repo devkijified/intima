@@ -280,7 +280,11 @@ export default function IntimaMap() {
           (!filters.verifiedOnly || p.verified) &&
           (!filters.availableNow || p.available) &&
           (!filters.negotiableOnly || p.ratesNegotiable) &&
-          (!filters.city || p.city === filters.city) &&
+          (!filters.city ||
+            p.city === filters.city ||
+            p.travelCities.includes(filters.city) ||
+            p.travelMode === 'nationwide' ||
+            p.nextTour?.city === filters.city) &&
           // Pins with no listed short-time rate stay visible under every
           // budget: an unlisted rate is not proof of an unaffordable one,
           // and the sheet says "Rates not listed yet" so the client knows.
@@ -532,6 +536,19 @@ export default function IntimaMap() {
       return;
     }
     void startCall(p.userId, p.displayName, 'video', p.avatar);
+  };
+
+  /** Why a non-local companion matches the active city filter. */
+  const travelNoteFor = (p: MapProvider): string | null => {
+    const city = filters.city;
+    if (!city || p.city === city) return null;
+    if (p.nextTour?.city === city) {
+      const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' });
+      return `In ${city}, ${f(p.nextTour.start)} to ${f(p.nextTour.end)}`;
+    }
+    if (p.travelCities.includes(city)) return `Can travel to ${city}`;
+    if (p.travelMode === 'nationwide') return 'Can travel anywhere in Nigeria';
+    return null;
   };
 
   const goToProfile = (p: MapProvider) => {
@@ -836,7 +853,7 @@ export default function IntimaMap() {
           ) : filtered.length > 0 ? (
             <ul className="stagger grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {filtered.map((p) => (
-                <ProviderListCard key={p.id} provider={p} onSelect={goToProfile} />
+                <ProviderListCard key={p.id} provider={p} onSelect={goToProfile} travelNote={travelNoteFor(p)} />
               ))}
             </ul>
           ) : (
