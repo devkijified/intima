@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
+import {
+  getSnapStanding,
+  readSnapThresholds,
+  type SnapStanding,
+} from '@/lib/snaps/rules';
 
 /**
  * Private snaps: fan-only photo and video collections on a companion
@@ -56,6 +61,9 @@ interface SnapRow {
   caption: string | null;
   collection: string;
   created_at: string;
+  review_status: string;
+  duration_seconds: number | null;
+  reject_reason: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -103,12 +111,22 @@ export async function GET(req: NextRequest) {
 
     const { data: snapData, error: snapErr } = await svc
       .from('private_snaps')
-      .select('id, storage_path, media_type, caption, collection, created_at')
+      .select(
+        'id, storage_path, media_type, caption, collection, created_at, review_status, duration_seconds, reject_reason'
+      )
       .eq('provider_id', providerId)
       .order('created_at', { ascending: false })
       .limit(300);
     if (snapErr) throw snapErr;
-    const snaps = (snapData ?? []) as SnapRow[];
+    const allSnaps = (snapData ?? []) as SnapRow[];
+    // Fans (and everyone who is not the owner) only ever see
+    // approved content: pending snaps are drafts awaiting the human
+    // review, rejected ones are between the creator and the review
+    // team. Counts and collections follow the same filter, so a
+    // locked collection never leaks how much is waiting on review.
+    const snaps = isOwner
+      ? allSnaps
+      : allSnaps.filter((s) => s.review_status === 'approved');
 
     // Collection names and counts, in most-recent-first order.
     const counts = new Map<string, number>();
@@ -126,6 +144,7 @@ export async function GET(req: NextRequest) {
       fanPriceCoins: number | null;
       totalCount: number;
       collections: { name: string; count: number }[];
+      standing?: SnapStanding;
       snaps?: {
         id: string;
         mediaType: string;
@@ -133,6 +152,9 @@ export async function GET(req: NextRequest) {
         collection: string;
         createdAt: string;
         url: string;
+        reviewStatus?: string;
+        rejectReason?: string | null;
+        durationSeconds?: number | null;
       }[];
     } = {
       isOwner,
@@ -141,6 +163,10 @@ export async function GET(req: NextRequest) {
       totalCount: snaps.length,
       collections,
     };
+
+    if (isOwner) {
+      body.standing = await getSnapStanding(svc, providerId);
+    }
 
     if (detail && (isOwner || isSubscriber)) {
       if (snaps.length === 0) {
@@ -167,6 +193,13 @@ export async function GET(req: NextRequest) {
             collection: s.collection,
             createdAt: s.created_at,
             url: urlByPath.get(s.storage_path) as string,
+            ...(isOwner
+              ? {
+                  reviewStatus: s.review_status,
+                  rejectReason: s.reject_reason,
+                  durationSeconds: s.duration_seconds,
+                }
+              : {}),
           }));
       }
     }
@@ -206,6 +239,7 @@ export async function POST(req: NextRequest) {
       mediaType?: unknown;
       caption?: unknown;
       collection?: unknown;
+      durationSeconds?: unknown;
     } | null;
     const storagePath = body?.storagePath;
     const mediaType = body?.mediaType;
@@ -220,6 +254,26 @@ export async function POST(req: NextRequest) {
         { error: 'mediaType must be image or video' },
         { status: 400 }
       );
+    }
+
+    // Videos must run at least the configured minimum (30 seconds by
+    // default) before they can count as fan content. The uploader
+    // reads the duration from the file; a video without a believable
+    // duration is refused here, not left for the review queue.
+    let durationSeconds: number | null = null;
+    if (mediaType === 'video') {
+      const t = await readSnapThresholds(svc);
+      const raw = body?.durationSeconds;
+      durationSeconds =
+        typeof raw === 'number' && Number.isFinite(raw) ? Math.round(raw) : null;
+      if (durationSeconds === null || durationSeconds < t.minVideoSeconds) {
+        return NextResponse.json(
+          {
+            error: `Videos must be at least ${t.minVideoSeconds} seconds long to post here.`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const caption =
@@ -238,6 +292,8 @@ export async function POST(req: NextRequest) {
         ? body.collection.trim().slice(0, 40)
         : DEFAULT_COLLECTION;
 
+    // Every snap enters as a draft: a human reviews it before fans
+    // can see it or it counts toward the earning bar.
     const { data: row, error } = await svc
       .from('private_snaps')
       .insert({
@@ -246,8 +302,10 @@ export async function POST(req: NextRequest) {
         media_type: mediaType,
         caption,
         collection,
+        duration_seconds: durationSeconds,
+        review_status: 'pending',
       })
-      .select('id, media_type, caption, collection, created_at')
+      .select('id, media_type, caption, collection, created_at, review_status')
       .single();
     if (error) throw error;
 
@@ -259,6 +317,7 @@ export async function POST(req: NextRequest) {
         caption: row.caption,
         collection: row.collection,
         createdAt: row.created_at,
+        reviewStatus: row.review_status,
       },
     });
   } catch (e) {

@@ -19,11 +19,30 @@ interface SnapItem {
   collection: string;
   createdAt: string;
   url: string;
+  /** Owner only: where this snap sits in the human review. */
+  reviewStatus?: string;
+  rejectReason?: string | null;
+  durationSeconds?: number | null;
 }
 
 interface SnapCollection {
   name: string;
   count: number;
+}
+
+interface StandingLite {
+  canEarn: boolean;
+  blockedBy: string | null;
+  countingContents: number;
+  pendingCount: number;
+  checks: {
+    key: string;
+    label: string;
+    passed: boolean;
+    current: string;
+    target: string;
+  }[];
+  thresholds: { minContents: number; minVideoSeconds: number };
 }
 
 interface SnapsResponse {
@@ -33,6 +52,31 @@ interface SnapsResponse {
   totalCount: number;
   collections: SnapCollection[];
   snaps?: SnapItem[];
+  standing?: StandingLite;
+}
+
+/** Read a video file's duration in seconds before it uploads, so a
+ * too-short video is refused on the phone, not after a round trip. */
+async function readVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    const done = (val: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(val);
+    };
+    const timer = window.setTimeout(() => done(null), 6000);
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => {
+      window.clearTimeout(timer);
+      done(Number.isFinite(v.duration) ? v.duration : null);
+    };
+    v.onerror = () => {
+      window.clearTimeout(timer);
+      done(null);
+    };
+    v.src = url;
+  });
 }
 
 interface PrivateSnapsProps {
@@ -188,6 +232,7 @@ export function PrivateSnaps({
       let data: Blob;
       let contentType: string;
       let ext: string;
+      let durationSeconds: number | null = null;
       if (isImage) {
         if (picked.size > MAX_IMAGE_BYTES) {
           throw new Error('That photo is too large. Please keep photos under 10MB.');
@@ -200,6 +245,16 @@ export function PrivateSnaps({
       } else {
         if (picked.size > MAX_VIDEO_BYTES) {
           throw new Error('That video is too large. Please keep videos under 50MB.');
+        }
+        const minSeconds = summary?.standing?.thresholds.minVideoSeconds ?? 30;
+        durationSeconds = await readVideoDuration(picked);
+        if (durationSeconds === null) {
+          throw new Error('We could not read that video. Please try another file.');
+        }
+        if (durationSeconds < minSeconds) {
+          throw new Error(
+            `That video is ${Math.round(durationSeconds)} seconds. Videos here must be at least ${minSeconds} seconds.`
+          );
         }
         data = picked;
         contentType = picked.type || 'video/mp4';
@@ -222,6 +277,7 @@ export function PrivateSnaps({
           mediaType: isImage ? 'image' : 'video',
           caption: caption.trim() || undefined,
           collection: collection.trim() || undefined,
+          durationSeconds: durationSeconds ?? undefined,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -300,13 +356,13 @@ export function PrivateSnaps({
           Private snaps
         </h3>
         <p className="mt-1 text-sm text-neutral-500">
-          Fans only. Join her fan club to see these.
+          Fans only. Join the fan club to see these.
         </p>
         {summary.fanPriceCoins !== null ? (
           <SubscribeCard providerId={providerId} providerName={providerName} />
         ) : (
           <p className="mt-3 rounded-2xl bg-cream p-3 text-sm text-neutral-600">
-            Her fan club is not open yet, so private snaps are not available for
+            This fan club is not open yet, so private snaps are not available for
             now.
           </p>
         )}
@@ -358,12 +414,62 @@ export function PrivateSnaps({
           : 'For fan club members only. Enjoy.'}
       </p>
 
+      {ownerView && summary.standing && (
+        <div className="card-luxe mt-3 p-4">
+          {summary.standing.canEarn ? (
+            <p className="text-sm font-semibold text-emerald-700">
+              Your fan club is open and earning.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-charcoal">
+                Open your fan club
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Fans can subscribe once every step below is done. Every snap is
+                reviewed by our team before fans see it, and photos in a set
+                count once the set holds at least 5 approved photos.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {summary.standing.checks.map((c) => (
+                  <li key={c.key} className="flex items-start gap-2 text-sm">
+                    <span
+                      className={
+                        c.passed
+                          ? 'font-bold text-emerald-600'
+                          : 'font-bold text-red-500'
+                      }
+                    >
+                      {c.passed ? '✓' : '✕'}
+                    </span>
+                    <span className="flex-1 text-charcoal">
+                      {c.label}
+                      <span className="block text-xs text-neutral-500">
+                        {c.current} · needs {c.target}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {summary.standing.pendingCount > 0 && (
+            <p className="mt-2 text-xs text-neutral-500">
+              {summary.standing.pendingCount}{' '}
+              {summary.standing.pendingCount === 1 ? 'snap' : 'snaps'} waiting
+              for review.
+            </p>
+          )}
+        </div>
+      )}
+
       {ownerView && (
         <div className="card-luxe mt-3 p-4">
           <p className="text-sm font-semibold text-charcoal">Add a private snap</p>
           <p className="mt-1 text-xs text-neutral-500">
             Photos are cleaned of location data before they upload. Videos can be
-            up to 50MB.
+            up to 50MB, and must run at least 30 seconds. New snaps appear to
+            fans after a quick review.
           </p>
           <div className="mt-3 flex flex-col gap-2">
             <input
@@ -473,6 +579,16 @@ export function PrivateSnaps({
                       </>
                     )}
                   </button>
+                  {ownerView && snap.reviewStatus === 'pending' && (
+                    <span className="absolute bottom-1 right-1 rounded bg-gold px-1.5 py-0.5 text-[9px] font-bold text-charcoal">
+                      IN REVIEW
+                    </span>
+                  )}
+                  {ownerView && snap.reviewStatus === 'rejected' && (
+                    <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                      REJECTED
+                    </span>
+                  )}
                   {ownerView && (
                     <button
                       type="button"
@@ -545,6 +661,17 @@ export function PrivateSnaps({
             {lightbox.caption && (
               <p className="mt-3 text-center text-sm text-white/85">
                 {lightbox.caption}
+              </p>
+            )}
+            {lightbox.reviewStatus === 'pending' && (
+              <p className="mt-2 text-center text-xs font-semibold text-gold">
+                In review. Fans will see this once it is approved.
+              </p>
+            )}
+            {lightbox.reviewStatus === 'rejected' && (
+              <p className="mt-2 text-center text-xs font-semibold text-red-400">
+                Rejected by the review team.
+                {lightbox.rejectReason ? ` Reason: ${lightbox.rejectReason}` : ''}
               </p>
             )}
           </div>

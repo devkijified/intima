@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { notifyUsers } from '@/lib/push-server';
+import { getSnapStanding, snapBlockCopy } from '@/lib/snaps/rules';
 
 /**
  * Fan club subscriptions.
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
     const svc = service();
     const { data: provider } = await svc
       .from('profiles')
-      .select('id, sub_price_coins')
+      .select('id, sub_price_coins, display_name')
       .eq('id', providerId)
       .maybeSingle();
     if (!provider) {
@@ -138,6 +139,23 @@ export async function POST(req: NextRequest) {
     const price = provider.sub_price_coins as number | null;
     if (!price || price <= 0) {
       return NextResponse.json({ error: 'This fan club is not open' }, { status: 400 });
+    }
+
+    // Earning gate (Private Snaps rules): a fan club only takes new
+    // subscriptions while the creator is verified, has enough
+    // reviewed content live, and the gallery is fresh. Existing
+    // members are untouched; this guards new money only.
+    const standing = await getSnapStanding(svc, providerId);
+    if (!standing.canEarn) {
+      return NextResponse.json(
+        {
+          error: snapBlockCopy(
+            standing.blockedBy,
+            (provider.display_name as string | null) ?? 'This creator'
+          ),
+        },
+        { status: 403 }
+      );
     }
 
     // One effective subscription per pair.
