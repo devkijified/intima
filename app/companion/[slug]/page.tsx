@@ -173,6 +173,8 @@ export default function ModelDetailPage() {
   // Favorites.
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
+  const [following, setFollowing] = useState(false)
+  const [followBusy, setFollowBusy] = useState(false)
 
   // Stories + live.
   const [stories, setStories] = useState<Story[]>([])
@@ -325,6 +327,22 @@ export default function ModelDetailPage() {
     })()
     return () => { live = false }
   }, [params.slug, supabase])
+
+  const toggleFollow = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { window.location.href = '/login?next=/companion/' + encodeURIComponent(params.slug); return }
+    setFollowBusy(true)
+    if (following) {
+      await supabase.from('broadcast_follows').delete().eq('provider_id', provider?.id).eq('follower_id', user.id)
+      setFollowing(false)
+    } else {
+      await supabase.from('broadcast_follows').insert({ provider_id: provider?.id, follower_id: user.id })
+      setFollowing(true)
+      setToast('Following — her updates land in your Channel')
+    }
+    setFollowBusy(false)
+  }
 
   const toggleFav = async () => {
     if (!provider || favBusy) return
@@ -519,6 +537,13 @@ export default function ModelDetailPage() {
             className="flex h-10 w-10 items-center justify-center rounded-full bg-cream active:scale-90"
           >
             <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
+          </button>
+          <button
+            onClick={toggleFollow}
+            disabled={followBusy}
+            className={'rounded-full px-4 py-2 text-xs font-semibold transition-all ' + (following ? 'bg-cream text-charcoal' : 'bg-gold text-charcoal')}
+          >
+            {following ? 'Following' : 'Follow'}
           </button>
         </div>
       </div>

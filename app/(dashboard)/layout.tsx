@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon, Radio, Heart,
   MessageCircle,
   Coins,
-  Banknote,} from '@/lib/icons'
+  Banknote, Bell } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
@@ -221,11 +221,12 @@ export default function DashboardLayout({
         className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <div className="grid grid-cols-5 px-2 py-1.5">
+        <div className="grid grid-cols-6 px-1 py-1.5">
           {[
             { href: '/dashboard', icon: LayoutDashboard, label: 'Home', active: pathname === '/dashboard' },
             { href: '/live', icon: Radio, label: 'Live', active: pathname.startsWith('/live') },
             { href: '/', icon: MapIcon, label: 'Map', active: pathname === '/' },
+            { href: '/channel', icon: Bell, label: 'Channel', active: pathname.startsWith('/channel') },
             { href: '/saved', icon: Heart, label: 'Saved', active: pathname.startsWith('/saved') },
             { href: '/profile', icon: User, label: 'Profile', active: pathname.startsWith('/profile') },
           ].map(({ href, icon: Icon, label, active }) => (
