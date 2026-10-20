@@ -6,13 +6,18 @@ on:
   workflow_dispatch:
 
 # CRON_SECRET must exist in repo secrets and in Vercel env, with the same value.
+# The run commands use block scalars on purpose: an unquoted curl line
+# contains "Authorization: Bearer", whose colon-space breaks YAML parsing.
 jobs:
   sweeps:
     runs-on: ubuntu-latest
     steps:
       - name: Dispute sweep
-        run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/disputes
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/disputes
       - name: Subscription sweep
-        run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/subscriptions
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/subscriptions
       - name: Reconcile sweep
-        run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/reconcile
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/reconcile
