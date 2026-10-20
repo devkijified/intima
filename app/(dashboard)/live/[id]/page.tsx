@@ -8,7 +8,7 @@ import { FanBadge } from '@/components/social/FanBadge'
 import { GiftGlyph } from '@/components/live/GiftGlyph'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client'
+import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, VideoPresets, createLocalVideoTrack, createLocalAudioTrack, type RemoteTrackPublication, type TrackPublishOptions } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
@@ -16,6 +16,26 @@ import { Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 /* ---------------------------------- types --------------------------------- */
+
+// Same simulcast ladder the host console publishes: full capture on
+// top, 360p and 180p layers under it, so a co-host publishing from
+// this page is adaptive for viewers in exactly the same way.
+const CAMERA_PUBLISH_OPTIONS: TrackPublishOptions = {
+  simulcast: true,
+  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+}
+
+// Viewer quality picker. 'auto' leaves adaptive stream in charge of
+// the stage video; the manual picks cap the highest layer the server
+// may send for the host's stage track.
+type QualityChoice = 'auto' | 'high' | 'medium' | 'low'
+const QUALITY_OPTIONS: { value: QualityChoice; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+]
+const QUALITY_STORAGE_KEY = 'intima_live_quality'
 
 interface Stream {
   id: string
@@ -157,6 +177,20 @@ export default function StreamRoomPage() {
   const tilesRef = useRef<HTMLDivElement>(null)
   const tileElsRef = useRef(new Map<string, HTMLVideoElement>())
 
+  // Viewer video quality: persisted per device, applied to the host's
+  // main-stage publication whenever it is (re)subscribed.
+  const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() => {
+    if (typeof window === 'undefined') return 'auto'
+    try {
+      const v = window.localStorage.getItem(QUALITY_STORAGE_KEY)
+      return v === 'high' || v === 'medium' || v === 'low' ? v : 'auto'
+    } catch {
+      return 'auto'
+    }
+  })
+  const qualityChoiceRef = useRef<QualityChoice>(qualityChoice)
+  const hostVideoPubRef = useRef<RemoteTrackPublication | null>(null)
+
   /* ------------------------------ helpers --------------------------------- */
 
   const pushMessage = useCallback((m: ChatMsg) => {
@@ -193,6 +227,53 @@ export default function StreamRoomPage() {
       tileElsRef.current.delete(identity)
     }
   }, [])
+
+  // Quality application. In livekit-client v2.23 a manual quality on
+  // RemoteTrackPublication is a cap, not a replacement for adaptive
+  // stream: the server request takes the smaller of the adaptive
+  // stream dimensions and the capped layer, so Auto and a manual pick
+  // compose instead of fighting. The SDK offers no way to clear a cap
+  // once set, so Auto restores by capping at the top layer (HIGH),
+  // which lets adaptive stream govern everything below it exactly as
+  // it does for a never-touched publication.
+  const applyQuality = useCallback((pub: RemoteTrackPublication | null) => {
+    if (!pub) return
+    const choice = qualityChoiceRef.current
+    const target =
+      choice === 'low' ? VideoQuality.LOW : choice === 'medium' ? VideoQuality.MEDIUM : VideoQuality.HIGH
+    try {
+      pub.setVideoQuality(target)
+    } catch {
+      /* publication not subscribed yet; the subscribe path re-applies */
+    }
+  }, [])
+
+  // Remember the host's stage publication (same host test as
+  // attachRemoteVideo) and (re)apply the viewer's quality choice.
+  const noteHostVideoPub = useCallback(
+    (track: RemoteTrack, pub: RemoteTrackPublication, identity?: string) => {
+      if (track.kind !== Track.Kind.Video) return
+      if (!identity || identity === hostIdRef.current) {
+        hostVideoPubRef.current = pub
+        applyQuality(pub)
+      }
+    },
+    [applyQuality]
+  )
+
+  const chooseQuality = useCallback(
+    (choice: QualityChoice) => {
+      setQualityChoice(choice)
+      qualityChoiceRef.current = choice
+      try {
+        window.localStorage.setItem(QUALITY_STORAGE_KEY, choice)
+      } catch {
+        /* storage unavailable; the choice still applies to this room */
+      }
+      applyQuality(hostVideoPubRef.current)
+    },
+    [applyQuality]
+  )
 
   // Shared chat packet handler for the viewer connection and for a
   // co-host publisher connection. Message ids travel in the packet so
@@ -464,12 +545,15 @@ export default function StreamRoomPage() {
         setViewerCount(room.remoteParticipants.size + 1)
       }
 
-      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
         attachRemoteVideo(track, participant?.identity)
+        noteHostVideoPub(track, pub, participant?.identity)
       })
       room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
         if (participant && participant.identity !== session.provider_id) {
           detachTile(participant.identity)
+        } else {
+          hostVideoPubRef.current = null
         }
       })
       room.on(RoomEvent.ParticipantConnected, updateViewers)
@@ -495,7 +579,10 @@ export default function StreamRoomPage() {
       // Attach any already-published tracks (host stage, co-host tiles).
       room.remoteParticipants.forEach((p) => {
         p.trackPublications.forEach((pub) => {
-          if (pub.track) attachRemoteVideo(pub.track as RemoteTrack, p.identity)
+          if (pub.track) {
+            attachRemoteVideo(pub.track as RemoteTrack, p.identity)
+            noteHostVideoPub(pub.track as RemoteTrack, pub as RemoteTrackPublication, p.identity)
+          }
         })
       })
       updateViewers()
@@ -804,8 +891,9 @@ export default function StreamRoomPage() {
 
       const room = new Room({ adaptiveStream: true, dynacast: true })
       roomRef.current = room
-      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
         attachRemoteVideo(track, participant?.identity)
+        noteHostVideoPub(track, pub, participant?.identity)
       })
       room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
         setViewerCount(room.remoteParticipants.size + 1)
@@ -816,14 +904,17 @@ export default function StreamRoomPage() {
       await room.connect(url, token)
       room.remoteParticipants.forEach((p) => {
         p.trackPublications.forEach((pub) => {
-          if (pub.track) attachRemoteVideo(pub.track as RemoteTrack, p.identity)
+          if (pub.track) {
+            attachRemoteVideo(pub.track as RemoteTrack, p.identity)
+            noteHostVideoPub(pub.track as RemoteTrack, pub as RemoteTrackPublication, p.identity)
+          }
         })
       })
       setViewerCount(room.remoteParticipants.size + 1)
 
       const cam = await createLocalVideoTrack({ facingMode: 'user' })
       const mic = await createLocalAudioTrack()
-      await room.localParticipant.publishTrack(cam)
+      await room.localParticipant.publishTrack(cam, CAMERA_PUBLISH_OPTIONS)
       await room.localParticipant.publishTrack(mic)
       // Own preview tile so the co-host can see themselves.
       const container = tilesRef.current
@@ -842,7 +933,7 @@ export default function StreamRoomPage() {
     } finally {
       setCohostBusy(false)
     }
-  }, [id, cohostBusy, attachRemoteVideo, detachTile, handleDataPacket, showChatError])
+  }, [id, cohostBusy, attachRemoteVideo, detachTile, handleDataPacket, showChatError, noteHostVideoPub])
 
   const declineCohost = useCallback(async () => {
     try {
@@ -1211,15 +1302,13 @@ export default function StreamRoomPage() {
 
       {/* Top-right: PiP + share + close */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
-        {canModerate && (
-          <button
-            onClick={() => setPanelOpen(true)}
-            aria-label="Stream controls"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-        )}
+        <button
+          onClick={() => setPanelOpen(true)}
+          aria-label="Stream controls"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
         {!isHostMe && (
           <button
             onClick={() => {
@@ -1339,8 +1428,9 @@ export default function StreamRoomPage() {
         </div>
       )}
 
-      {/* Host and moderator control panel */}
-      {panelOpen && canModerate && (
+      {/* Stream controls panel: video quality for every viewer, plus
+          the host and moderator controls below it. */}
+      {panelOpen && (
         <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/60" onClick={() => setPanelOpen(false)}>
           <div
             className="max-h-[85%] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-8"
@@ -1352,11 +1442,34 @@ export default function StreamRoomPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {!isHostMe && (
+            {!isHostMe && canModerate && (
               <p className="mt-2 text-xs text-neutral-500">
                 You are a moderator here. Tap a name in chat to delete a message or mute its author.
               </p>
             )}
+            {/* Video quality (all viewers) */}
+            <div className="mt-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Video quality</p>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {QUALITY_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    onClick={() => chooseQuality(o.value)}
+                    className={
+                      qualityChoice === o.value
+                        ? 'rounded-xl bg-primary px-2 py-2 text-sm font-bold text-white'
+                        : 'rounded-xl bg-cream px-2 py-2 text-sm font-semibold text-charcoal'
+                    }
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-neutral-500">
+                Auto adjusts to your network strength. High, Medium and Low cap the picture quality for
+                this device.
+              </p>
+            </div>
             {isHostMe && (
               <div className="mt-4 space-y-5">
                 {/* Pin */}

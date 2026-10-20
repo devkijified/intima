@@ -2,9 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Room, createLocalVideoTrack, createLocalAudioTrack, type LocalVideoTrack, type LocalAudioTrack } from 'livekit-client'
+import { Room, createLocalVideoTrack, createLocalAudioTrack, VideoPresets, type LocalVideoTrack, type LocalAudioTrack, type TrackPublishOptions } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift, Eye, Crown, CheckCircle } from '@/lib/icons'
+
+// Simulcast ladder for the camera, stated on purpose rather than left
+// to SDK defaults: the full capture (720p class on a phone) stays the
+// top layer, with 360p and 180p layers under it. Viewers on weak
+// networks get served a smaller layer instead of a stalled picture,
+// and the viewer quality picker caps which layer a viewer takes.
+const CAMERA_PUBLISH_OPTIONS: TrackPublishOptions = {
+  simulcast: true,
+  videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+}
 
 type Phase = 'setup' | 'publishing' | 'live'
 type AccessMode = 'public' | 'paid' | 'fans'
@@ -177,7 +187,7 @@ export default function GoLivePage() {
       room.on('participantConnected', () => setViewerCount(room.remoteParticipants.size))
       room.on('participantDisconnected', () => setViewerCount(room.remoteParticipants.size))
       await room.connect(url, token)
-      await room.localParticipant.publishTrack(cam)
+      await room.localParticipant.publishTrack(cam, CAMERA_PUBLISH_OPTIONS)
       await room.localParticipant.publishTrack(mic)
 
       // Notify past clients (best-effort, via the push+notification primitive).
@@ -282,7 +292,7 @@ export default function GoLivePage() {
       const next = await createLocalVideoTrack({ facingMode: facing as 'user' | 'environment' })
       if (roomRef.current) {
         await roomRef.current.localParticipant.unpublishTrack(current!)
-        await roomRef.current.localParticipant.publishTrack(next)
+        await roomRef.current.localParticipant.publishTrack(next, CAMERA_PUBLISH_OPTIONS)
       }
       current?.stop()
       videoTrack.current = next
