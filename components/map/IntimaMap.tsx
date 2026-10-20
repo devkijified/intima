@@ -928,7 +928,7 @@ export default function IntimaMap() {
                 {toast.actionLabel}
               </button>
             )}
-            <button onClick={() => setToast(null)} aria-label="Dismiss">
+            <button onClick={() => setToast(null)} aria-label="Dismiss" className="-mr-2 flex h-11 w-11 items-center justify-center">
               <X className="h-4 w-4 text-white/70" />
             </button>
           </div>
