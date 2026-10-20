@@ -125,7 +125,7 @@ export default function CoinsPage() {
       <div className="mt-5 rounded-3xl bg-gradient-to-br from-primary to-[#7a1a36] p-6 text-white shadow-lg">
         <p className="text-xs font-medium uppercase tracking-widest text-white/70">Your balance</p>
         <p className="mt-1 font-display text-4xl font-bold">
-          {balance === null ? '—' : balance.toLocaleString()}
+          {balance === null ? '…' : balance.toLocaleString()}
           <span className="ml-2 text-base font-normal text-white/70">coins</span>
         </p>
         <p className="mt-1 text-xs text-white/60">≈ ₦{((balance ?? 0) * 10).toLocaleString()}</p>
@@ -140,7 +140,7 @@ export default function CoinsPage() {
       {/* Packages */}
       <h2 className="mt-6 text-sm font-bold uppercase tracking-widest text-neutral-400">Buy coins</h2>
 
-      {/* Payment method tabs — card checkout only appears once Paystack is live. */}
+      {/* Payment method tabs: card checkout only appears once Paystack is live. */}
       {cardEnabled && (
         <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-neutral-100 p-1">
           <button

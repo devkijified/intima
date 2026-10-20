@@ -14,9 +14,9 @@ interface CashoutRequest {
 
 const STATUS_META: Record<string, { label: string; icon: typeof Clock; cls: string }> = {
   pending: { label: 'Pending review', icon: Clock, cls: 'text-amber-600 bg-amber-50 border-amber-200' },
-  approved: { label: 'Approved — transfer coming', icon: CheckCircle2, cls: 'text-blue-600 bg-blue-50 border-blue-200' },
+  approved: { label: 'Approved: transfer coming', icon: CheckCircle2, cls: 'text-blue-600 bg-blue-50 border-blue-200' },
   paid: { label: 'Paid', icon: Banknote, cls: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-  rejected: { label: 'Rejected — coins refunded', icon: XCircle, cls: 'text-red-500 bg-red-50 border-red-200' },
+  rejected: { label: 'Rejected: coins refunded', icon: XCircle, cls: 'text-red-500 bg-red-50 border-red-200' },
 }
 
 /**
@@ -98,11 +98,11 @@ export default function EarningsPage() {
       <div className="mt-5 rounded-3xl bg-gradient-to-br from-primary to-[#7a1a36] p-6 text-white shadow-lg">
         <p className="text-xs font-medium uppercase tracking-widest text-white/70">Available to cash out</p>
         <p className="mt-1 font-display text-4xl font-bold">
-          {balance === null ? '—' : balance.toLocaleString()}
+          {balance === null ? '…' : balance.toLocaleString()}
           <span className="ml-2 text-base font-normal text-white/70">coins</span>
         </p>
         <p className="mt-1 text-xs text-white/60">
-          ≈ ₦{((balance ?? 0) * 10).toLocaleString()} · Lifetime earned: {lifetime === null ? '—' : lifetime.toLocaleString()} coins
+          ≈ ₦{((balance ?? 0) * 10).toLocaleString()} · Lifetime earned: {lifetime === null ? '…' : lifetime.toLocaleString()} coins
         </p>
       </div>
 

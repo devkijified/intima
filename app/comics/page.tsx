@@ -45,7 +45,7 @@ export default function ComicsPage() {
         </span>
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Intima Comics</h1>
-          <p className="text-sm text-neutral-500">New episodes drop regularly — come back for more.</p>
+          <p className="text-sm text-neutral-500">New episodes drop regularly. Come back for more.</p>
         </div>
       </div>
 

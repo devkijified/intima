@@ -340,7 +340,7 @@ export default function ModelDetailPage() {
     } else {
       await supabase.from('broadcast_follows').insert({ provider_id: provider?.id, follower_id: user.id })
       setFollowing(true)
-      setToast('Following — her updates land in your Channel')
+      setToast('Following. Her updates land in your Channel')
     }
     setFollowBusy(false)
   }

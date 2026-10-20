@@ -128,7 +128,7 @@ export default function ComicReaderPage() {
       </div>
 
       <div ref={endRef} className="px-6 pt-10 text-center">
-        <p className="font-display text-xl italic text-neutral-500">— end of episode —</p>
+        <p className="font-display text-xl italic text-neutral-500">End of episode</p>
         {next ? (
           <Link href={`/comics/${next.id}`} className="btn-luxe mt-6 inline-flex items-center gap-1 px-6 py-3 text-sm">
             Next: Episode {next.episode_no} <ChevronRight className="h-4 w-4" />
@@ -136,7 +136,7 @@ export default function ComicReaderPage() {
         ) : (
           <Link href="/comics" className="btn-soft mt-6 inline-flex px-6 py-3 text-sm">All episodes</Link>
         )}
-        <p className="mt-6 text-xs text-neutral-400">New episodes drop regularly — follow Intima and you will never miss one.</p>
+        <p className="mt-6 text-xs text-neutral-400">New episodes drop regularly. Follow Intima and you will never miss one.</p>
         {ep?.source_name && (
           <p className="mt-2 text-[11px] text-neutral-400">
             Source: {ep.source_link ? (
