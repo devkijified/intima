@@ -42,13 +42,13 @@ export async function POST(req: NextRequest) {
     .select('episode_id, completed').match(match).maybeSingle();
 
   if (!existing) {
-    const { error } = await svc.from('comic_reads').insert({
+    const { error } = await svc.from('comic_reads').upsert({
       episode_id: episodeId,
       user_id: user?.id ?? null,
       viewer_key: key,
       completed: !!completed,
       completed_at: completed ? new Date().toISOString() : null,
-    });
+    }, { onConflict: 'episode_id,viewer_id', ignoreDuplicates: true });
     if (!error) {
       await svc.rpc('increment_comic_views', { ep: episodeId }).then(
         () => {},
