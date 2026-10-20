@@ -206,3 +206,138 @@
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ================= Intima design system v2 =================
+   A calm luxury surface: warm cream, burgundy with depth,
+   gold used sparingly as jewellery. Everything tactile. */
+
+@layer base {
+  ::selection {
+    background: rgba(172, 36, 77, 0.18);
+  }
+
+  :focus-visible {
+    outline: 2px solid #AC244D;
+    outline-offset: 2px;
+    border-radius: 9999px;
+  }
+
+  /* Display headings get Fraunces optical sizing for elegance. */
+  .font-display {
+    font-optical-sizing: auto;
+  }
+}
+
+@layer components {
+  /* Primary action: burgundy with depth — gradient, top highlight,
+     warm shadow, gentle press. */
+  .btn-luxe {
+    @apply inline-flex items-center justify-center rounded-full font-semibold text-white
+           transition-all duration-150 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100;
+    background: linear-gradient(180deg, #C22A57 0%, #AC244D 45%, #9A2043 100%);
+    box-shadow: 0 8px 24px rgba(172, 36, 77, 0.32), 0 2px 6px rgba(172, 36, 77, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+  .btn-luxe:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 10px 28px rgba(172, 36, 77, 0.38), 0 2px 6px rgba(172, 36, 77, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  /* Secondary action: quiet charcoal or soft cream. */
+  .btn-soft {
+    @apply inline-flex items-center justify-center rounded-full font-semibold text-charcoal
+           bg-white ring-1 ring-black/[0.07] shadow-soft
+           transition-all duration-150 active:scale-[0.97];
+  }
+  .btn-soft:hover {
+    @apply shadow-lift -translate-y-px;
+  }
+
+  /* House card: warm white, hairline ring, soft lift. */
+  .card-luxe {
+    @apply rounded-4xl bg-white ring-1 ring-black/[0.045] shadow-soft;
+  }
+
+  /* Dark glass pill, the map-overlay surface. */
+  .glass-dark {
+    background: rgba(10, 10, 14, 0.55);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  /* Small badge with a hairline gold ring for elite moments. */
+  .badge-elite {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-charcoal;
+    background: linear-gradient(180deg, #E8D49E 0%, #C9A84C 100%);
+    box-shadow: 0 4px 12px rgba(201, 168, 76, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  /* Photo legibility veil: bottom gradient on card photos. */
+  .photo-veil {
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.12) 45%, transparent 70%);
+  }
+  .photo-veil-top {
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.08) 40%, transparent 65%);
+  }
+}
+
+/* Entrance motion: soft rise. Stagger via inline animation-delay. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@layer utilities {
+  .animate-rise-in {
+    animation: rise-in 0.5s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+  }
+  .animate-pop-in {
+    animation: pop-in 0.25s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+  }
+  /* Staggered children: wrap a grid/list in .stagger, children animate in turn. */
+  .stagger > * {
+    animation: rise-in 0.5s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.10s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.18s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.22s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.26s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.30s; }
+
+  /* Hide scrollbars on horizontal scrollers without killing scroll. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}

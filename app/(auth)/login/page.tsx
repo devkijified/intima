@@ -52,13 +52,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="w-full">
+      <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
         <CardHeader className="space-y-1 text-center">
-          <div className="mb-4 text-3xl font-bold text-[#AC244D]">Intima</div>
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>
-            Sign in to your account to continue
+          <CardTitle className="font-display text-3xl font-semibold tracking-tight">Welcome back</CardTitle>
+          <CardDescription className="text-[15px]">
+            Sign in to continue to Intima
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>

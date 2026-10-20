@@ -52,10 +52,9 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="w-full">
+      <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
         <CardHeader className="space-y-1 text-center">
-          <div className="mb-4 text-3xl font-bold text-[#AC244D]">Intima</div>
           <CardTitle className="text-2xl">{done ? 'Password updated' : 'Choose a new password'}</CardTitle>
           <CardDescription>
             {done

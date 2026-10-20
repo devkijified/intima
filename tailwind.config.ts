@@ -30,11 +30,23 @@ const config: Config = {
         charcoal: '#1A1A1A',
       },
       fontFamily: {
-        // One pairing: Inter for UI text, Fraunces for display. The CSS
+        // One pairing: Figtree for UI text, Fraunces for display. The CSS
         // variables are set on <html> by next/font in app/layout.tsx.
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-figtree)', 'system-ui', 'sans-serif'],
         serif: ['var(--font-fraunces)', 'Georgia', 'serif'],
         display: ['var(--font-fraunces)', 'Georgia', 'serif'],
+      },
+      boxShadow: {
+        // Soft, layered, slightly warm — the house elevation scale.
+        soft: '0 1px 2px rgba(26,26,26,0.04), 0 8px 24px rgba(26,26,26,0.06)',
+        lift: '0 2px 4px rgba(26,26,26,0.05), 0 16px 40px rgba(26,26,26,0.10)',
+        sheet: '0 -8px 40px rgba(26,26,26,0.22)',
+        cta: '0 8px 24px rgba(172,36,77,0.32), 0 2px 6px rgba(172,36,77,0.22)',
+        gold: '0 6px 20px rgba(201,168,76,0.35)',
+        pin: '0 4px 14px rgba(0,0,0,0.45)',
+      },
+      borderRadius: {
+        '4xl': '2rem',
       },
     },
   },

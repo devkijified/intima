@@ -32,11 +32,10 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="w-full">
+      <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
         <CardHeader className="space-y-1 text-center">
-          <div className="mb-4 text-3xl font-bold text-[#AC244D]">Intima</div>
-          <CardTitle className="text-2xl">{sent ? 'Check your email' : 'Reset your password'}</CardTitle>
+          <CardTitle className="font-display text-3xl font-semibold tracking-tight">{sent ? 'Check your email' : 'Reset your password'}</CardTitle>
           <CardDescription>
             {sent
               ? 'We sent a password reset link to your email. Tap it to choose a new password.'

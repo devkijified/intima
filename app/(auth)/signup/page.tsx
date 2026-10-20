@@ -78,10 +78,10 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-md">
+      <div className="w-full">
+        <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
           <CardHeader>
-            <CardTitle className="text-2xl text-center text-green-600">✅ Account Created!</CardTitle>
+            <CardTitle className="font-display text-3xl font-semibold tracking-tight text-center text-emerald-700">Account created</CardTitle>
             <CardDescription className="text-center">
               {needsConfirm
                 ? 'Check your email to confirm your account, then sign in.'
@@ -101,11 +101,11 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-8">
-      <Card className="w-full max-w-md">
+    <div className="w-full">
+      <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
         <CardHeader>
-          <CardTitle className="text-2xl text-center">Create Account</CardTitle>
-          <CardDescription className="text-center">Join Intima today</CardDescription>
+          <CardTitle className="font-display text-3xl font-semibold tracking-tight text-center">Create your account</CardTitle>
+          <CardDescription className="text-center text-[15px]">Join Intima — verified, private, direct</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
