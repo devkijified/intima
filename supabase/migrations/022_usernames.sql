@@ -13,7 +13,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS profiles_username_unique ON profiles (username
 create or replace view public.map_providers as
 select
   pp.provider_id,
-  p.username,
   nullif(coalesce(p.display_name, ''), '') as display_name,
   p.avatar_url,
   coalesce(p.is_verified, false) as is_verified,
@@ -32,7 +31,8 @@ select
   coalesce((select count(*) from public.reviews r where r.provider_id = pp.provider_id), 0)::integer as review_count,
   (select round(avg(r.rating)::numeric, 1) from public.reviews r where r.provider_id = pp.provider_id)::float as avg_rating,
   coalesce((select count(*) from public.connections c where c.provider_id = pp.provider_id and c.status = 'active'), 0)::integer as booking_count,
-  coalesce(p.video_urls, '{}') as video_urls
+  coalesce(p.video_urls, '{}') as video_urls,
+  p.username
 from public.provider_presence pp
 join public.profiles p on p.id = pp.provider_id
 where pp.show_on_map = true
