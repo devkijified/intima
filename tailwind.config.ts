@@ -30,11 +30,13 @@ const config: Config = {
         charcoal: '#1A1A1A',
       },
       fontFamily: {
-        // One pairing: Figtree for UI text, Fraunces for display. The CSS
+        // One pairing: Figtree for UI text, Inter for display. The CSS
         // variables are set on <html> by next/font in app/layout.tsx.
+        // serif stays as an alias of display: older screens use
+        // font-serif for headings and big numbers.
         sans: ['var(--font-figtree)', 'system-ui', 'sans-serif'],
-        serif: ['var(--font-fraunces)', 'Georgia', 'serif'],
-        display: ['var(--font-fraunces)', 'Georgia', 'serif'],
+        serif: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-inter)', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         // Soft, layered, slightly warm — the house elevation scale.
