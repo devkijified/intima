@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard'
+import { FanBadge } from '@/components/social/FanBadge'
 import { GiftGlyph } from '@/components/live/GiftGlyph'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client'
+import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
-import { Eye, Gift, Heart, Lock, Radio, Send, Share2, X,
+import { Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
   PictureInPicture2,} from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
@@ -21,6 +22,9 @@ interface Stream {
   title: string
   price_ngn: number
   status: string
+  pinned_text: string | null
+  slow_mode_seconds: number
+  blocked_words: string[]
   provider: { display_name: string; avatar_url: string | null } | null
 }
 
@@ -38,6 +42,17 @@ interface ChatMsg {
   body: string
   mine: boolean
   senderId?: string
+  level?: number
+}
+
+interface PkBattleState {
+  id: string
+  status: string
+  endsAt: string
+  winnerSessionId: string | null
+  scores: { a: number; b: number }
+  mineIsA: boolean
+  opponent: { sessionId: string; hostName: string | null; title: string } | null
 }
 
 interface FloatingHeart {
@@ -101,13 +116,102 @@ export default function StreamRoomPage() {
   const [modTarget, setModTarget] = useState<ChatMsg | null>(null)
   const [myId, setMyId] = useState<string | null>(null)
   const [hostId, setHostId] = useState<string | null>(null)
+  const [fanIds, setFanIds] = useState<Set<string>>(new Set())
+  const hostIdRef = useRef<string | null>(null)
   const [miniGifts, setMiniGifts] = useState<GiftEvent[]>([])
+
+  // Live depth: server-gated chat, pins, moderation, PK, co-hosts.
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
+  const deletedRef = useRef<Set<string>>(new Set())
+  const [pinnedText, setPinnedText] = useState<string | null>(null)
+  const [isModerator, setIsModerator] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [pinDraft, setPinDraft] = useState('')
+  const [pinEditing, setPinEditing] = useState(false)
+  const [slowSel, setSlowSel] = useState(0)
+  const [blockedDraft, setBlockedDraft] = useState('')
+  const [modUsername, setModUsername] = useState('')
+  const [cohostUsername, setCohostUsername] = useState('')
+  const [panelMsg, setPanelMsg] = useState('')
+  const [pkBattle, setPkBattle] = useState<PkBattleState | null>(null)
+  const [pkOptions, setPkOptions] = useState<{ id: string; label: string }[]>([])
+  const [pkOpponent, setPkOpponent] = useState('')
+  const [, setPkTick] = useState(0)
+  const [cohostInvite, setCohostInvite] = useState<'invited' | 'accepted' | null>(null)
+  const [cohostBusy, setCohostBusy] = useState(false)
+  const tilesRef = useRef<HTMLDivElement>(null)
+  const tileElsRef = useRef(new Map<string, HTMLVideoElement>())
 
   /* ------------------------------ helpers --------------------------------- */
 
   const pushMessage = useCallback((m: ChatMsg) => {
     setMessages((prev) => [...prev.slice(-CHAT_MAX + 1), m])
   }, [])
+
+  // Video routing for multiple publishers: the host track fills the
+  // main stage; every other publisher (an accepted co-host) gets a
+  // small tile in the tile strip.
+  const attachRemoteVideo = useCallback((track: RemoteTrack, identity?: string) => {
+    if (track.kind !== Track.Kind.Video) return
+    if (!identity || identity === hostIdRef.current) {
+      if (videoRef.current) track.attach(videoRef.current)
+      return
+    }
+    const container = tilesRef.current
+    if (!container) return
+    let el = tileElsRef.current.get(identity)
+    if (!el) {
+      el = document.createElement('video')
+      el.autoplay = true
+      el.playsInline = true
+      el.className = 'h-24 w-[4.5rem] rounded-xl border border-white/40 bg-black object-cover'
+      container.appendChild(el)
+      tileElsRef.current.set(identity, el)
+    }
+    track.attach(el)
+  }, [])
+
+  const detachTile = useCallback((identity: string) => {
+    const el = tileElsRef.current.get(identity)
+    if (el) {
+      el.remove()
+      tileElsRef.current.delete(identity)
+    }
+  }, [])
+
+  // Shared chat packet handler for the viewer connection and for a
+  // co-host publisher connection. Message ids travel in the packet so
+  // server-recorded deletions can match them on every client.
+  const handleDataPacket = useCallback(
+    (payload: Uint8Array, participant?: RemoteParticipant) => {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(payload)) as {
+          topic?: string
+          name?: string
+          body?: string
+          id?: string
+          level?: number
+        }
+        if (parsed.topic === CHAT_TOPIC && parsed.body) {
+          const sid = participant?.identity
+          if (sid && blockedRef.current.has(sid)) return
+          const mid = parsed.id ?? uid()
+          if (deletedRef.current.has(mid)) return
+          pushMessage({
+            id: mid,
+            name: parsed.name ?? 'Guest',
+            body: parsed.body.slice(0, 200),
+            mine: false,
+            senderId: sid,
+            level: typeof parsed.level === 'number' ? parsed.level : undefined,
+          })
+        }
+      } catch {
+        /* ignore malformed data packets */
+      }
+    },
+    [pushMessage]
+  )
 
   const spawnHearts = useCallback((n: number) => {
     const fresh: FloatingHeart[] = Array.from({ length: n }, () => ({
@@ -142,7 +246,7 @@ export default function StreamRoomPage() {
 
       const { data: session } = await supabase
         .from('live_sessions')
-        .select('id, provider_id, title, price_ngn, status')
+        .select('id, provider_id, title, price_ngn, status, pinned_text, slow_mode_seconds, blocked_words')
         .eq('id', id)
         .maybeSingle()
       if (cancelled) return
@@ -152,6 +256,11 @@ export default function StreamRoomPage() {
         return
       }
       setHostId(session.provider_id)
+      hostIdRef.current = session.provider_id
+      setPinnedText(session.pinned_text ?? null)
+      setPinDraft(session.pinned_text ?? '')
+      setSlowSel(session.slow_mode_seconds ?? 0)
+      setBlockedDraft((session.blocked_words ?? []).join(', '))
 
       const { data: mods } = await supabase
         .from('stream_moderation')
@@ -161,6 +270,27 @@ export default function StreamRoomPage() {
         const set = new Set<string>(mods.map((r: any) => r.user_id))
         blockedRef.current = set
         setBlockedIds(set)
+      }
+
+      // Am I an appointed moderator or an invited co-host here?
+      const [{ data: myMod }, { data: myCohost }] = await Promise.all([
+        supabase
+          .from('stream_moderators')
+          .select('id')
+          .eq('session_id', id)
+          .eq('moderator_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('live_cohosts')
+          .select('status')
+          .eq('session_id', id)
+          .eq('cohost_id', user.id)
+          .maybeSingle(),
+      ])
+      if (!cancelled) {
+        if (myMod) setIsModerator(true)
+        if (myCohost?.status === 'invited') setCohostInvite('invited')
+        else if (myCohost?.status === 'accepted') setCohostInvite('accepted')
       }
 
       const { data: prof } = await supabase
@@ -213,37 +343,22 @@ export default function StreamRoomPage() {
         setViewerCount(room.remoteParticipants.size + 1)
       }
 
-      const attachHostVideo = (track: RemoteTrack) => {
-        if (track.kind === Track.Kind.Video && videoRef.current) {
-          track.attach(videoRef.current)
-        }
-      }
-
-      room.on(RoomEvent.TrackSubscribed, attachHostVideo)
-      room.on(RoomEvent.ParticipantConnected, updateViewers)
-      room.on(RoomEvent.ParticipantDisconnected, updateViewers)
-      room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: RemoteParticipant) => {
-        try {
-          const parsed = JSON.parse(new TextDecoder().decode(payload)) as {
-            topic?: string
-            name?: string
-            body?: string
-          }
-          if (parsed.topic === CHAT_TOPIC && parsed.body) {
-            const sid = participant?.identity
-            if (sid && blockedRef.current.has(sid)) return
-            pushMessage({
-              id: uid(),
-              name: parsed.name ?? 'Guest',
-              body: parsed.body.slice(0, 200),
-              mine: false,
-              senderId: sid,
-            })
-          }
-        } catch {
-          /* ignore malformed data packets */
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
+        attachRemoteVideo(track, participant?.identity)
+      })
+      room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
+        if (participant && participant.identity !== session.provider_id) {
+          detachTile(participant.identity)
         }
       })
+      room.on(RoomEvent.ParticipantConnected, updateViewers)
+      room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+        updateViewers()
+        if (participant && participant.identity !== session.provider_id) {
+          detachTile(participant.identity)
+        }
+      })
+      room.on(RoomEvent.DataReceived, handleDataPacket)
 
       try {
         await room.connect(url, token)
@@ -256,10 +371,10 @@ export default function StreamRoomPage() {
         return
       }
 
-      // Attach any already-published host tracks.
+      // Attach any already-published tracks (host stage, co-host tiles).
       room.remoteParticipants.forEach((p) => {
         p.trackPublications.forEach((pub) => {
-          if (pub.track) attachHostVideo(pub.track as RemoteTrack)
+          if (pub.track) attachRemoteVideo(pub.track as RemoteTrack, p.identity)
         })
       })
       updateViewers()
@@ -335,8 +450,42 @@ export default function StreamRoomPage() {
         )
         .subscribe()
 
+      // 6. Realtime chat deletions + live session settings (pin, slow
+      // mode). Deletions are recorded server-side by /api/live/moderate
+      // because data packets cannot be recalled.
+      const delChannel = supabase
+        .channel(`chat-depth-${id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'live_chat_deletions', filter: `session_id=eq.${id}` },
+          (payload) => {
+            const mid = (payload.new as { message_id?: string }).message_id
+            if (!mid) return
+            const next = new Set(deletedRef.current)
+            next.add(mid)
+            deletedRef.current = next
+            setDeletedIds(next)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'live_sessions', filter: `id=eq.${id}` },
+          (payload) => {
+            const row = payload.new as {
+              pinned_text?: string | null
+              slow_mode_seconds?: number
+              blocked_words?: string[]
+            }
+            if ('pinned_text' in row) setPinnedText(row.pinned_text ?? null)
+            if (typeof row.slow_mode_seconds === 'number') setSlowSel(row.slow_mode_seconds)
+            if (Array.isArray(row.blocked_words)) setBlockedDraft(row.blocked_words.join(', '))
+          }
+        )
+        .subscribe()
+
       return () => {
         supabase.removeChannel(channel)
+        supabase.removeChannel(delChannel)
       }
     }
 
@@ -354,33 +503,238 @@ export default function StreamRoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Fan club members of this host, fetched once when the host is
+  // known. Chat sender identity is the LiveKit participant identity,
+  // which is the user id (see handleDataPacket and sendChat).
+  useEffect(() => {
+    if (!hostId) return
+    let live = true
+    ;(async () => {
+      try {
+        const res = await fetch(
+          `/api/subscriptions/subscribers?provider_id=${encodeURIComponent(hostId)}`
+        )
+        if (!res.ok) return
+        const j = await res.json()
+        if (live && Array.isArray(j.subscriberIds)) {
+          setFanIds(new Set(j.subscriberIds as string[]))
+        }
+      } catch {
+        /* badges are best effort */
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [hostId])
+
   /* -------------------------------- actions -------------------------------- */
 
   const [chatBlocked, setChatBlocked] = useState('')
+  const showChatError = useCallback((msg: string) => {
+    setChatBlocked(msg)
+    window.setTimeout(() => setChatBlocked(''), 5000)
+  }, [])
   const sendChat = useCallback(async () => {
     const body = draft.trim()
     const room = roomRef.current
     if (!body || !room || room.state !== 'connected') return
-    // Fence: stream chat is public to every viewer, so contact details are
-    // blocked here (private contact goes to paid connections only).
+    // Fence, first pass on the client: stream chat is public to every
+    // viewer, so contact details are blocked here (private contact goes
+    // to paid connections only).
     const scan = scanForLeaks(body)
     if (!scan.clean) {
-      setChatBlocked(leakWarning(scan.leaks))
-      window.setTimeout(() => setChatBlocked(''), 4000)
+      showChatError(`${leakWarning(scan.leaks)} Contact details stay in paid connections.`)
+      return
+    }
+    // Gate check, then publish: chat is client-to-client data packets,
+    // so the server cannot intercept a send. The app must pass
+    // POST /api/live/chat/check first; the gate applies the same leak
+    // scan server-side plus blocked words, mute state, and slow mode,
+    // and records the send in live_chat_log.
+    const messageId = uid()
+    try {
+      const gate = await fetch('/api/live/chat/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: id, body: body.slice(0, 200), messageId }),
+      })
+      if (!gate.ok) {
+        const j = await gate.json().catch(() => ({}))
+        showChatError(j.error || 'Message could not be sent')
+        return
+      }
+    } catch {
+      showChatError('Message could not be verified. Check your connection and try again.')
       return
     }
     setChatBlocked('')
     const payload = new TextEncoder().encode(
-      JSON.stringify({ topic: CHAT_TOPIC, name: myName, body: body.slice(0, 200) })
+      JSON.stringify({ topic: CHAT_TOPIC, id: messageId, name: myName, body: body.slice(0, 200) })
     )
     try {
       await room.localParticipant.publishData(payload, { reliable: true })
-      pushMessage({ id: uid(), name: myName, body: body.slice(0, 200), mine: true })
+      pushMessage({ id: messageId, name: myName, body: body.slice(0, 200), mine: true, senderId: myId ?? undefined })
       setDraft('')
     } catch {
       /* offline or kicked; ignore */
     }
-  }, [draft, myName, pushMessage])
+  }, [draft, myName, myId, id, pushMessage, showChatError])
+
+  /* ------------------------- live depth actions -------------------------- */
+
+  const callModerate = useCallback(
+    async (payload: Record<string, unknown>) => {
+      const res = await fetch('/api/live/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: id, ...payload }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Action failed')
+      return j
+    },
+    [id]
+  )
+
+  const fetchPk = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/live/pk?sessionId=${id}`)
+      if (!res.ok) return
+      const j = await res.json()
+      setPkBattle((j.battle as PkBattleState | null) ?? null)
+    } catch {
+      /* polling is best effort */
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (phase !== 'live') return
+    fetchPk()
+    const t = window.setInterval(fetchPk, 5000)
+    return () => window.clearInterval(t)
+  }, [phase, fetchPk])
+
+  // One second ticker so the PK countdown moves between polls.
+  useEffect(() => {
+    if (!pkBattle || pkBattle.status !== 'active') return
+    const t = window.setInterval(() => setPkTick((n) => n + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [pkBattle])
+
+  // Load PK opponent options when the host opens the control panel.
+  useEffect(() => {
+    if (!panelOpen || !myId || myId !== hostId) return
+    let live = true
+    ;(async () => {
+      const { data } = await supabase
+        .from('live_sessions')
+        .select('id, title, provider_id')
+        .eq('status', 'live')
+        .neq('id', id)
+      if (!live || !data) return
+      const rows = data as { id: string; title: string; provider_id: string }[]
+      const names = new Map<string, string>()
+      if (rows.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .in('id', rows.map((r) => r.provider_id))
+        ;(profs ?? []).forEach((p: { id: string; display_name: string | null }) =>
+          names.set(p.id, p.display_name ?? 'Companion')
+        )
+      }
+      if (!live) return
+      setPkOptions(
+        rows.map((r) => ({ id: r.id, label: `${names.get(r.provider_id) ?? 'Companion'}: ${r.title}` }))
+      )
+    })()
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelOpen, myId, hostId, id])
+
+  // Co-host accept: respond, then reconnect with a publisher token and
+  // publish camera and mic into the same room.
+  const acceptCohost = useCallback(async () => {
+    if (cohostBusy) return
+    setCohostBusy(true)
+    try {
+      const res = await fetch('/api/live/cohost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'respond', sessionId: id, accept: true }),
+      })
+      if (!res.ok) throw new Error('respond failed')
+      setCohostInvite('accepted')
+
+      const tokRes = await fetch('/api/live/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: id, role: 'publisher' }),
+      })
+      if (!tokRes.ok) throw new Error('token failed')
+      const { token, url } = (await tokRes.json()) as { token: string; url: string }
+
+      roomRef.current?.disconnect()
+      tileElsRef.current.forEach((el) => el.remove())
+      tileElsRef.current.clear()
+
+      const room = new Room({ adaptiveStream: true, dynacast: true })
+      roomRef.current = room
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
+        attachRemoteVideo(track, participant?.identity)
+      })
+      room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+        setViewerCount(room.remoteParticipants.size + 1)
+        if (participant && participant.identity !== hostIdRef.current) detachTile(participant.identity)
+      })
+      room.on(RoomEvent.ParticipantConnected, () => setViewerCount(room.remoteParticipants.size + 1))
+      room.on(RoomEvent.DataReceived, handleDataPacket)
+      await room.connect(url, token)
+      room.remoteParticipants.forEach((p) => {
+        p.trackPublications.forEach((pub) => {
+          if (pub.track) attachRemoteVideo(pub.track as RemoteTrack, p.identity)
+        })
+      })
+      setViewerCount(room.remoteParticipants.size + 1)
+
+      const cam = await createLocalVideoTrack({ facingMode: 'user' })
+      const mic = await createLocalAudioTrack()
+      await room.localParticipant.publishTrack(cam)
+      await room.localParticipant.publishTrack(mic)
+      // Own preview tile so the co-host can see themselves.
+      const container = tilesRef.current
+      if (container) {
+        const el = document.createElement('video')
+        el.autoplay = true
+        el.playsInline = true
+        el.muted = true
+        el.className = 'h-24 w-[4.5rem] rounded-xl border-2 border-gold bg-black object-cover'
+        container.appendChild(el)
+        tileElsRef.current.set('__self__', el)
+        cam.attach(el)
+      }
+    } catch {
+      showChatError('Co-host connect failed. You are still watching as a viewer.')
+    } finally {
+      setCohostBusy(false)
+    }
+  }, [id, cohostBusy, attachRemoteVideo, detachTile, handleDataPacket, showChatError])
+
+  const declineCohost = useCallback(async () => {
+    try {
+      await fetch('/api/live/cohost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'respond', sessionId: id, accept: false }),
+      })
+    } catch {
+      /* best effort */
+    }
+    setCohostInvite(null)
+  }, [id])
 
   const handleVideoTap = useCallback(() => {
     const now = Date.now()
@@ -566,6 +920,18 @@ export default function StreamRoomPage() {
   /* ---------------------------------- live ---------------------------------- */
 
   const hostName = stream?.provider?.display_name ?? 'Host'
+  const isHostMe = !!myId && !!hostId && myId === hostId
+  const canModerate = isHostMe || isModerator
+  const visibleMessages = messages.filter((m) => !deletedIds.has(m.id))
+  const pkMine = pkBattle ? (pkBattle.mineIsA ? pkBattle.scores.a : pkBattle.scores.b) : 0
+  const pkTheirs = pkBattle ? (pkBattle.mineIsA ? pkBattle.scores.b : pkBattle.scores.a) : 0
+  const pkSecondsLeft = pkBattle
+    ? Math.max(0, Math.round((new Date(pkBattle.endsAt).getTime() - Date.now()) / 1000))
+    : 0
+  const pkTimeLeft = `${Math.floor(pkSecondsLeft / 60)}:${String(pkSecondsLeft % 60).padStart(2, '0')}`
+  const pkIWon = !!pkBattle && pkBattle.winnerSessionId === id
+  const pkTheyWon =
+    !!pkBattle && !!pkBattle.opponent && pkBattle.winnerSessionId === pkBattle.opponent.sessionId
 
   return (
     <div className="relative mx-auto h-[calc(100dvh-4rem)] w-full max-w-md overflow-hidden bg-black md:h-[calc(100dvh-5rem)]">
@@ -608,8 +974,58 @@ export default function StreamRoomPage() {
         </button>
       </div>
 
+      {/* PK score bar + pinned message, stacked under the top bar */}
+      {(pkBattle || pinnedText) && (
+        <div className="absolute inset-x-3 top-14 z-10 flex flex-col items-start gap-1.5">
+          {pkBattle && pkBattle.status === 'active' && (
+            <div className="flex w-full items-center justify-between gap-2 rounded-2xl bg-black/60 px-3 py-2 backdrop-blur-sm">
+              <span className="text-xs font-bold text-white">
+                PK · You <span className="text-gold">{pkMine.toLocaleString()}</span>
+              </span>
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                {pkTimeLeft}
+              </span>
+              {pkBattle.opponent ? (
+                <Link href={`/live/${pkBattle.opponent.sessionId}`} className="truncate text-xs font-bold text-white">
+                  <span className="text-gold">{pkTheirs.toLocaleString()}</span>{' '}
+                  {pkBattle.opponent.hostName ?? 'Opponent'}
+                </Link>
+              ) : (
+                <span className="text-xs font-bold text-white">{pkTheirs.toLocaleString()}</span>
+              )}
+            </div>
+          )}
+          {pkBattle && pkBattle.status === 'finished' && (
+            <div className="w-full rounded-2xl bg-gold px-3 py-2 text-center text-xs font-bold text-charcoal">
+              {pkIWon
+                ? 'You won the PK battle!'
+                : pkTheyWon
+                  ? `${pkBattle.opponent?.hostName ?? 'Your opponent'} won the PK battle`
+                  : 'The PK battle ended in a tie'}
+            </div>
+          )}
+          {pinnedText && (
+            <p className="max-w-full truncate rounded-full bg-gold/90 px-3 py-1.5 text-xs font-semibold text-charcoal">
+              Pinned: {pinnedText}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Co-host tiles: extra publishers render here, host stays on stage */}
+      <div ref={tilesRef} className="absolute right-3 top-24 z-10 flex flex-col gap-2" />
+
       {/* Top-right: PiP + share + close */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
+        {canModerate && (
+          <button
+            onClick={() => setPanelOpen(true)}
+            aria-label="Stream controls"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        )}
         {pipSupported && (
           <button
             onClick={togglePip}
@@ -645,48 +1061,346 @@ export default function StreamRoomPage() {
             <div className="mt-4 space-y-2">
               <button
                 onClick={async () => {
-                  if (!modTarget.senderId) return
-                  const supabase = createClient()
-                  await supabase.from('stream_moderation').insert({
-                    session_id: id,
-                    user_id: modTarget.senderId,
-                    action: 'mute',
-                  })
-                  const set = new Set(blockedRef.current)
-                  set.add(modTarget.senderId)
-                  blockedRef.current = set
-                  setBlockedIds(set)
-                  setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
+                  // Deletion is recorded server-side; subscribed clients
+                  // hide this message id. Hide locally right away too.
+                  try {
+                    await callModerate({ action: 'delete_message', messageId: modTarget.id })
+                  } catch {
+                    /* local hide still applies */
+                  }
+                  const next = new Set(deletedRef.current)
+                  next.add(modTarget.id)
+                  deletedRef.current = next
+                  setDeletedIds(next)
                   setModTarget(null)
                 }}
                 className="w-full rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
               >
-                Mute for this stream
+                Delete this message
               </button>
-              <button
-                onClick={async () => {
-                  if (!modTarget.senderId) return
-                  const supabase = createClient()
-                  await supabase.from('stream_moderation').insert({
-                    session_id: id,
-                    user_id: modTarget.senderId,
-                    action: 'block',
-                  })
-                  const set = new Set(blockedRef.current)
-                  set.add(modTarget.senderId)
-                  blockedRef.current = set
-                  setBlockedIds(set)
-                  setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
-                  setModTarget(null)
-                }}
-                className="w-full rounded-2xl bg-red-50 py-3 text-sm font-semibold text-red-600"
-              >
-                Block from this stream
-              </button>
+              {modTarget.senderId && (
+                <button
+                  onClick={async () => {
+                    if (!modTarget.senderId) return
+                    try {
+                      await callModerate({ action: 'mute_viewer', targetUserId: modTarget.senderId })
+                    } catch {
+                      /* fall through to the local hide */
+                    }
+                    const set = new Set(blockedRef.current)
+                    set.add(modTarget.senderId)
+                    blockedRef.current = set
+                    setBlockedIds(set)
+                    setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
+                    setModTarget(null)
+                  }}
+                  className="w-full rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
+                >
+                  Mute for this stream
+                </button>
+              )}
+              {isHostMe && modTarget.senderId && (
+                <button
+                  onClick={async () => {
+                    if (!modTarget.senderId) return
+                    const supabase = createClient()
+                    await supabase.from('stream_moderation').insert({
+                      session_id: id,
+                      user_id: modTarget.senderId,
+                      action: 'block',
+                    })
+                    const set = new Set(blockedRef.current)
+                    set.add(modTarget.senderId)
+                    blockedRef.current = set
+                    setBlockedIds(set)
+                    setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
+                    setModTarget(null)
+                  }}
+                  className="w-full rounded-2xl bg-red-50 py-3 text-sm font-semibold text-red-600"
+                >
+                  Block from this stream
+                </button>
+              )}
               <button onClick={() => setModTarget(null)} className="w-full py-2 text-sm text-neutral-500">
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Host and moderator control panel */}
+      {panelOpen && canModerate && (
+        <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/60" onClick={() => setPanelOpen(false)}>
+          <div
+            className="max-h-[85%] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-charcoal">Stream controls</p>
+              <button onClick={() => setPanelOpen(false)} aria-label="Close controls" className="text-neutral-400">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {!isHostMe && (
+              <p className="mt-2 text-xs text-neutral-500">
+                You are a moderator here. Tap a name in chat to delete a message or mute its author.
+              </p>
+            )}
+            {isHostMe && (
+              <div className="mt-4 space-y-5">
+                {/* Pin */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Pinned message</p>
+                  {pinEditing ? (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={pinDraft}
+                        onChange={(e) => setPinDraft(e.target.value)}
+                        maxLength={200}
+                        placeholder="Pin a message for viewers"
+                        className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                      />
+                      <button
+                        onClick={async () => {
+                          try {
+                            await callModerate({ action: 'set_pin', pinnedText: pinDraft })
+                            setPinnedText(pinDraft.trim() || null)
+                            setPinEditing(false)
+                            setPanelMsg('Pin updated.')
+                          } catch (e) {
+                            setPanelMsg(e instanceof Error ? e.message : 'Could not set pin')
+                          }
+                        }}
+                        className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex items-center gap-2">
+                      <p className="min-w-0 flex-1 truncate text-sm text-charcoal">
+                        {pinnedText || 'No pin yet'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setPinDraft(pinnedText ?? '')
+                          setPinEditing(true)
+                        }}
+                        className="shrink-0 rounded-xl bg-cream px-3 py-2 text-xs font-semibold text-charcoal"
+                      >
+                        {pinnedText ? 'Edit pin' : 'Add pin'}
+                      </button>
+                      {pinnedText && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await callModerate({ action: 'set_pin', pinnedText: '' })
+                              setPinnedText(null)
+                              setPinDraft('')
+                              setPanelMsg('Pin cleared.')
+                            } catch (e) {
+                              setPanelMsg(e instanceof Error ? e.message : 'Could not clear pin')
+                            }
+                          }}
+                          className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Slow mode */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Slow mode</p>
+                  <select
+                    value={slowSel}
+                    onChange={async (e) => {
+                      const v = Number(e.target.value)
+                      setSlowSel(v)
+                      try {
+                        await callModerate({ action: 'set_slow', slowModeSeconds: v })
+                        setPanelMsg(v === 0 ? 'Slow mode off.' : `Slow mode set to ${v}s.`)
+                      } catch (err) {
+                        setPanelMsg(err instanceof Error ? err.message : 'Could not set slow mode')
+                      }
+                    }}
+                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                  >
+                    <option value={0}>Off</option>
+                    <option value={5}>5 seconds between messages</option>
+                    <option value={10}>10 seconds between messages</option>
+                    <option value={30}>30 seconds between messages</option>
+                  </select>
+                </div>
+
+                {/* Blocked words */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Blocked words</p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={blockedDraft}
+                      onChange={(e) => setBlockedDraft(e.target.value)}
+                      placeholder="Comma separated words"
+                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                    <button
+                      onClick={async () => {
+                        try {
+                          await callModerate({
+                            action: 'set_blocked_words',
+                            blockedWords: blockedDraft.split(',').map((w) => w.trim()).filter(Boolean),
+                          })
+                          setPanelMsg('Blocked words saved.')
+                        } catch (e) {
+                          setPanelMsg(e instanceof Error ? e.message : 'Could not save words')
+                        }
+                      }}
+                      className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                {/* Moderators */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Moderators</p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={modUsername}
+                      onChange={(e) => setModUsername(e.target.value)}
+                      placeholder="Username"
+                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!modUsername.trim()) return
+                        try {
+                          await callModerate({ action: 'appoint_mod', targetUsername: modUsername.trim() })
+                          setPanelMsg(`@${modUsername.trim()} is now a moderator.`)
+                          setModUsername('')
+                        } catch (e) {
+                          setPanelMsg(e instanceof Error ? e.message : 'Could not appoint')
+                        }
+                      }}
+                      className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                    >
+                      Appoint
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!modUsername.trim()) return
+                        try {
+                          await callModerate({ action: 'remove_mod', targetUsername: modUsername.trim() })
+                          setPanelMsg(`@${modUsername.trim()} is no longer a moderator.`)
+                          setModUsername('')
+                        } catch (e) {
+                          setPanelMsg(e instanceof Error ? e.message : 'Could not remove')
+                        }
+                      }}
+                      className="shrink-0 rounded-xl bg-cream px-3 py-2 text-sm font-semibold text-charcoal"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                {/* Co-host */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Co-host</p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={cohostUsername}
+                      onChange={(e) => setCohostUsername(e.target.value)}
+                      placeholder="Username to invite"
+                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!cohostUsername.trim()) return
+                        try {
+                          const res = await fetch('/api/live/cohost', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              action: 'invite',
+                              sessionId: id,
+                              username: cohostUsername.trim(),
+                            }),
+                          })
+                          const j = await res.json().catch(() => ({}))
+                          if (!res.ok) throw new Error(j.error || 'Invite failed')
+                          setPanelMsg(`Co-host invite sent to @${cohostUsername.trim()}.`)
+                          setCohostUsername('')
+                        } catch (e) {
+                          setPanelMsg(e instanceof Error ? e.message : 'Invite failed')
+                        }
+                      }}
+                      className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                    >
+                      Invite
+                    </button>
+                  </div>
+                </div>
+
+                {/* PK battle */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">PK battle</p>
+                  {pkBattle && pkBattle.status === 'active' ? (
+                    <p className="mt-2 text-sm text-charcoal">
+                      Battle running against {pkBattle.opponent?.hostName ?? 'your opponent'}. Ends in{' '}
+                      {pkTimeLeft}.
+                    </p>
+                  ) : pkOptions.length === 0 ? (
+                    <p className="mt-2 text-sm text-neutral-500">No other streams are live right now.</p>
+                  ) : (
+                    <div className="mt-2 flex gap-2">
+                      <select
+                        value={pkOpponent}
+                        onChange={(e) => setPkOpponent(e.target.value)}
+                        className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                      >
+                        <option value="">Pick an opponent stream</option>
+                        {pkOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={!pkOpponent}
+                        onClick={async () => {
+                          try {
+                            const res = await fetch('/api/live/pk', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                sessionId: id,
+                                opponentSessionId: pkOpponent,
+                                durationMinutes: 10,
+                              }),
+                            })
+                            const j = await res.json().catch(() => ({}))
+                            if (!res.ok) throw new Error(j.error || 'Could not start PK')
+                            setPkBattle(j.battle as PkBattleState)
+                            setPanelMsg('PK battle started. Ten minutes, most gift coins wins.')
+                          } catch (e) {
+                            setPanelMsg(e instanceof Error ? e.message : 'Could not start PK')
+                          }
+                        }}
+                        className="shrink-0 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                      >
+                        Start PK
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {panelMsg && <p className="mt-4 text-center text-xs font-medium text-neutral-500">{panelMsg}</p>}
           </div>
         </div>
       )}
@@ -737,13 +1451,19 @@ export default function StreamRoomPage() {
 
       {/* Comments */}
       <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden">
-        {messages.map((m) => (
+        {visibleMessages.map((m) => (
           <div key={m.id} className="w-fit max-w-full">
             <p className="pointer-events-auto text-[13px] leading-snug text-white drop-shadow">
+              {typeof m.level === 'number' && (
+                <span className="mr-1 rounded-full bg-gold px-1.5 py-px align-middle text-[9px] font-bold text-charcoal">
+                  FAN {m.level}
+                </span>
+              )}
+              {m.senderId && fanIds.has(m.senderId) && <FanBadge className="mr-1" />}
               <button
-                disabled={!hostId || myId !== hostId || !m.senderId || m.mine}
+                disabled={!canModerate || m.mine}
                 onClick={() => setModTarget(m)}
-                className={`font-semibold ${m.mine ? 'text-gold' : 'text-white/85'} ${hostId && myId === hostId && !m.mine ? 'underline decoration-dotted' : ''}`}
+                className={`font-semibold ${m.mine || (m.senderId && fanIds.has(m.senderId)) ? 'text-gold' : 'text-white/85'} ${canModerate && !m.mine ? 'underline decoration-dotted' : ''}`}
               >
                 {m.name}:{' '}
               </button>
@@ -762,10 +1482,36 @@ export default function StreamRoomPage() {
         </div>
       )}
 
-      {/* Fence notice when a contact leak is blocked */}
+      {/* Gate notice: leak scan, blocked word, mute, or slow mode */}
       {chatBlocked && (
         <div className="absolute inset-x-3 bottom-[4.5rem] z-30 animate-pop-in rounded-2xl bg-red-500/95 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-lg">
-          {chatBlocked} Contact details stay in paid connections.
+          {chatBlocked}
+        </div>
+      )}
+
+      {/* Co-host invitation prompt */}
+      {cohostInvite === 'invited' && (
+        <div className="absolute inset-x-3 bottom-36 z-30 rounded-2xl bg-white p-4 shadow-xl">
+          <p className="text-sm font-bold text-charcoal">Co-host invitation</p>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            {hostName} invited you to publish in this stream. Your camera and mic will go live to
+            every viewer.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={acceptCohost}
+              disabled={cohostBusy}
+              className="flex-1 rounded-full bg-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {cohostBusy ? 'Connecting…' : 'Accept and go live'}
+            </button>
+            <button
+              onClick={declineCohost}
+              className="rounded-full bg-cream px-5 py-2.5 text-sm font-semibold text-charcoal"
+            >
+              Decline
+            </button>
+          </div>
         </div>
       )}
 
