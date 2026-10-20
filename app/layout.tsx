@@ -8,6 +8,7 @@ import RefCapture from '@/components/RefCapture'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
+import ErrorReporter from '@/components/observability/ErrorReporter'
 
 // One pairing for the whole product: Fraunces for display (wordmark,
 // headings, prices, sheet titles) and Figtree for everything else. Loaded
@@ -67,6 +68,7 @@ export default function RootLayout({
           <div className="splash-tag">Where Elegance Meets Connection</div>
         </div>
         <SplashDismiss />
+        <ErrorReporter />
         <PushAutoSubscribe />
         <RefCapture />
         {/* AgeGate still blocks everything until verified. CallProvider sits

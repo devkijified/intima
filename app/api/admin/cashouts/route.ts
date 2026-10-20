@@ -68,17 +68,15 @@ export async function POST(req: NextRequest) {
       status: 'paid', admin_note: note ?? null, processed_at: new Date().toISOString(),
     }).eq('id', id);
   } else if (action === 'reject' && request.status === 'pending') {
-    // Refund the held coins.
-    const { data: bal } = await svc.from('coin_balances')
-      .select('balance').eq('user_id', request.user_id).maybeSingle();
-    await svc.from('coin_balances').upsert(
-      {
-        user_id: request.user_id,
-        balance: (bal?.balance ?? 0) + request.coins,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    );
+    // Refund the held coins via the ledger.
+    const { error: creditErr } = await svc.rpc('credit_coins', {
+      p_user_id: request.user_id,
+      p_amount: request.coins,
+      p_kind: 'cashout_refund',
+      p_ref: id,
+      p_meta: {},
+    });
+    if (creditErr) throw creditErr;
     await svc.from('cashout_requests').update({
       status: 'rejected', admin_note: note ?? null, processed_at: new Date().toISOString(),
     }).eq('id', id);

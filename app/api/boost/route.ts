@@ -25,6 +25,9 @@ export async function POST(_req: NextRequest) {
   const { error: spendErr } = await svc.rpc('spend_coins', {
     p_user_id: user.id,
     p_amount: BOOST_COST_COINS,
+    p_kind: 'boost',
+    p_ref: null,
+    p_meta: {},
   });
   if (spendErr) {
     if (String(spendErr.message).includes('insufficient_balance')) {

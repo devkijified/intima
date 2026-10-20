@@ -63,6 +63,9 @@ export async function POST(req: NextRequest) {
     const { error: spendErr } = await service.rpc('spend_coins', {
       p_user_id: user.id,
       p_amount: coinAmount,
+      p_kind: 'cashout_request',
+      p_ref: null,
+      p_meta: {},
     });
     if (spendErr) {
       if (String(spendErr.message).includes('insufficient_balance')) {

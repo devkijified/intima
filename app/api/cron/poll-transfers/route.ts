@@ -99,20 +99,15 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Credit coins.
-      const { data: bal } = await svc
-        .from('coin_balances')
-        .select('balance')
-        .eq('user_id', intent.user_id)
-        .maybeSingle();
-      await svc.from('coin_balances').upsert(
-        {
-          user_id: intent.user_id,
-          balance: (bal?.balance ?? 0) + intent.coins,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      );
+      // Credit coins via the ledger.
+      const { error: creditErr } = await svc.rpc('credit_coins', {
+        p_user_id: intent.user_id,
+        p_amount: intent.coins,
+        p_kind: 'topup_transfer',
+        p_ref: `transfer-${reference}`,
+        p_meta: {},
+      });
+      if (creditErr) throw creditErr;
       await svc.from('transfer_intents').update({
         status: 'credited',
         credited_at: new Date().toISOString(),

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut, Radio, Mail, BookOpen, ShieldAlert } from '@/lib/icons'
+import { Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut, Radio, Mail, BookOpen, ShieldAlert, AlertTriangle } from '@/lib/icons'
 import { Button } from '@/components/ui/Button'
 
 export default async function AdminLayout({
@@ -47,6 +47,9 @@ export default async function AdminLayout({
               </Link>
               <Link href="/admin/reports" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Reports">
                 <Flag className="inline h-5 w-5" />
+              </Link>
+              <Link href="/admin/errors" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Errors">
+                <AlertTriangle className="inline h-5 w-5" />
               </Link>
               <Link href="/admin/models" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Models">
                 <Video className="inline h-5 w-5" />

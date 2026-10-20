@@ -66,10 +66,15 @@ export async function POST(req: NextRequest) {
     const hostEarnings = Math.floor(gift.coin_cost * (100 - cutPct) / 100);
 
     // Atomic deduct: one statement, balance-checked in the database, so
-    // concurrent requests cannot double-spend.
+    // concurrent requests cannot double-spend. The ledger ref is null
+    // here because the gift transaction row does not exist yet; the
+    // host credit below carries the transaction id as its ref.
     const { data: spent, error: spendErr } = await service.rpc('spend_coins', {
       p_user_id: user.id,
       p_amount: gift.coin_cost,
+      p_kind: 'gift_send',
+      p_ref: null,
+      p_meta: {},
     });
     if (spendErr) {
       if (String(spendErr.message).includes('insufficient_balance')) {
@@ -81,21 +86,6 @@ export async function POST(req: NextRequest) {
       throw spendErr;
     }
     const newSenderBalance = Array.isArray(spent) ? spent[0]?.new_balance : (spent as any)?.new_balance;
-
-    // Credit host.
-    const { data: hostBal } = await service
-      .from('coin_balances')
-      .select('balance')
-      .eq('user_id', session.provider_id)
-      .maybeSingle();
-    await service.from('coin_balances').upsert(
-      {
-        user_id: session.provider_id,
-        balance: (hostBal?.balance ?? 0) + hostEarnings,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    );
 
     // Ledger row (clients subscribe to this table for live gift events).
     const { data: tx, error: txErr } = await service
@@ -111,6 +101,18 @@ export async function POST(req: NextRequest) {
       .select('id, created_at')
       .single();
     if (txErr) throw txErr;
+
+    // Credit host via the ledger, keyed by the gift transaction id.
+    if (hostEarnings > 0) {
+      const { error: creditErr } = await service.rpc('credit_coins', {
+        p_user_id: session.provider_id,
+        p_amount: hostEarnings,
+        p_kind: 'gift_receive',
+        p_ref: tx.id,
+        p_meta: {},
+      });
+      if (creditErr) throw creditErr;
+    }
 
     // Sender display name for the animation.
     const { data: sender } = await service

@@ -70,19 +70,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (payment.kind === 'coins' && payment.coins) {
-      const { data: bal } = await svc
-        .from('coin_balances')
-        .select('balance')
-        .eq('user_id', payment.user_id)
-        .maybeSingle();
-      await svc.from('coin_balances').upsert(
-        {
-          user_id: payment.user_id,
-          balance: (bal?.balance ?? 0) + payment.coins,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      );
+      const { error: creditErr } = await svc.rpc('credit_coins', {
+        p_user_id: payment.user_id,
+        p_amount: payment.coins,
+        p_kind: 'topup_crypto',
+        p_ref: `crypto-${payment.reference}`,
+        p_meta: {},
+      });
+      if (creditErr) throw creditErr;
       await svc.from('coin_topups').insert({
         user_id: payment.user_id,
         reference: `crypto-${payment.reference}`,

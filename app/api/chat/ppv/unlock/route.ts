@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
   const { error: spendErr } = await svc.rpc('spend_coins', {
     p_user_id: user.id,
     p_amount: msg.ppv_price_coins,
+    p_kind: 'ppv_unlock',
+    p_ref: messageId,
+    p_meta: {},
   });
   if (spendErr) {
     if (String(spendErr.message).includes('insufficient_balance')) {
@@ -67,16 +70,16 @@ export async function POST(req: NextRequest) {
   const cutPct = Number(settings?.value ?? 50);
   const hostEarnings = Math.floor(msg.ppv_price_coins * (100 - cutPct) / 100);
 
-  const { data: hostBal } = await svc.from('coin_balances')
-    .select('balance').eq('user_id', msg.sender_id).maybeSingle();
-  await svc.from('coin_balances').upsert(
-    {
-      user_id: msg.sender_id,
-      balance: (hostBal?.balance ?? 0) + hostEarnings,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' }
-  );
+  if (hostEarnings > 0) {
+    const { error: creditErr } = await svc.rpc('credit_coins', {
+      p_user_id: msg.sender_id,
+      p_amount: hostEarnings,
+      p_kind: 'ppv_receive',
+      p_ref: `${messageId}:${user.id}`,
+      p_meta: {},
+    });
+    if (creditErr) throw creditErr;
+  }
 
   await svc.from('messages').update({
     unlocked_by: [...(msg.unlocked_by ?? []), user.id],

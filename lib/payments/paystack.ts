@@ -106,19 +106,14 @@ export async function settleCoinTopup(
     .maybeSingle();
   if (existing) return { credited: false };
 
-  const { data: bal } = await svc
-    .from('coin_balances')
-    .select('balance')
-    .eq('user_id', input.userId)
-    .maybeSingle();
-  await svc.from('coin_balances').upsert(
-    {
-      user_id: input.userId,
-      balance: (bal?.balance ?? 0) + input.coins,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' }
-  );
+  const { error: creditErr } = await svc.rpc('credit_coins', {
+    p_user_id: input.userId,
+    p_amount: input.coins,
+    p_kind: 'topup_card',
+    p_ref: input.reference,
+    p_meta: {},
+  });
+  if (creditErr) throw creditErr;
   await svc.from('coin_topups').insert({
     user_id: input.userId,
     reference: input.reference,
