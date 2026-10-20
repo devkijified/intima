@@ -58,17 +58,24 @@ export async function middleware(request: NextRequest) {
   // Refresh the Supabase session so server components (admin layout, etc.)
   // see the same auth state as the browser. Without this, an expired
   // access token looks like "not logged in" to the server.
-  const res = NextResponse.next()
+  // Cookie adapter uses the get / set / remove interface: the installed
+  // @supabase/ssr is 0.1.0, which silently ignores getAll / setAll.
+  const res = NextResponse.next({ request: { headers: request.headers } })
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet: { name: string; value: string; options?: object }[]) => {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            res.cookies.set(name, value, options as Record<string, unknown>)
-          )
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: Record<string, unknown>) {
+          request.cookies.set(name, value)
+          res.cookies.set(name, value, options as never)
+        },
+        remove(name: string, options: Record<string, unknown>) {
+          request.cookies.set(name, '')
+          res.cookies.set(name, '', { ...options, maxAge: 0 } as never)
         },
       },
     }

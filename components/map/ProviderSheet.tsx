@@ -410,15 +410,15 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
               </span>
             </div>
 
-            {/* Action row: request + calls + favorite */}
-            <div className="mt-3 flex items-center gap-2">
+            {/* Action row: request + calls + favorite (wraps on narrow phones) */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => onRequestConnection(provider)}
-                className="btn-luxe h-11 flex-1 text-[15px]"
+                className="btn-luxe h-11 min-w-[218px] flex-1 gap-1.5 whitespace-nowrap px-4 text-[15px]"
               >
                 Request connection
                 {connectionFee !== null && (
-                  <span className="ml-1.5 font-normal text-white/85">• N{connectionFee.toLocaleString()}</span>
+                  <span className="shrink-0 text-[13px] font-normal text-white/85">• ₦{connectionFee.toLocaleString()}</span>
                 )}
               </button>
               <button

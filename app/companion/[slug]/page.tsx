@@ -604,8 +604,8 @@ export default function ModelDetailPage() {
           </div>
         )}
 
-        {/* Action row */}
-        <div className="mt-3 flex items-center gap-2">
+        {/* Action row: wraps on narrow phones so the CTA never crushes */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {connected ? (
             <span className="flex-1 rounded-full bg-green-50 py-2.5 text-center text-sm font-bold text-green-700">
               Connected
@@ -620,11 +620,11 @@ export default function ModelDetailPage() {
           ) : (
             <button
               onClick={() => setShowConnectModal(true)}
-              className="btn-luxe h-12 flex-1 text-[15px]"
+              className="btn-luxe h-12 min-w-[218px] flex-1 gap-1.5 whitespace-nowrap px-4 text-[15px]"
             >
               Request connection
               {connectionFee !== null && (
-                <span className="ml-1.5 font-normal text-white/85">• N{connectionFee.toLocaleString()}</span>
+                <span className="shrink-0 text-[13px] font-normal text-white/85">• ₦{connectionFee.toLocaleString()}</span>
               )}
             </button>
           )}

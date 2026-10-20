@@ -62,11 +62,13 @@ export default function SetupWizardPage() {
       if (!user) { setLoading(false); return }
       if (!live) return
       setUserId(user.id)
-      const { data: p } = await supabase.from('profiles')
-        .select('display_name, avatar_url, gallery_urls, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days, verification_status, username')
-        .eq('id', user.id).maybeSingle()
-      const { data: presence } = await supabase.from('provider_presence')
-        .select('city').eq('provider_id', user.id).maybeSingle()
+      const [{ data: p }, { data: presence }] = await Promise.all([
+        supabase.from('profiles')
+          .select('display_name, avatar_url, gallery_urls, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days, verification_status, username')
+          .eq('id', user.id).maybeSingle(),
+        supabase.from('provider_presence')
+          .select('city').eq('provider_id', user.id).maybeSingle(),
+      ])
       if (!live || !p) { setLoading(false); return }
       setDisplayName(p.display_name ?? '')
       setAvatarUrl(p.avatar_url ?? '')
@@ -133,6 +135,10 @@ export default function SetupWizardPage() {
         setPresenceCity(city)
       }
       if (step === 2) {
+        if (!avatarUrl.trim()) {
+          setError('Add your main profile photo first: the map only lists companions with a photo, so this step cannot be skipped. You can change the photo any time.')
+          return false
+        }
         const { error: e } = await supabase.from('profiles')
           .update({ avatar_url: avatarUrl.trim() || null, gallery_urls: galleryUrls }).eq('id', userId)
         if (e) throw e
