@@ -4,14 +4,25 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Room, createLocalVideoTrack, createLocalAudioTrack, type LocalVideoTrack, type LocalAudioTrack } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
-import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift, Eye } from '@/lib/icons'
+import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift, Eye, Crown, CheckCircle } from '@/lib/icons'
 
 type Phase = 'setup' | 'publishing' | 'live'
+type AccessMode = 'public' | 'paid' | 'fans'
+
+interface PremiumCheck {
+  key: string
+  label: string
+  passed: boolean
+  current: string
+  target: string
+}
 
 export default function GoLivePage() {
   const [title, setTitle] = useState('')
-  const [paid, setPaid] = useState(false)
+  const [access, setAccess] = useState<AccessMode>('public')
   const [price, setPrice] = useState('')
+  const [premium, setPremium] = useState<{ eligible: boolean; checks: PremiumCheck[] } | null>(null)
+  const [showPremiumChecks, setShowPremiumChecks] = useState(false)
   const [phase, setPhase] = useState<Phase>('setup')
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -39,6 +50,33 @@ export default function GoLivePage() {
     }
   }, [])
 
+  // Premium (fans only) is earned, not given: load her checklist so
+  // the Premium option knows whether it is open or locked, and what
+  // is left if it is locked. Same evaluator the server enforces with.
+  useEffect(() => {
+    fetch('/api/live/premium-status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && Array.isArray(j.checks)) setPremium(j)
+      })
+      .catch(() => {})
+  }, [])
+
+  const choosePremium = async () => {
+    if (premium?.eligible) {
+      setAccess('fans')
+      setShowPremiumChecks(false)
+      return
+    }
+    setShowPremiumChecks(true)
+    if (!premium) {
+      try {
+        const r = await fetch('/api/live/premium-status')
+        if (r.ok) setPremium(await r.json())
+      } catch { /* the checklist panel explains the wait */ }
+    }
+  }
+
   const handleGoLive = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -51,8 +89,8 @@ export default function GoLivePage() {
         .from('profiles').select('role, display_name').eq('id', user.id).maybeSingle()
       if (profile?.role !== 'model') throw new Error('Only companions can go live')
 
-      let priceNgn = paid ? Math.max(0, parseInt(price || '0', 10)) : 0
-      if (paid && priceNgn <= 0) throw new Error('Set a join price, or choose free')
+      let priceNgn = access === 'paid' ? Math.max(0, parseInt(price || '0', 10)) : 0
+      if (access === 'paid' && priceNgn <= 0) throw new Error('Set a join price, or choose Public or Premium')
 
       // A scheduled session can be picked up with ?session=<id>: flip it
       // live through the go-live route (which sends the live_started
@@ -64,7 +102,7 @@ export default function GoLivePage() {
       if (resumeId) {
         const { data: existing } = await supabase
           .from('live_sessions')
-          .select('id, status, price_ngn')
+          .select('id, status, price_ngn, access_mode')
           .eq('id', resumeId)
           .eq('provider_id', user.id)
           .maybeSingle()
@@ -90,27 +128,25 @@ export default function GoLivePage() {
           .update({ status: 'ended', ended_at: new Date().toISOString() })
           .eq('provider_id', user.id).eq('status', 'live').neq('id', existing.id)
       } else {
-        // End any prior live session.
-        await supabase.from('live_sessions')
-          .update({ status: 'ended', ended_at: new Date().toISOString() })
-          .eq('provider_id', user.id).eq('status', 'live')
-
-        // Create the session with a LiveKit room name.
-        const roomName = `intima-${user.id.slice(0, 8)}-${Date.now().toString(36)}`
-        const { data: created, error: sessionError } = await supabase
-          .from('live_sessions')
-          .insert({
-            provider_id: user.id,
+        // Create the session through the start route: it ends any
+        // prior live session, sets the room name, and judges the
+        // access mode server-side (a fans stream needs the Premium
+        // bar cleared, which only the server can enforce).
+        const startRes = await fetch('/api/live/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             title: title.trim() || 'Live now',
-            is_public: !paid,
-            price_ngn: priceNgn,
-            status: 'live',
-            livekit_room: roomName,
-          })
-          .select('id')
-          .single()
-        if (sessionError) throw sessionError
-        session = created
+            accessMode: access,
+            priceNgn,
+          }),
+        })
+        if (!startRes.ok) {
+          const j = await startRes.json().catch(() => ({}))
+          throw new Error(j.error || 'Could not start stream')
+        }
+        const startJson = await startRes.json()
+        session = startJson.session
       }
       setSessionId(session.id)
 
@@ -160,7 +196,9 @@ export default function GoLivePage() {
               user_ids: ids,
               type: 'live_started',
               title: (profile?.display_name ?? 'A companion') + ' is live',
-              body: priceNgn > 0 ? 'Join for N' + priceNgn.toLocaleString() : 'Join free now',
+              body: access === 'fans'
+                ? 'Fans only: join her fan club to watch'
+                : priceNgn > 0 ? 'Join for N' + priceNgn.toLocaleString() : 'Join free now',
               link: '/live/' + session.id,
             }),
           })
@@ -185,8 +223,8 @@ export default function GoLivePage() {
     setSchedMsg('')
     setError(null)
     try {
-      const priceNgn = paid ? Math.max(0, parseInt(price || '0', 10)) : 0
-      if (paid && priceNgn <= 0) throw new Error('Set a join price, or choose free')
+      const priceNgn = access === 'paid' ? Math.max(0, parseInt(price || '0', 10)) : 0
+      if (access === 'paid' && priceNgn <= 0) throw new Error('Set a join price, or choose Public or Premium')
       const res = await fetch('/api/live/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -194,7 +232,8 @@ export default function GoLivePage() {
           title: title.trim() || 'Live',
           scheduledFor: new Date(schedWhen).toISOString(),
           priceNgn,
-          isPublic: !paid,
+          isPublic: access !== 'paid',
+          accessMode: access,
         }),
       })
       const j = await res.json().catch(() => ({}))
@@ -274,7 +313,7 @@ export default function GoLivePage() {
             <Video className="h-6 w-6 text-primary" /> Go Live
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Stream to your audience TikTok-style. You decide free or paid, and viewers can send you gifts.
+            Stream to your audience TikTok-style. You decide who gets in: everyone, ticket buyers, or your fans. Viewers can send you gifts.
           </p>
           <form onSubmit={handleGoLive} className="mt-6 space-y-5">
             <div>
@@ -284,23 +323,66 @@ export default function GoLivePage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-charcoal">Access</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => setPaid(false)}
-                  className={'flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold ' + (!paid ? 'border-primary bg-primary/5 text-primary' : 'border-neutral-200 text-neutral-500')}>
-                  <Unlock className="h-4 w-4" /> Free to join
+              <div className="grid grid-cols-3 gap-2">
+                <button type="button" onClick={() => { setAccess('public'); setShowPremiumChecks(false) }}
+                  className={'flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-3 text-sm font-semibold ' + (access === 'public' ? 'border-primary bg-primary/5 text-primary' : 'border-neutral-200 text-neutral-500')}>
+                  <span className="flex items-center gap-1.5"><Unlock className="h-4 w-4" /> Public</span>
+                  <span className="text-[11px] font-normal leading-tight text-neutral-400">Free for everyone</span>
                 </button>
-                <button type="button" onClick={() => setPaid(true)}
-                  className={'flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold ' + (paid ? 'border-gold bg-gold/10 text-charcoal' : 'border-neutral-200 text-neutral-500')}>
-                  <Lock className="h-4 w-4" /> Pay to join
+                <button type="button" onClick={() => { setAccess('paid'); setShowPremiumChecks(false) }}
+                  className={'flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-3 text-sm font-semibold ' + (access === 'paid' ? 'border-gold bg-gold/10 text-charcoal' : 'border-neutral-200 text-neutral-500')}>
+                  <span className="flex items-center gap-1.5"><Lock className="h-4 w-4" /> Paid</span>
+                  <span className="text-[11px] font-normal leading-tight text-neutral-400">Ticket price</span>
+                </button>
+                <button type="button" onClick={choosePremium}
+                  className={'flex flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-3 text-sm font-semibold ' + (access === 'fans' ? 'border-charcoal bg-charcoal text-white' : 'border-neutral-200 text-neutral-500')}>
+                  <span className="flex items-center gap-1.5">
+                    <Crown className="h-4 w-4" /> Premium
+                    {premium && !premium.eligible && <Lock className="h-3 w-3 text-neutral-400" />}
+                  </span>
+                  <span className={'text-[11px] font-normal leading-tight ' + (access === 'fans' ? 'text-white/60' : 'text-neutral-400')}>Fans only</span>
                 </button>
               </div>
+              {access === 'fans' && (
+                <p className="mt-2 text-xs text-neutral-400">
+                  Only your fan club subscribers can enter. Everyone else sees the show listed with a Fans Only badge and a join prompt.
+                </p>
+              )}
+              {showPremiumChecks && premium && !premium.eligible && (
+                <div className="mt-3 rounded-2xl border border-neutral-200 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-charcoal">
+                    <Crown className="h-4 w-4 text-gold" /> Premium is earned, not given
+                  </p>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    Fans only shows are a reward for a proven track record. Here is where you stand:
+                  </p>
+                  <ul className="mt-3 space-y-2.5">
+                    {premium.checks.map((c) => (
+                      <li key={c.key} className="flex items-start gap-2 text-sm">
+                        {c.passed
+                          ? <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                          : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />}
+                        <span className="flex-1 text-charcoal">
+                          {c.label}
+                          <span className="block text-xs text-neutral-400">
+                            {c.passed ? c.current : `${c.current} · needs ${c.target}`}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {showPremiumChecks && !premium && (
+                <p className="mt-3 text-xs text-neutral-400">Checking your Premium status...</p>
+              )}
             </div>
-            {paid && (
+            {access === 'paid' && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-charcoal">Join price (N)</label>
                 <input type="number" min={100} step={100} value={price} onChange={(e) => setPrice(e.target.value)}
                   placeholder="e.g. 2000" className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary" />
-                <p className="mt-1 text-xs text-neutral-400">Viewers pay once to join. You keep 100%.</p>
+                <p className="mt-1 text-xs text-neutral-400">Viewers pay once to join. Your fan club subscribers enter free.</p>
               </div>
             )}
             {error && (

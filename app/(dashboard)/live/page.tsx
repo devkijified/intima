@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Clock, Eye, Lock, Radio } from '@/lib/icons'
+import { Calendar, Clock, Crown, Eye, Lock, Radio } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface LiveStream {
@@ -12,12 +12,14 @@ interface LiveStream {
   provider_id: string
   title: string
   price_ngn: number
+  access_mode: string
   viewer_count: number
   featured: boolean
   started_at: string
   provider: {
     display_name: string
     avatar_url: string | null
+    username: string | null
     city: string | null
   } | null
 }
@@ -27,10 +29,12 @@ interface ScheduledStream {
   provider_id: string
   title: string
   price_ngn: number
+  access_mode: string
   scheduled_for: string
   provider: {
     display_name: string
     avatar_url: string | null
+    username: string | null
   } | null
 }
 
@@ -60,6 +64,11 @@ export default function LiveFeedPage() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [myId, setMyId] = useState<string | null>(null)
   const [isModel, setIsModel] = useState(false)
+  // Providers whose fan club I effectively belong to (active, or
+  // cancelled with the paid period still running). Fans mode streams
+  // from these hosts open for me; everyone else's route to the fan
+  // club on her profile.
+  const [fanOf, setFanOf] = useState<Set<string>>(new Set())
   const [schedTitle, setSchedTitle] = useState('')
   const [schedWhen, setSchedWhen] = useState('')
   const [schedBusy, setSchedBusy] = useState(false)
@@ -74,9 +83,9 @@ export default function LiveFeedPage() {
       const { data } = await supabase
         .from('live_sessions')
         .select(`
-          id, provider_id, title, price_ngn, viewer_count, featured, started_at,
+          id, provider_id, title, price_ngn, access_mode, viewer_count, featured, started_at,
           provider:profiles!live_sessions_provider_id_fkey (
-            display_name, avatar_url
+            display_name, avatar_url, username
           )
         `)
         .eq('status', 'live')
@@ -123,13 +132,30 @@ export default function LiveFeedPage() {
           .eq('id', user.id)
           .maybeSingle()
         setIsModel(prof?.role === 'model')
+        const { data: subs } = await supabase
+          .from('subscriptions')
+          .select('provider_id, status, current_period_end')
+          .eq('subscriber_id', user.id)
+        const nowMs = Date.now()
+        setFanOf(
+          new Set(
+            (subs ?? [])
+              .filter(
+                (s: any) =>
+                  s.status === 'active' ||
+                  (s.status === 'cancelled' &&
+                    new Date(s.current_period_end).getTime() > nowMs)
+              )
+              .map((s: any) => s.provider_id as string)
+          )
+        )
       }
       const { data } = await supabase
         .from('live_sessions')
         .select(`
-          id, provider_id, title, price_ngn, scheduled_for,
+          id, provider_id, title, price_ngn, access_mode, scheduled_for,
           provider:profiles!live_sessions_provider_id_fkey (
-            display_name, avatar_url
+            display_name, avatar_url, username
           )
         `)
         .eq('status', 'scheduled')
@@ -250,7 +276,11 @@ export default function LiveFeedPage() {
                         <p className="truncate text-sm font-semibold text-charcoal">{s.title}</p>
                         <p className="truncate text-xs text-neutral-500">
                           {s.provider?.display_name ?? 'Companion'}
-                          {s.price_ngn > 0 ? ` · ₦${s.price_ngn.toLocaleString()} to join` : ' · Free'}
+                          {s.access_mode === 'fans'
+                            ? ' · Fans only'
+                            : s.price_ngn > 0
+                              ? ` · ₦${s.price_ngn.toLocaleString()} to join`
+                              : ' · Free'}
                         </p>
                         <p className="flex items-center gap-1 text-xs font-medium text-primary">
                           <Clock className="h-3 w-3" /> {formatWhen(s.scheduled_for)}
@@ -264,6 +294,17 @@ export default function LiveFeedPage() {
                         >
                           {goingLiveId === s.id ? 'Starting…' : 'Go live'}
                         </button>
+                      ) : s.access_mode === 'fans' && !fanOf.has(s.provider_id) ? (
+                        <Link
+                          href={`/companion/${s.provider?.username ?? s.provider_id}`}
+                          className="flex shrink-0 items-center gap-1 rounded-full bg-gold px-3 py-2 text-xs font-bold text-charcoal"
+                        >
+                          <Crown className="h-3 w-3" /> Join fan club
+                        </Link>
+                      ) : s.access_mode === 'fans' ? (
+                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold/20 px-3 py-2 text-xs font-bold text-charcoal">
+                          <Crown className="h-3 w-3" /> Fan
+                        </span>
                       ) : null}
                     </div>
                   )
@@ -332,7 +373,7 @@ export default function LiveFeedPage() {
         <div
           ref={feedRef}
           onScroll={handleScroll}
-          className="flex h-[calc(100vh-120px)] snap-y snap-mandatory flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex h-[calc(100dvh-120px)] snap-y snap-mandatory flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {streams.map((s, i) => (
             <div key={s.id} className="relative h-full w-full shrink-0 snap-start bg-charcoal">
@@ -366,6 +407,12 @@ export default function LiveFeedPage() {
                     Featured
                   </span>
                 )}
+                {s.access_mode === 'fans' && (
+                  <span className="flex items-center gap-1 rounded-full bg-gold px-2.5 py-1 text-xs font-bold text-charcoal">
+                    <Crown className="h-3 w-3" />
+                    Fans Only
+                  </span>
+                )}
               </div>
 
               {/* Provider + title */}
@@ -393,8 +440,26 @@ export default function LiveFeedPage() {
                   </div>
                 </div>
 
-                {/* Join: free vs paid */}
-                {s.price_ngn > 0 ? (
+                {/* Join: fans only, paid, or free */}
+                {s.access_mode === 'fans' ? (
+                  myId === s.provider_id || fanOf.has(s.provider_id) ? (
+                    <Link
+                      href={`/live/${s.id}`}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-bold text-white active:scale-[0.98]"
+                    >
+                      <Crown className="h-4 w-4" />
+                      Watch now
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/companion/${s.provider?.username ?? s.provider_id}`}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gold py-3 text-sm font-bold text-charcoal active:scale-[0.98]"
+                    >
+                      <Crown className="h-4 w-4" />
+                      Fans only · Join her fan club
+                    </Link>
+                  )
+                ) : s.price_ngn > 0 ? (
                   <Link
                     href={`/live/${s.id}`}
                     className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gold py-3 text-sm font-bold text-charcoal active:scale-[0.98]"

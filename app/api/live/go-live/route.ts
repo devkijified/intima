@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { notifyUsers } from '@/lib/push-server';
+import { getPremiumEligibility, unmetChecks } from '@/lib/live/premium';
 
 /**
  * POST /api/live/go-live
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const { data: session } = await service
       .from('live_sessions')
-      .select('id, provider_id, status, title, price_ngn')
+      .select('id, provider_id, status, title, price_ngn, access_mode')
       .eq('id', sessionId)
       .single();
     if (!session) {
@@ -45,6 +46,22 @@ export async function POST(req: NextRequest) {
     }
     if (session.status !== 'scheduled') {
       return NextResponse.json({ error: 'This stream cannot go live' }, { status: 400 });
+    }
+
+    // A fans (Premium) stream was checked when it was scheduled, but
+    // the bar is judged again at the door: if she no longer clears it
+    // (for example her account was hidden), it cannot start as fans.
+    if (session.access_mode === 'fans') {
+      const result = await getPremiumEligibility(service, user.id);
+      if (!result.eligible) {
+        return NextResponse.json(
+          {
+            error: 'Premium streams are not unlocked yet',
+            checks: unmetChecks(result),
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const { error } = await service
@@ -75,9 +92,11 @@ export async function POST(req: NextRequest) {
         type: 'live_started',
         title: `${host?.display_name ?? 'A companion'} is live`,
         body:
-          (session.price_ngn ?? 0) > 0
-            ? `${session.title}. Join for N${(session.price_ngn ?? 0).toLocaleString()}`
-            : `${session.title}. Join free now`,
+          session.access_mode === 'fans'
+            ? `${session.title}. Fans only: join her fan club to watch.`
+            : (session.price_ngn ?? 0) > 0
+              ? `${session.title}. Join for N${(session.price_ngn ?? 0).toLocaleString()}`
+              : `${session.title}. Join free now`,
         link: `/live/${sessionId}`,
       });
     }
