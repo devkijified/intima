@@ -4,6 +4,7 @@ import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { SplashDismiss } from '@/components/SplashDismiss'
 import PushAutoSubscribe from '@/components/PushAutoSubscribe'
+import RefCapture from '@/components/RefCapture'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
@@ -67,6 +68,7 @@ export default function RootLayout({
         </div>
         <SplashDismiss />
         <PushAutoSubscribe />
+        <RefCapture />
         {/* AgeGate still blocks everything until verified. CallProvider sits
             inside it so voice/video calls work on every route, including the
             public map landing page. */}

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { computeSetupSteps, isLiveOnMap, setupProgress, type SetupProfile } from '@/lib/setup/completeness'
+import { Walkthrough } from '@/components/setup/Walkthrough'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
   Banknote, BookOpen } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
@@ -19,6 +21,10 @@ export default function DashboardPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [userName, setUserName] = useState('')
   const [userRole, setUserRole] = useState<string>('client')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [setupProfile, setSetupProfile] = useState<SetupProfile | null>(null)
+  const [presenceCity, setPresenceCity] = useState<string | null>(null)
+  const [username, setUsername] = useState<string | null>(null)
   const [isAvailable, setIsAvailable] = useState(true)
   const supabase = createClient()
 
@@ -32,11 +38,14 @@ export default function DashboardPage() {
 
       // Real tables: profiles (role, display_name, view_count),
       // provider_presence (is_available), connections, reviews.
+      setUserId(user.id)
       const { data: profile } = await supabase
         .from('profiles')
-        .select('display_name, role, view_count')
+        .select('display_name, role, view_count, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, verification_status, username')
         .eq('id', user.id)
         .maybeSingle()
+      setSetupProfile((profile as unknown as SetupProfile) ?? null)
+      setUsername((profile as any)?.username ?? null)
 
       const role = profile?.role ?? user.user_metadata?.role ?? 'client'
       const name =
@@ -52,10 +61,11 @@ export default function DashboardPage() {
         // Availability lives in provider_presence.
         const { data: presence } = await supabase
           .from('provider_presence')
-          .select('is_available')
+          .select('is_available, city')
           .eq('provider_id', user.id)
           .maybeSingle()
         setIsAvailable(presence?.is_available ?? true)
+        setPresenceCity(presence?.city ?? null)
 
         // Traction stats: views, reviews, active connections.
         const [{ count: reviewsCount }, { count: bookingsCount }] = await Promise.all([
@@ -141,6 +151,9 @@ export default function DashboardPage() {
   }
 
   const isModel = userRole === 'model'
+  const setupSteps = isModel ? computeSetupSteps(setupProfile, presenceCity) : []
+  const setupProg = setupProgress(setupSteps)
+  const showSetupBanner = isModel && !loading && !isLiveOnMap(setupSteps)
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-rise-in">
@@ -163,7 +176,24 @@ export default function DashboardPage() {
         </div>
 
         <div>
-          {isModel ? (
+          {showSetupBanner && (
+        <Link href="/setup" className="card-luxe flex items-center gap-4 p-5 transition-all hover:shadow-lift active:scale-[0.99]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-white font-display text-lg font-semibold">
+            {setupProg.done}/{setupProg.total}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-lg font-semibold tracking-tight text-charcoal">Finish setting up your account</span>
+            <span className="block text-sm text-neutral-500">Complete your setup so clients can find and book you on the map.</span>
+          </span>
+          <ArrowUpRight className="h-5 w-5 shrink-0 text-primary" />
+        </Link>
+      )}
+
+      {isModel && userId && (
+        <Walkthrough userId={userId} profilePath={username ? `/companion/${username}` : '/profile'} />
+      )}
+
+      {isModel ? (
             <div className="flex items-center bg-white border border-neutral-200/85 rounded-full px-4 py-2 shadow-xs">
               <span className="text-xs font-medium text-neutral-600 mr-3">Status:</span>
               <button

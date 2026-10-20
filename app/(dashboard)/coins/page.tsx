@@ -31,12 +31,14 @@ export default function CoinsPage() {
       .then((d) => setCardEnabled(!!d.card))
       .catch(() => setCardEnabled(false))
   }, [])
-  const [method, setMethod] = useState<'paystack' | 'transfer'>('transfer')
+  const [method, setMethod] = useState<'paystack' | 'transfer' | 'crypto'>('transfer')
   const [intent, setIntent] = useState<{
     reference: string; amountNgn: number; coins: number; expiresAt: string
     bank: { name: string; accountNumber: string; accountName: string }
   } | null>(null)
   const [creatingIntent, setCreatingIntent] = useState<string | null>(null)
+  const [cryptoBusy, setCryptoBusy] = useState<string | null>(null)
+  const [cryptoNotice, setCryptoNotice] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => {
@@ -82,6 +84,35 @@ export default function CoinsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Payment failed')
       setBuying(null)
+    }
+  }
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('crypto') === 'success') {
+      setCryptoNotice('Payment sent. Your coins land automatically once the network confirms, usually a few minutes.')
+    } else if (q.get('crypto') === 'cancelled') {
+      setCryptoNotice('Crypto payment cancelled. No charge was made.')
+    }
+  }, [])
+
+  const startCrypto = async (packageId: string) => {
+    setCryptoBusy(packageId)
+    setError('')
+    try {
+      const res = await fetch('/api/payments/crypto/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'coins', package_id: packageId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.invoiceUrl) {
+        throw new Error(data?.error || 'Could not start crypto checkout')
+      }
+      window.location.href = data.invoiceUrl
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start crypto checkout')
+      setCryptoBusy(null)
     }
   }
 
@@ -141,21 +172,31 @@ export default function CoinsPage() {
       <h2 className="mt-6 text-sm font-bold uppercase tracking-widest text-neutral-400">Buy coins</h2>
 
       {/* Payment method tabs: card checkout only appears once Paystack is live. */}
-      {cardEnabled && (
-        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-neutral-100 p-1">
-          <button
-            onClick={() => setMethod('transfer')}
-            className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'transfer' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
-          >
-            Bank transfer
-          </button>
+      <div className={`mt-3 grid gap-2 rounded-2xl bg-neutral-100 p-1 ${cardEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <button
+          onClick={() => setMethod('transfer')}
+          className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'transfer' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
+        >
+          Bank transfer
+        </button>
+        <button
+          onClick={() => setMethod('crypto')}
+          className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'crypto' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
+        >
+          Crypto (USDT)
+        </button>
+        {cardEnabled && (
           <button
             onClick={() => setMethod('paystack')}
             className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'paystack' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
           >
             Card / Paystack
           </button>
-        </div>
+        )}
+      </div>
+
+      {cryptoNotice && (
+        <p className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{cryptoNotice}</p>
       )}
 
       {method === 'transfer' && intent && (
@@ -208,8 +249,8 @@ export default function CoinsPage() {
             {COIN_PACKAGES.map((pkg) => (
               <button
                 key={pkg.id}
-                onClick={() => method === 'paystack' ? buy(pkg.id) : startTransfer(pkg.id)}
-                disabled={buying !== null || creatingIntent !== null}
+                onClick={() => method === 'paystack' ? buy(pkg.id) : method === 'crypto' ? startCrypto(pkg.id) : startTransfer(pkg.id)}
+                disabled={buying !== null || creatingIntent !== null || cryptoBusy !== null}
                 className="rounded-3xl border border-neutral-200/80 bg-white p-5 text-left shadow-xs transition-all hover:border-gold active:scale-[0.98] disabled:opacity-60"
               >
                 <p className="font-display text-2xl font-bold text-charcoal">
@@ -218,7 +259,7 @@ export default function CoinsPage() {
                 <p className="text-xs text-neutral-500">{pkg.label}</p>
                 <p className="mt-2 flex items-center justify-between">
                   <span className="text-sm font-bold text-primary">₦{pkg.priceNgn.toLocaleString()}</span>
-                  {(buying === pkg.id || creatingIntent === pkg.id) ? (
+                  {(buying === pkg.id || creatingIntent === pkg.id || cryptoBusy === pkg.id) ? (
                     <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
                   ) : (
                     <Plus className="h-4 w-4 text-neutral-300" />
@@ -230,7 +271,9 @@ export default function CoinsPage() {
           <p className="mt-3 text-center text-xs text-neutral-400">
             {method === 'paystack'
               ? 'Secure checkout via Paystack. Coins are non-refundable.'
-              : 'No KYC, no card needed. Transfer from any Nigerian bank app.'}
+              : method === 'crypto'
+                ? 'Pay with USDT or other crypto. Coins land automatically once the network confirms.'
+                : 'No KYC, no card needed. Transfer from any Nigerian bank app.'}
           </p>
         </>
       )}

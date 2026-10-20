@@ -47,6 +47,7 @@ export default function SignupPage() {
             full_name: formData.fullName,
             phone: formData.phone,
             role: formData.role,
+            referred_by: (() => { try { return localStorage.getItem('intima_ref') } catch { return null } })(),
           },
         },
       })

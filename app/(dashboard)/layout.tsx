@@ -219,7 +219,6 @@ export default function DashboardLayout({
       {/* Mobile bottom tab bar */}
       <nav
         className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="grid grid-cols-6 px-1 py-1.5">
           {[

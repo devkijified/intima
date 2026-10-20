@@ -13,6 +13,8 @@ interface VerificationRow {
   status: 'pending' | 'approved' | 'rejected'
   id_document_url: string | null
   selfie_url: string | null
+  sign_selfie_url: string | null
+  id_type: string | null
   submitted_at: string
   review_notes: string | null
   profiles: { display_name: string | null; full_name: string | null } | null
@@ -31,10 +33,26 @@ export default function AdminVerificationsPage() {
     const { data } = await supabase
       .from('verifications')
       .select(
-        'id, provider_id, status, id_document_url, selfie_url, submitted_at, review_notes, profiles:provider_id (display_name, full_name)'
+        'id, provider_id, status, id_document_url, selfie_url, sign_selfie_url, id_type, submitted_at, review_notes, profiles:provider_id (display_name, full_name)'
       )
       .order('submitted_at', { ascending: true })
-    if (data) setRows(data as unknown as VerificationRow[])
+    if (data) {
+      const list = data as unknown as VerificationRow[]
+      // New submissions store private storage paths, not public URLs:
+      // sign them so the review team can open the documents.
+      await Promise.all(list.map(async (r) => {
+        for (const k of ['id_document_url', 'selfie_url', 'sign_selfie_url'] as const) {
+          const v = r[k]
+          if (v && !v.startsWith('http')) {
+            const { data: signed } = await supabase.storage
+              .from('verification-docs')
+              .createSignedUrl(v, 3600)
+            if (signed) r[k] = signed.signedUrl
+          }
+        }
+      }))
+      setRows(list)
+    }
   }
 
   useEffect(() => {
@@ -207,6 +225,21 @@ export default function AdminVerificationsPage() {
                   </a>
                 ) : (
                   <span className="text-sm text-gray-400">No selfie</span>
+                )}
+                {row.sign_selfie_url ? (
+                  <a
+                    href={row.sign_selfie_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-primary hover:text-primary-dark flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Sign selfie
+                  </a>
+                ) : (
+                  <span className="text-sm text-gray-400">No sign selfie</span>
+                )}
+                {row.id_type && (
+                  <span className="text-xs font-medium text-gray-500">ID: {row.id_type}</span>
                 )}
               </div>
 
