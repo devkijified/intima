@@ -36,27 +36,38 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
   const [needCoins, setNeedCoins] = useState(false);
   const [error, setError] = useState('');
 
+  const loadStatus = async (initial = false) => {
+    try {
+      const res = await fetch(
+        `/api/subscriptions?provider_id=${encodeURIComponent(providerId)}`
+      );
+      if (!res.ok) return;
+      const j = await res.json();
+      setPriceCoins(typeof j.priceCoins === 'number' ? j.priceCoins : null);
+      setSub(j.subscription ?? null);
+    } catch {
+      /* fan club card is best effort */
+    } finally {
+      if (initial) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let live = true;
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/subscriptions?provider_id=${encodeURIComponent(providerId)}`
-        );
-        if (!res.ok) return;
-        const j = await res.json();
-        if (!live) return;
-        setPriceCoins(typeof j.priceCoins === 'number' ? j.priceCoins : null);
-        setSub(j.subscription ?? null);
-      } catch {
-        /* fan club card is best effort */
-      } finally {
-        if (live) setLoading(false);
-      }
-    })();
-    return () => {
-      live = false;
+    void loadStatus(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
+
+  // Every instance of this card on the page stays in sync: subscribing
+  // from the profile card must flip the copy inside the Private tab
+  // too, and the other way round.
+  useEffect(() => {
+    const onChange = () => {
+      void loadStatus();
     };
+    window.addEventListener('intima:subscription-changed', onChange);
+    return () =>
+      window.removeEventListener('intima:subscription-changed', onChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerId]);
 
   if (loading || !priceCoins || priceCoins <= 0) return null;
@@ -91,6 +102,7 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
           cancelled: false,
           current_period_end: j.subscription.current_period_end,
         });
+        window.dispatchEvent(new CustomEvent('intima:subscription-changed'));
       }
     } catch {
       setError('Could not subscribe. Please try again.');
@@ -115,6 +127,7 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
         return;
       }
       setSub((prev) => (prev ? { ...prev, cancelled: true } : prev));
+      window.dispatchEvent(new CustomEvent('intima:subscription-changed'));
     } catch {
       setError('Could not cancel. Please try again.');
     } finally {

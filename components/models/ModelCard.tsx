@@ -51,9 +51,17 @@ export function ModelCard({ model }: ModelCardProps) {
   const [isLiked, setIsLiked] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showConnectModal, setShowConnectModal] = useState(false)
+  const [note, setNote] = useState('')
   const { startCall } = useCall()
   const canCall = Boolean(model.userId)
   const callsDisabledCopy = 'Available after verification launch'
+  // Mock rows cannot be called or connected yet. The buttons stay
+  // tappable and say why inline: a hard-disabled button fires nothing
+  // and its only explanation was a hover tooltip, invisible on touch.
+  const flashNote = (msg: string) => {
+    setNote(msg)
+    window.setTimeout(() => setNote(''), 3000)
+  }
 
   // Default values for demo
   const isVerified = model.is_verified ?? Math.random() > 0.3
@@ -223,46 +231,46 @@ export function ModelCard({ model }: ModelCardProps) {
           <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
-                disabled={!canCall}
                 title={canCall ? 'Start a voice call' : callsDisabledCopy}
                 aria-label={canCall ? `Voice call ${model.display_name}` : callsDisabledCopy}
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
                   if (model.userId) void startCall(model.userId, model.display_name, 'voice')
+                  else flashNote('Preview profile. Calls open at launch.')
                 }}
-                className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:text-neutral-500"
+                className={`w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors ${canCall ? '' : 'opacity-40'}`}
               >
                 <Phone className="w-4 h-4" />
               </button>
               <button
-                disabled={!canCall}
                 title={canCall ? 'Start a video call' : callsDisabledCopy}
                 aria-label={canCall ? `Video call ${model.display_name}` : callsDisabledCopy}
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
                   if (model.userId) void startCall(model.userId, model.display_name, 'video')
+                  else flashNote('Preview profile. Calls open at launch.')
                 }}
-                className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:text-neutral-500"
+                className={`w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors ${canCall ? '' : 'opacity-40'}`}
               >
                 <Video className="w-4 h-4" />
               </button>
               <button
-                disabled={!canCall}
                 title={canCall ? 'Request a connection' : callsDisabledCopy}
                 aria-label={canCall ? `Request connection with ${model.display_name}` : callsDisabledCopy}
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
                   if (model.userId) setShowConnectModal(true)
+                  else flashNote('Preview profile. Connections open at launch.')
                 }}
-                className="w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:text-neutral-500"
+                className={`w-9 h-9 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-500 hover:border-primary hover:text-primary transition-colors ${canCall ? '' : 'opacity-40'}`}
               >
                 <UserPlus className="w-4 h-4" />
               </button>
             </div>
-            <button 
+            <button
               className="text-sm font-medium text-primary hover:text-primary-dark transition-colors flex items-center gap-1"
               onClick={(e) => {
                 e.preventDefault()
@@ -273,6 +281,7 @@ export function ModelCard({ model }: ModelCardProps) {
               <span className="text-xs">→</span>
             </button>
           </div>
+          {note && <p className="mt-2 text-xs text-neutral-500">{note}</p>}
         </div>
       </Card>
       {showConnectModal && model.userId && (

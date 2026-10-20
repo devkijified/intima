@@ -142,6 +142,20 @@ export function PrivateSnaps({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerId]);
 
+  // Subscribe or cancel anywhere on the profile flips what this tab
+  // may show: refetch so the locked and open states stay truthful
+  // without a page reload.
+  useEffect(() => {
+    const onChange = () => {
+      setSnaps(null);
+      void fetchSummary();
+    };
+    window.addEventListener('intima:subscription-changed', onChange);
+    return () =>
+      window.removeEventListener('intima:subscription-changed', onChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
+
   const canView = summary ? summary.isOwner || summary.isSubscriber : isOwner;
 
   // Detail (snaps with signed URLs) once the tab opens for a viewer
