@@ -39,7 +39,17 @@ export async function POST(req: NextRequest) {
 
     if (role === 'publisher') {
       if (!isHost) {
-        return NextResponse.json({ error: 'Only the host can publish' }, { status: 403 });
+        // An accepted co-host may publish into the host's room.
+        const { data: cohost } = await supabase
+          .from('live_cohosts')
+          .select('id')
+          .eq('session_id', sessionId)
+          .eq('cohost_id', user.id)
+          .eq('status', 'accepted')
+          .maybeSingle();
+        if (!cohost) {
+          return NextResponse.json({ error: 'Only the host can publish' }, { status: 403 });
+        }
       }
     } else {
       // Paid room gate: host always in; others need an active connection.

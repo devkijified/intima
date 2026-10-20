@@ -20,6 +20,9 @@ export default function GoLivePage() {
   const [giftEarnings, setGiftEarnings] = useState(0)
   const [muted, setMuted] = useState(false)
   const [ending, setEnding] = useState(false)
+  const [schedWhen, setSchedWhen] = useState('')
+  const [scheduling, setScheduling] = useState(false)
+  const [schedMsg, setSchedMsg] = useState('')
 
   const router = useRouter()
   const roomRef = useRef<Room | null>(null)
@@ -48,29 +51,67 @@ export default function GoLivePage() {
         .from('profiles').select('role, display_name').eq('id', user.id).maybeSingle()
       if (profile?.role !== 'model') throw new Error('Only companions can go live')
 
-      const priceNgn = paid ? Math.max(0, parseInt(price || '0', 10)) : 0
+      let priceNgn = paid ? Math.max(0, parseInt(price || '0', 10)) : 0
       if (paid && priceNgn <= 0) throw new Error('Set a join price, or choose free')
 
-      // End any prior live session.
-      await supabase.from('live_sessions')
-        .update({ status: 'ended', ended_at: new Date().toISOString() })
-        .eq('provider_id', user.id).eq('status', 'live')
+      // A scheduled session can be picked up with ?session=<id>: flip it
+      // live through the go-live route (which sends the live_started
+      // fanout) and publish into its pre-generated room instead of
+      // creating a second session.
+      const resumeId = new URLSearchParams(window.location.search).get('session')
+      let session: { id: string }
+      let resumed = false
+      if (resumeId) {
+        const { data: existing } = await supabase
+          .from('live_sessions')
+          .select('id, status, price_ngn')
+          .eq('id', resumeId)
+          .eq('provider_id', user.id)
+          .maybeSingle()
+        if (!existing) throw new Error('Scheduled stream not found')
+        if (existing.status === 'scheduled') {
+          const gl = await fetch('/api/live/go-live', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: existing.id }),
+          })
+          if (!gl.ok) {
+            const j = await gl.json().catch(() => ({}))
+            throw new Error(j.error || 'Could not go live')
+          }
+        } else if (existing.status !== 'live') {
+          throw new Error('This stream has ended')
+        }
+        priceNgn = existing.price_ngn ?? 0
+        session = existing
+        resumed = true
+        // End any other live session of mine, but not this one.
+        await supabase.from('live_sessions')
+          .update({ status: 'ended', ended_at: new Date().toISOString() })
+          .eq('provider_id', user.id).eq('status', 'live').neq('id', existing.id)
+      } else {
+        // End any prior live session.
+        await supabase.from('live_sessions')
+          .update({ status: 'ended', ended_at: new Date().toISOString() })
+          .eq('provider_id', user.id).eq('status', 'live')
 
-      // Create the session with a LiveKit room name.
-      const roomName = `intima-${user.id.slice(0, 8)}-${Date.now().toString(36)}`
-      const { data: session, error: sessionError } = await supabase
-        .from('live_sessions')
-        .insert({
-          provider_id: user.id,
-          title: title.trim() || 'Live now',
-          is_public: !paid,
-          price_ngn: priceNgn,
-          status: 'live',
-          livekit_room: roomName,
-        })
-        .select('id')
-        .single()
-      if (sessionError) throw sessionError
+        // Create the session with a LiveKit room name.
+        const roomName = `intima-${user.id.slice(0, 8)}-${Date.now().toString(36)}`
+        const { data: created, error: sessionError } = await supabase
+          .from('live_sessions')
+          .insert({
+            provider_id: user.id,
+            title: title.trim() || 'Live now',
+            is_public: !paid,
+            price_ngn: priceNgn,
+            status: 'live',
+            livekit_room: roomName,
+          })
+          .select('id')
+          .single()
+        if (sessionError) throw sessionError
+        session = created
+      }
       setSessionId(session.id)
 
       // Mint a publisher token.
@@ -104,7 +145,10 @@ export default function GoLivePage() {
       await room.localParticipant.publishTrack(mic)
 
       // Notify past clients (best-effort, via the push+notification primitive).
+      // Skipped for a resumed scheduled session: /api/live/go-live already
+      // sent the live_started fanout when it flipped the status.
       try {
+        if (!resumed) {
         const { data: clients } = await supabase.from('connections')
           .select('client_id').eq('provider_id', user.id).eq('status', 'active')
         const ids = [...new Set((clients ?? []).map((c: { client_id: string }) => c.client_id))]
@@ -121,6 +165,7 @@ export default function GoLivePage() {
             }),
           })
         }
+        }
       } catch { /* best-effort */ }
 
       setPhase('live')
@@ -130,6 +175,36 @@ export default function GoLivePage() {
       roomRef.current?.disconnect()
       videoTrack.current?.stop()
       audioTrack.current?.stop()
+    }
+  }
+
+  // Schedule this stream for later instead of going live now.
+  const handleSchedule = async () => {
+    if (!schedWhen || scheduling) return
+    setScheduling(true)
+    setSchedMsg('')
+    setError(null)
+    try {
+      const priceNgn = paid ? Math.max(0, parseInt(price || '0', 10)) : 0
+      if (paid && priceNgn <= 0) throw new Error('Set a join price, or choose free')
+      const res = await fetch('/api/live/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim() || 'Live',
+          scheduledFor: new Date(schedWhen).toISOString(),
+          priceNgn,
+          isPublic: !paid,
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not schedule')
+      setSchedMsg('Scheduled. Find it under Upcoming on the live page, then tap Go live at the time.')
+      setSchedWhen('')
+    } catch (err: unknown) {
+      setSchedMsg(err instanceof Error ? err.message : 'Could not schedule')
+    } finally {
+      setScheduling(false)
     }
   }
 
@@ -238,6 +313,19 @@ export default function GoLivePage() {
               className="w-full rounded-full bg-primary py-3 text-sm font-bold text-white disabled:opacity-50">
               {phase === 'publishing' ? 'Starting camera...' : 'Go live now'}
             </button>
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <label className="block text-sm font-medium text-charcoal">Schedule for later</label>
+              <p className="mt-0.5 text-xs text-neutral-400">
+                Same title, access, and price as above, but announced in Upcoming instead of starting now.
+              </p>
+              <input type="datetime-local" value={schedWhen} onChange={(e) => setSchedWhen(e.target.value)}
+                className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary" />
+              <button type="button" onClick={handleSchedule} disabled={!schedWhen || scheduling}
+                className="mt-3 w-full rounded-full bg-charcoal py-2.5 text-sm font-bold text-white disabled:opacity-40">
+                {scheduling ? 'Scheduling...' : 'Schedule stream'}
+              </button>
+              {schedMsg && <p className="mt-2 text-center text-xs text-neutral-500">{schedMsg}</p>}
+            </div>
             <p className="text-center text-xs text-neutral-400">
               Your browser will ask for camera and microphone permission.
             </p>
