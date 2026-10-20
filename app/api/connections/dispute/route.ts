@@ -87,6 +87,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // First entry on the dispute timeline (migration 037). Best effort:
+  // the dispute itself is already open, so a timeline hiccup must not
+  // fail the request.
+  await svc.from('dispute_events').insert({
+    connection_id: conn.id,
+    actor_id: user.id,
+    kind: 'opened',
+    note: reason,
+  });
+
   // Tell the admins there is a fee to review.
   const { data: admins } = await svc
     .from('profiles')

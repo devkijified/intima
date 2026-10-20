@@ -4,6 +4,16 @@ import { useEffect, useState } from 'react'
 import { ShieldAlert, ShieldCheck, Loader2 } from '@/lib/icons'
 
 interface Party { id: string; name: string | null }
+interface DisputeEvent {
+  id: string
+  kind: string
+  note: string | null
+  evidence_path: string | null
+  evidence_url: string | null
+  actor_id: string | null
+  actor: Party | null
+  created_at: string
+}
 interface Dispute {
   id: string
   fee_ngn: number
@@ -16,6 +26,54 @@ interface Dispute {
   client: Party
   provider: Party
   openedBy: Party | null
+  events?: DisputeEvent[]
+}
+
+function eventLabel(ev: DisputeEvent): string {
+  if (ev.kind === 'opened') return 'Dispute opened'
+  if (ev.kind === 'evidence') return 'Evidence added'
+  if (ev.kind === 'note') return 'Note'
+  if (ev.kind === 'resolved') {
+    return ev.note === 'refunded' ? 'Resolved: fee refunded' : 'Resolved: fee released'
+  }
+  if (ev.kind === 'auto_released') return 'Closed automatically: fee released'
+  return ev.kind
+}
+
+function DisputeTimeline({ events }: { events: DisputeEvent[] }) {
+  if (events.length === 0) return null
+  return (
+    <div className="mt-3.5 space-y-2.5 border-t border-black/[0.05] pt-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Timeline</p>
+      {events.map((ev) => (
+        <div key={ev.id} className="flex items-start gap-2">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-charcoal">
+              {eventLabel(ev)}
+              <span className="ml-1.5 text-[11px] font-normal text-neutral-400">
+                {fmt(ev.created_at)}{ev.actor ? ` · ${ev.actor.name ?? 'A party'}` : ''}
+              </span>
+            </p>
+            {ev.kind === 'opened' && ev.note && (
+              <p className="mt-0.5 text-[13px] leading-relaxed text-neutral-600">{ev.note}</p>
+            )}
+            {ev.kind === 'evidence' && ev.note && (
+              <p className="mt-0.5 text-[13px] leading-relaxed text-neutral-600">{ev.note}</p>
+            )}
+            {ev.kind === 'evidence' && ev.evidence_url && (
+              <a href={ev.evidence_url} target="_blank" rel="noreferrer">
+                <img src={ev.evidence_url} alt="Dispute evidence" className="mt-1.5 h-24 w-24 rounded-xl object-cover ring-1 ring-black/[0.06]" />
+              </a>
+            )}
+            {ev.kind === 'evidence' && !ev.evidence_url && ev.evidence_path && (
+              <p className="mt-0.5 text-[11px] text-neutral-400">Evidence photo on file (preview unavailable).</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function fmt(iso: string | null): string {
@@ -105,6 +163,7 @@ export default function AdminDisputesPage() {
               </div>
               <p className="mt-2 text-sm leading-relaxed text-neutral-600">{d.dispute_reason}</p>
               <p className="mt-1 text-xs text-neutral-400">Opened by {d.openedBy?.name ?? 'a party to the connection'}</p>
+              <DisputeTimeline events={d.events ?? []} />
               <div className="mt-3.5 flex gap-2">
                 <button
                   onClick={() => resolve(d.id, 'refunded')}
@@ -139,7 +198,7 @@ export default function AdminDisputesPage() {
                   ₦{d.fee_ngn.toLocaleString()} · {d.provider.name ?? 'Companion'} ↔ {d.client.name ?? 'Client'}
                 </p>
                 <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${d.dispute_outcome === 'refunded' ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-emerald-50 text-emerald-600 ring-emerald-100'}`}>
-                  {d.dispute_outcome === 'refunded' ? 'Refunded' : 'Released'} · {fmt(d.dispute_resolved_at)}
+                  {d.dispute_outcome === 'refunded' ? 'Refunded' : d.dispute_outcome === 'auto_released' ? 'Auto released' : 'Released'} · {fmt(d.dispute_resolved_at)}
                 </span>
               </div>
             ))}

@@ -1,7 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { ShieldCheck, ShieldAlert, Star, Clock } from '@/lib/icons'
+import { useEffect, useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { reencodeImage } from '@/lib/uploads/reencode'
+import { ShieldCheck, ShieldAlert, Star, Clock, Camera, Loader2 } from '@/lib/icons'
+
+interface DisputeEvent {
+  id: string
+  kind: string
+  note: string | null
+  evidence_path: string | null
+  evidence_url: string | null
+  actor_id: string | null
+  created_at: string
+}
+
+function disputeKindLabel(ev: DisputeEvent): string {
+  if (ev.kind === 'opened') return 'Dispute opened'
+  if (ev.kind === 'evidence') return 'Evidence added'
+  if (ev.kind === 'note') return 'Note'
+  if (ev.kind === 'resolved') {
+    return ev.note === 'refunded' ? 'Resolved: fee refunded' : 'Resolved: fee released'
+  }
+  if (ev.kind === 'auto_released') return 'Closed automatically: fee released'
+  return ev.kind
+}
 
 interface ReviewState {
   canReview: boolean
@@ -64,6 +87,13 @@ export default function ConnectionCare({
   const [disputeBusy, setDisputeBusy] = useState(false)
   const [disputeError, setDisputeError] = useState('')
 
+  const evidenceRef = useRef<HTMLInputElement>(null)
+  const [disputeEvents, setDisputeEvents] = useState<DisputeEvent[]>([])
+  const [viewerId, setViewerId] = useState<string | null>(null)
+  const [evidenceCaption, setEvidenceCaption] = useState('')
+  const [evidenceBusy, setEvidenceBusy] = useState(false)
+  const [evidenceError, setEvidenceError] = useState('')
+
   const [review, setReview] = useState<ReviewState | null>(null)
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
@@ -108,6 +138,84 @@ export default function ConnectionCare({
       setDisputeError(e instanceof Error ? e.message : 'Could not open the dispute')
     }
     setDisputeBusy(false)
+  }
+
+  async function loadDisputeEvents() {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setViewerId(user.id)
+    const { data } = await supabase
+      .from('dispute_events')
+      .select('id, kind, note, evidence_path, actor_id, created_at')
+      .eq('connection_id', connectionId)
+      .order('created_at', { ascending: true })
+    if (!data) return
+    const rows = await Promise.all(
+      (data as Omit<DisputeEvent, 'evidence_url'>[]).map(async (ev) => {
+        let evidence_url: string | null = null
+        if (ev.evidence_path) {
+          const { data: signed } = await supabase.storage
+            .from('dispute-evidence')
+            .createSignedUrl(ev.evidence_path, 3600)
+          evidence_url = signed?.signedUrl ?? null
+        }
+        return { ...ev, evidence_url }
+      })
+    )
+    setDisputeEvents(rows)
+  }
+
+  useEffect(() => {
+    if (fee !== 'disputed') return
+    let live = true
+    ;(async () => {
+      try { if (live) await loadDisputeEvents() } catch { /* timeline simply stays empty */ }
+    })()
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fee, connectionId])
+
+  async function pickEvidence(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setEvidenceError('Please choose an image file.'); return }
+    if (file.size > 10 * 1024 * 1024) { setEvidenceError('That photo is too large. Please keep each photo under 10MB.'); return }
+    setEvidenceBusy(true)
+    setEvidenceError('')
+    try {
+      const supabase = createClient()
+      let uid = viewerId
+      if (!uid) {
+        const { data: { user } } = await supabase.auth.getUser()
+        uid = user?.id ?? null
+        if (uid) setViewerId(uid)
+      }
+      if (!uid) throw new Error('Sign in required')
+      // Re-encode first, same as every other upload surface: EXIF is
+      // stripped and the image is capped at 1600px before it leaves
+      // the phone.
+      const blob = await reencodeImage(file)
+      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg'
+      const path = `${uid}/${connectionId}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('dispute-evidence').upload(path, blob, {
+        contentType: blob.type || file.type || 'image/jpeg',
+        upsert: false,
+      })
+      if (upErr) throw upErr
+      const res = await fetch('/api/connections/dispute-evidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connection_id: connectionId, path, note: evidenceCaption }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save the evidence')
+      setEvidenceCaption('')
+      await loadDisputeEvents()
+    } catch (err) {
+      setEvidenceError(err instanceof Error ? err.message : 'Could not save the evidence')
+    }
+    setEvidenceBusy(false)
   }
 
   async function submitReview() {
@@ -182,11 +290,67 @@ export default function ConnectionCare({
       {fee === 'disputed' && (
         <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 px-3.5 py-3 ring-1 ring-amber-100">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-[13px] font-semibold text-charcoal">Dispute open on this connection</p>
             <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
               Our team is reviewing the fee. Chat stays open, and we will notify you both when it is decided.
             </p>
+
+            {/* Evidence and timeline, visible to both parties. */}
+            {disputeEvents.length > 0 && (
+              <div className="mt-3 space-y-2.5 border-t border-amber-100 pt-2.5">
+                {disputeEvents.map((ev) => (
+                  <div key={ev.id} className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-charcoal">
+                        {disputeKindLabel(ev)}
+                        <span className="ml-1.5 font-normal text-neutral-400">{fmtDateTime(ev.created_at)}</span>
+                      </p>
+                      {ev.kind === 'opened' && ev.note && (
+                        <p className="mt-0.5 text-xs leading-relaxed text-neutral-600">{ev.note}</p>
+                      )}
+                      {ev.kind === 'evidence' && ev.note && (
+                        <p className="mt-0.5 text-xs leading-relaxed text-neutral-600">{ev.note}</p>
+                      )}
+                      {ev.kind === 'evidence' && ev.evidence_url && (
+                        <a href={ev.evidence_url} target="_blank" rel="noreferrer">
+                          <img src={ev.evidence_url} alt="Dispute evidence" className="mt-1.5 h-20 w-20 rounded-xl object-cover ring-1 ring-black/[0.06]" />
+                        </a>
+                      )}
+                      {ev.kind === 'evidence' && !ev.evidence_url && ev.evidence_path && (
+                        <p className="mt-0.5 text-[11px] text-neutral-400">Evidence photo added (preview unavailable).</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 border-t border-amber-100 pt-2.5">
+              <p className="text-xs font-semibold text-charcoal">Add evidence</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-neutral-500">
+                A screenshot or photo that helps the team decide. Both sides can add evidence.
+              </p>
+              <input
+                value={evidenceCaption}
+                onChange={(e) => setEvidenceCaption(e.target.value)}
+                placeholder="Caption (optional)"
+                maxLength={1000}
+                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              {evidenceError && <p className="mt-1.5 text-xs text-red-600">{evidenceError}</p>}
+              <input ref={evidenceRef} type="file" accept="image/*" className="hidden" onChange={pickEvidence} />
+              <button
+                type="button"
+                onClick={() => evidenceRef.current?.click()}
+                disabled={evidenceBusy}
+                className="btn-soft mt-2 inline-flex items-center gap-1.5 px-4 py-2 text-xs disabled:opacity-50"
+              >
+                {evidenceBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                {evidenceBusy ? 'Uploading…' : 'Add a photo'}
+              </button>
+            </div>
           </div>
         </div>
       )}

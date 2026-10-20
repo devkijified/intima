@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { reencodeImage } from '@/lib/uploads/reencode'
 import { BadgeCheck, Clock, ShieldCheck, XCircle, Camera, IdCard, PenLine } from '@/lib/icons'
 
 type VStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
@@ -75,10 +76,18 @@ export default function VerificationPage() {
   }
 
   async function uploadOne(file: File, kind: string): Promise<string> {
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    // Re-encode before upload, like every other image surface: the
+    // canvas redraw strips EXIF (including location) and caps the
+    // document at 1600px on its longest side, still clear to review.
+    const blob = await reencodeImage(file)
+    const ext = blob.type === 'image/png'
+      ? 'png'
+      : blob.type === 'image/jpeg'
+        ? 'jpg'
+        : (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = `${userId}/${kind}-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('verification-docs').upload(path, file, {
-      contentType: file.type || 'image/jpeg',
+    const { error } = await supabase.storage.from('verification-docs').upload(path, blob, {
+      contentType: blob.type || file.type || 'image/jpeg',
       upsert: true,
     })
     if (error) throw error

@@ -2,19 +2,32 @@
 
 import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { reencodeImage } from '@/lib/uploads/reencode'
 import { Camera, Loader2, Trash2 } from '@/lib/icons'
 
 const BUCKET = 'profile-photos'
 const MAX_BYTES = 10 * 1024 * 1024
 
+function extForBlob(blob: Blob, fallbackName: string): string {
+  if (blob.type === 'image/png') return 'png'
+  if (blob.type === 'image/jpeg') return 'jpg'
+  if (blob.type === 'image/webp') return 'webp'
+  if (blob.type === 'image/gif') return 'gif'
+  return (fallbackName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+}
+
 async function uploadPhoto(userId: string, file: File): Promise<string> {
   if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.')
   if (file.size > MAX_BYTES) throw new Error('That photo is too large. Please keep each photo under 10MB.')
   const supabase = createClient()
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+  // Re-encode before upload: this strips EXIF (including location) and
+  // caps the image at 1600px on its longest side. The size and type
+  // guards above apply to the original file, as picked.
+  const blob = await reencodeImage(file)
+  const ext = extForBlob(blob, file.name)
   const path = `${userId}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type || 'image/jpeg',
+  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
+    contentType: blob.type || file.type || 'image/jpeg',
     upsert: false,
   })
   if (error) throw error

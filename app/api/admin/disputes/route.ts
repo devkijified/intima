@@ -56,6 +56,71 @@ async function withParties(
   }));
 }
 
+interface DisputeEventRow {
+  id: string;
+  connection_id: string;
+  actor_id: string | null;
+  kind: string;
+  note: string | null;
+  evidence_path: string | null;
+  created_at: string;
+}
+
+// Attach each dispute's timeline (migration 037). Evidence paths are
+// signed here with the service client, 1 hour expiry, because the
+// dispute-evidence bucket is private and only admins can read all of it.
+async function withEvents(
+  svc: ReturnType<typeof service>,
+  rows: Awaited<ReturnType<typeof withParties>>
+) {
+  if (rows.length === 0) return rows;
+  const ids = rows.map((r) => (r as unknown as { id: string }).id);
+  const { data: events } = await svc
+    .from('dispute_events')
+    .select('id, connection_id, actor_id, kind, note, evidence_path, created_at')
+    .in('connection_id', ids)
+    .order('created_at', { ascending: true });
+  const list = (events ?? []) as unknown as DisputeEventRow[];
+
+  const actorIds = Array.from(
+    new Set(list.map((e) => e.actor_id).filter((v): v is string => !!v))
+  );
+  const { data: actorProfiles } = actorIds.length
+    ? await svc.from('profiles').select('id, display_name').in('id', actorIds)
+    : { data: [] as { id: string; display_name: string | null }[] };
+  const actorById = new Map<string, Party>(
+    (actorProfiles ?? []).map((p) => [p.id, { id: p.id, name: p.display_name }])
+  );
+
+  const enriched = await Promise.all(
+    list.map(async (e) => {
+      let evidence_url: string | null = null;
+      if (e.evidence_path) {
+        const { data: signed } = await svc.storage
+          .from('dispute-evidence')
+          .createSignedUrl(e.evidence_path, 3600);
+        evidence_url = signed?.signedUrl ?? null;
+      }
+      return {
+        ...e,
+        actor: e.actor_id ? actorById.get(e.actor_id) ?? { id: e.actor_id, name: null } : null,
+        evidence_url,
+      };
+    })
+  );
+
+  const byConnection = new Map<string, typeof enriched>();
+  for (const e of enriched) {
+    const bucket = byConnection.get(e.connection_id) ?? [];
+    bucket.push(e);
+    byConnection.set(e.connection_id, bucket);
+  }
+  return rows.map((r) => ({
+    ...r,
+    events: byConnection.get((r as unknown as { id: string }).id) ?? [],
+  }));
+}
+
 /**
  * GET /api/admin/disputes
  * Open disputes first, then the most recently resolved ones.
@@ -79,9 +144,14 @@ export async function GET() {
     .order('dispute_resolved_at', { ascending: false })
     .limit(20);
 
+  const openRows = await withParties(svc, (open ?? []) as unknown as Record<string, unknown>[]);
+  const resolvedRows = await withParties(
+    svc,
+    (resolved ?? []) as unknown as Record<string, unknown>[]
+  );
   return NextResponse.json({
-    open: await withParties(svc, (open ?? []) as unknown as Record<string, unknown>[]),
-    resolved: await withParties(svc, (resolved ?? []) as unknown as Record<string, unknown>[]),
+    open: await withEvents(svc, openRows),
+    resolved: await withEvents(svc, resolvedRows),
   });
 }
 
@@ -142,6 +212,14 @@ export async function POST(req: NextRequest) {
   if (error || !updated) {
     return NextResponse.json({ error: 'Could not resolve this dispute' }, { status: 500 });
   }
+
+  // Close out the dispute timeline (migration 037).
+  await svc.from('dispute_events').insert({
+    connection_id: conn.id,
+    actor_id: admin.id,
+    kind: 'resolved',
+    note: body.outcome,
+  });
 
   await notifyUsers({
     userIds: [conn.client_id, conn.provider_id],
