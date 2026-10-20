@@ -97,6 +97,11 @@ export default function LoginPage() {
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
+            <p className="text-sm">
+              <Link href="/forgot-password" className="text-[#AC244D] hover:underline">
+                Forgot your password?
+              </Link>
+            </p>
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
               <Link href={nextParam ? `/signup?next=${encodeURIComponent(nextParam)}` : '/signup'} className="text-[#AC244D] hover:underline">

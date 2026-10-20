@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Fraunces, Inter } from 'next/font/google'
+import { Fraunces, Figtree } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { SplashDismiss } from '@/components/SplashDismiss'
@@ -9,13 +9,13 @@ import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 
 // One pairing for the whole product: Fraunces for display (wordmark,
-// headings, prices, sheet titles) and Inter for everything else. Loaded
+// headings, prices, sheet titles) and Figtree for everything else. Loaded
 // once via next/font, latin subset, display=swap, no CSS @imports.
-const inter = Inter({
+const figtree = Figtree({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-figtree',
   display: 'swap',
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700', '800'],
 })
 
 const fraunces = Fraunces({
@@ -53,7 +53,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
+    <html lang="en" className={`${figtree.variable} ${fraunces.variable}`}>
       <head>
         {/* Critical paint: burgundy before any CSS/JS loads, kills the white flash. */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background:#FDF9F6;margin:0;padding:0;min-height:100dvh}#app-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#C22A57 0%,#8F1D40 100%)}` }} />

@@ -23,6 +23,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "googleapis": "^131.0.0",
+    "iconsax-react": "^0.0.8",
     "livekit-client": "^2.23.0",
     "livekit-server-sdk": "^2.19.1",
     "lucide-react": "^0.294.0",

@@ -29,6 +29,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [needsConfirm, setNeedsConfirm] = useState(false)
   const [nextParam] = useState<string | null>(() => getNextParam())
   const supabase = createClient()
 
@@ -52,35 +53,20 @@ export default function SignupPage() {
 
       if (authError) throw authError
 
+      // Profile row is created server-side by the on_auth_user_created trigger
+      // (uses the metadata passed above). Nothing to insert client-side.
       if (authData.user) {
-        await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            full_name: formData.fullName,
-            phone: formData.phone,
-            role: formData.role,
-            username: formData.email.split('@')[0],
-            is_active: true,
-          })
-
-        if (formData.role === 'model') {
-          await supabase
-            .from('model_profiles')
-            .insert({
-              profile_id: authData.user.id,
-              display_name: formData.fullName,
-              city: 'Lagos',
-              state: 'Lagos',
-            })
-        }
-
-        // Guests who signed up to order go straight back to where they were.
-        if (nextParam) {
-          window.location.href = nextParam
+        if (authData.session) {
+          // No email confirmation required: session is live, go back.
+          if (nextParam) {
+            window.location.href = nextParam
+            return
+          }
+          window.location.href = '/'
           return
         }
-
+        // Email confirmation required: tell them to check their inbox.
+        setNeedsConfirm(true)
         setSuccess(true)
       }
     } catch (err: any) {
@@ -97,7 +83,9 @@ export default function SignupPage() {
           <CardHeader>
             <CardTitle className="text-2xl text-center text-green-600">✅ Account Created!</CardTitle>
             <CardDescription className="text-center">
-              Your account has been created successfully.
+              {needsConfirm
+                ? 'Check your email to confirm your account, then sign in.'
+                : 'Your account has been created successfully.'}
             </CardDescription>
           </CardHeader>
           <CardFooter>
