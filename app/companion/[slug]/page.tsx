@@ -411,7 +411,7 @@ export default function ModelDetailPage() {
   return (
     <div className="mx-auto max-w-2xl pb-28 md:pb-10">
       {/* Top bar: back */}
-      <div className="sticky top-0 z-20 flex items-center gap-2 bg-white/90 px-4 py-2.5 backdrop-blur-md">
+      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-black/[0.04] bg-cream/85 px-4 py-2.5 backdrop-blur-xl">
         <button
           onClick={() => router.back()}
           aria-label="Back"
@@ -452,26 +452,28 @@ export default function ModelDetailPage() {
               </Link>
             )}
           </button>
-          <div className="flex flex-1 items-center justify-around">
-            <div className="text-center">
-              <p className="text-lg font-bold text-charcoal">{formatCompactCount(provider.viewCount)}</p>
-              <p className="text-xs text-neutral-500">Views</p>
+          <div className="flex flex-1 items-center">
+            <div className="flex-1 text-center">
+              <p className="font-display text-[22px] font-semibold text-charcoal">{formatCompactCount(provider.viewCount)}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Views</p>
             </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-charcoal">{formatCompactCount(provider.bookingCount)}</p>
-              <p className="text-xs text-neutral-500">Bookings</p>
+            <div className="h-9 w-px bg-neutral-200/70" />
+            <div className="flex-1 text-center">
+              <p className="font-display text-[22px] font-semibold text-charcoal">{formatCompactCount(provider.bookingCount)}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Bookings</p>
             </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-charcoal">
+            <div className="h-9 w-px bg-neutral-200/70" />
+            <div className="flex-1 text-center">
+              <p className="font-display text-[22px] font-semibold text-charcoal">
                 {provider.rating !== null ? provider.rating.toFixed(1) : '-'}
               </p>
-              <p className="text-xs text-neutral-500">Rating ({provider.reviewCount})</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Rating ({provider.reviewCount})</p>
             </div>
           </div>
         </div>
 
         <div className="mt-2 flex items-center gap-1.5">
-          <h1 className="font-display text-lg font-semibold text-charcoal">{provider.displayName}</h1>
+          <h1 className="font-display text-[22px] font-semibold tracking-tight text-charcoal">{provider.displayName}</h1>
           {provider.verified && <BadgeCheck className="h-4 w-4 text-primary" />}
         </div>
         <p className="flex items-center gap-1 text-sm text-neutral-500">
@@ -511,11 +513,11 @@ export default function ModelDetailPage() {
           ) : (
             <button
               onClick={() => setShowConnectModal(true)}
-              className="flex-1 rounded-full bg-primary py-2.5 text-sm font-bold text-white active:scale-[0.98]"
+              className="btn-luxe h-12 flex-1 text-[15px]"
             >
               Request connection
               {connectionFee !== null && (
-                <span className="font-normal opacity-80"> • N{connectionFee.toLocaleString()}</span>
+                <span className="ml-1.5 font-normal text-white/85">• N{connectionFee.toLocaleString()}</span>
               )}
             </button>
           )}
@@ -526,7 +528,7 @@ export default function ModelDetailPage() {
             }}
             disabled={!offersVoice}
             title={offersVoice ? 'Start a voice call' : 'She doesn\u2019t offer voice calls'}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
           >
             <Phone className="h-4 w-4 text-charcoal" />
           </button>
@@ -537,7 +539,7 @@ export default function ModelDetailPage() {
             }}
             disabled={!offersVideo}
             title={offersVideo ? 'Start a video call' : 'She doesn\u2019t offer video calls'}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
           >
             <Video className="h-4 w-4 text-charcoal" />
           </button>
@@ -545,7 +547,7 @@ export default function ModelDetailPage() {
             onClick={toggleFav}
             disabled={favBusy}
             aria-label={isFav ? 'Remove from favorites' : 'Save to favorites'}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-cream active:scale-90"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] active:scale-90"
           >
             <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
           </button>

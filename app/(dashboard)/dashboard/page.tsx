@@ -143,10 +143,10 @@ export default function DashboardPage() {
   const isModel = userRole === 'model'
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 font-sans">
+    <div className="max-w-5xl mx-auto space-y-8 animate-rise-in">
 
       {/* Top Welcome Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-neutral-200/80 pb-6 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-neutral-200/70">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs uppercase tracking-widest font-semibold text-[#AC244D]">
@@ -157,7 +157,7 @@ export default function DashboardPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-[#AC244D]" /> Securely Verified
             </span>
           </div>
-          <h1 className="text-3xl font-serif font-normal text-neutral-900 tracking-tight">
+          <h1 className="font-display text-[34px] font-semibold leading-tight tracking-tight text-charcoal">
             Welcome back, {userName}
           </h1>
         </div>
@@ -197,61 +197,67 @@ export default function DashboardPage() {
         /* ================= COMPANION VIEW ================= */
         <div className="space-y-8">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Profile Views</span>
-                <Eye className="h-4 w-4 text-[#AC244D]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Profile views</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-muted">
+                  <Eye className="h-4 w-4 text-[#AC244D]" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{formatCompactCount(stats.profileViews)}</p>
-              <p className="text-xs text-neutral-400 mt-1">Total public directory visits</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{formatCompactCount(stats.profileViews)}</p>
+              <p className="mt-1 text-xs text-neutral-400">Total public directory visits</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Reviews</span>
-                <Star className="h-4 w-4 text-[#AC244D]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Reviews</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary-muted">
+                  <Star className="h-4 w-4 fill-[#C9A84C] text-[#C9A84C]" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.reviews}</p>
-              <p className="text-xs text-neutral-400 mt-1">Verified client feedback</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.reviews}</p>
+              <p className="mt-1 text-xs text-neutral-400">Verified client feedback</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Active Connections</span>
-                <Calendar className="h-4 w-4 text-[#AC244D]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Active connections</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50">
+                  <Calendar className="h-4 w-4 text-emerald-600" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
-              <p className="text-xs text-neutral-400 mt-1">Clients you are chatting with</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.bookings}</p>
+              <p className="mt-1 text-xs text-neutral-400">Clients you are chatting with</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <h3 className="font-serif text-lg text-neutral-900 mb-4">Quick Management</h3>
+            <div className="card-luxe p-4 sm:p-6">
+              <h3 className="font-display text-xl font-semibold tracking-tight text-charcoal mb-3 px-1">Quick Management</h3>
               <div className="space-y-2">
-                <Link href="/profile" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/profile" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Edit Public Listing & Photos</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
-                <Link href="/models/live" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/models/live" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Broadcast Live Show</span>
                   <Video className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <h3 className="font-serif text-lg text-neutral-900 mb-4">Bookings & Earnings</h3>
+            <div className="card-luxe p-4 sm:p-6">
+              <h3 className="font-display text-xl font-semibold tracking-tight text-charcoal mb-3 px-1">Bookings & Earnings</h3>
               <div className="space-y-2">
-                <Link href="/bookings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/bookings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Manage Bookings</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
-                <Link href="/wallet" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/wallet" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Wallet & Payouts</span>
                   <Wallet className="h-4 w-4 text-[#AC244D]" />
                 </Link>
-                <Link href="/earnings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/earnings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Gift Earnings & Cash Out</span>
                   <Banknote className="h-4 w-4 text-[#AC244D]" />
                 </Link>
@@ -263,7 +269,7 @@ export default function DashboardPage() {
         /* ================= CLIENT VIEW ================= */
         <div className="space-y-8">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
+            <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Connections</span>
                 <Calendar className="h-4 w-4 text-[#AC244D]" />
@@ -272,7 +278,7 @@ export default function DashboardPage() {
               <p className="text-xs text-neutral-400 mt-1">Active companion chats</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
+            <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Wallet Balance</span>
                 <Wallet className="h-4 w-4 text-[#AC244D]" />
@@ -281,7 +287,7 @@ export default function DashboardPage() {
               <p className="text-xs text-neutral-400 mt-1">Worth ₦{(stats.coins * 10).toLocaleString()}</p>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
+            <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Saved</span>
                 <Sparkles className="h-4 w-4 text-[#AC244D]" />
@@ -292,28 +298,28 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <h3 className="font-serif text-lg text-neutral-900 mb-4">Explore Intima</h3>
+            <div className="card-luxe p-4 sm:p-6">
+              <h3 className="font-display text-xl font-semibold tracking-tight text-charcoal mb-3 px-1">Explore Intima</h3>
               <div className="space-y-2">
-                <Link href="/" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Browse All Verified Companions</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
-                <Link href="/bookings" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/bookings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">View Booking History</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
               </div>
             </div>
 
-            <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
-              <h3 className="font-serif text-lg text-neutral-900 mb-4">Account Settings</h3>
+            <div className="card-luxe p-4 sm:p-6">
+              <h3 className="font-display text-xl font-semibold tracking-tight text-charcoal mb-3 px-1">Account Settings</h3>
               <div className="space-y-2">
-                <Link href="/profile" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/profile" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Edit Profile & Contact Info</span>
                   <ArrowUpRight className="h-4 w-4 text-neutral-400" />
                 </Link>
-                <Link href="/wallet" className="flex items-center justify-between p-3 rounded-xl hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all text-neutral-700">
+                <Link href="/wallet" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Fund Wallet / Payments</span>
                   <Wallet className="h-4 w-4 text-[#AC244D]" />
                 </Link>

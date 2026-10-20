@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
+import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { Eye, Gift, Heart, Lock, Radio, Send, Share2, X,
   PictureInPicture2,} from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
@@ -354,10 +355,20 @@ export default function StreamRoomPage() {
 
   /* -------------------------------- actions -------------------------------- */
 
+  const [chatBlocked, setChatBlocked] = useState('')
   const sendChat = useCallback(async () => {
     const body = draft.trim()
     const room = roomRef.current
     if (!body || !room || room.state !== 'connected') return
+    // Fence: stream chat is public to every viewer, so contact details are
+    // blocked here (private contact goes to paid connections only).
+    const scan = scanForLeaks(body)
+    if (!scan.clean) {
+      setChatBlocked(leakWarning(scan.leaks))
+      window.setTimeout(() => setChatBlocked(''), 4000)
+      return
+    }
+    setChatBlocked('')
     const payload = new TextEncoder().encode(
       JSON.stringify({ topic: CHAT_TOPIC, name: myName, body: body.slice(0, 200) })
     )
@@ -720,6 +731,9 @@ export default function StreamRoomPage() {
         ))}
       </div>
 
+      {/* Legibility scrim: comments float over the video */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
+
       {/* Comments */}
       <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden">
         {messages.map((m) => (
@@ -744,6 +758,13 @@ export default function StreamRoomPage() {
           <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
             {formatCompactCount(likes)}
           </span>
+        </div>
+      )}
+
+      {/* Fence notice when a contact leak is blocked */}
+      {chatBlocked && (
+        <div className="absolute inset-x-3 bottom-[4.5rem] z-30 animate-pop-in rounded-2xl bg-red-500/95 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-lg">
+          {chatBlocked} Contact details stay in paid connections.
         </div>
       )}
 
@@ -787,8 +808,8 @@ export default function StreamRoomPage() {
       {giftOpen && (
         <div className="absolute inset-0 z-30 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/60" onClick={() => setGiftOpen(false)} />
-          <div className="gift-sheet relative rounded-t-3xl bg-[#141419] px-4 pb-8 pt-3">
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
+          <div className="gift-sheet relative animate-sheet-up rounded-t-[28px] bg-[#141419] px-4 pb-8 pt-3 shadow-sheet">
+            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/20" />
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-bold text-white">Send a gift</p>
               <span className="flex items-center gap-1 rounded-full bg-gold/15 px-3 py-1 text-xs font-bold text-gold">
