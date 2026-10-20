@@ -32,7 +32,7 @@ import {
 
 const BUCKET = 'private-snaps';
 const SIGNED_URL_TTL_SECONDS = 3600;
-const DEFAULT_COLLECTION = 'Private snaps';
+const DEFAULT_COLLECTION = 'Fans Only';
 
 function service() {
   return createServiceClient(

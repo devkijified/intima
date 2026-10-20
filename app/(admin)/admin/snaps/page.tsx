@@ -95,9 +95,9 @@ export default function AdminSnapsPage() {
           <Lock className="h-5 w-5 text-primary" />
         </span>
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Snaps review</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Fans Only review</h1>
           <p className="text-sm text-neutral-500">
-            Every private snap passes a human check before fans can see it. Oldest first.
+            Every Fans Only post passes a human check before fans can see it. Oldest first.
           </p>
         </div>
       </div>
@@ -114,7 +114,7 @@ export default function AdminSnapsPage() {
         {loading ? (
           <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
         ) : !error && snaps.length === 0 ? (
-          <p className="py-8 text-center text-sm text-neutral-400">No snaps waiting for review.</p>
+          <p className="py-8 text-center text-sm text-neutral-400">No posts waiting for review.</p>
         ) : (
           snaps.map((snap) => (
             <div key={snap.id} className="card-luxe p-4">

@@ -589,7 +589,7 @@ export default function ModelDetailPage() {
     { value: 'reviews', icon: Star, label: 'Reviews' },
   ]
   if (viewerIsOwner || privateTabVisible) {
-    tabs.push({ value: 'private', icon: Lock, label: 'Private snaps' })
+    tabs.push({ value: 'private', icon: Lock, label: 'Fans Only' })
   }
 
   const recency = formatRecency(provider.lastActiveAt)

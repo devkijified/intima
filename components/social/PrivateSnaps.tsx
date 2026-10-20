@@ -10,7 +10,7 @@ import { useDock } from '@/components/dock/FloatingDock';
 const BUCKET = 'private-snaps';
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-const DEFAULT_COLLECTION = 'Private snaps';
+const DEFAULT_COLLECTION = 'Fans Only';
 
 interface SnapItem {
   id: string;
@@ -332,7 +332,7 @@ export function PrivateSnaps({
     if (summaryError && !summary) {
       return (
         <p className="py-8 text-center text-sm text-neutral-400">
-          Could not load private snaps. Please try again later.
+          Could not load Fans Only. Please try again later.
         </p>
       );
     }
@@ -353,22 +353,22 @@ export function PrivateSnaps({
     return (
       <div>
         <h3 className="font-display text-lg font-semibold text-charcoal">
-          Private snaps
+          Fans Only
         </h3>
         <p className="mt-1 text-sm text-neutral-500">
-          Fans only. Join the fan club to see these.
+          For fan club members only. Join the fan club to see these.
         </p>
         {summary.fanPriceCoins !== null ? (
           <SubscribeCard providerId={providerId} providerName={providerName} />
         ) : (
           <p className="mt-3 rounded-2xl bg-cream p-3 text-sm text-neutral-600">
-            This fan club is not open yet, so private snaps are not available for
-            now.
+            This fan club is not open yet, so Fans Only posts are not available
+            for now.
           </p>
         )}
         {summary.collections.length === 0 ? (
           <p className="py-6 text-center text-sm text-neutral-400">
-            No private snaps yet.
+            No Fans Only posts yet.
           </p>
         ) : (
           summary.collections.map((c) => (
@@ -406,7 +406,7 @@ export function PrivateSnaps({
   return (
     <div>
       <h3 className="font-display text-lg font-semibold text-charcoal">
-        Private snaps
+        Fans Only
       </h3>
       <p className="mt-1 text-sm text-neutral-500">
         {ownerView
@@ -456,7 +456,7 @@ export function PrivateSnaps({
           {summary.standing.pendingCount > 0 && (
             <p className="mt-2 text-xs text-neutral-500">
               {summary.standing.pendingCount}{' '}
-              {summary.standing.pendingCount === 1 ? 'snap' : 'snaps'} waiting
+              {summary.standing.pendingCount === 1 ? 'post' : 'posts'} waiting
               for review.
             </p>
           )}
@@ -465,10 +465,10 @@ export function PrivateSnaps({
 
       {ownerView && (
         <div className="card-luxe mt-3 p-4">
-          <p className="text-sm font-semibold text-charcoal">Add a private snap</p>
+          <p className="text-sm font-semibold text-charcoal">Add a Fans Only post</p>
           <p className="mt-1 text-xs text-neutral-500">
             Photos are cleaned of location data before they upload. Videos can be
-            up to 50MB, and must run at least 30 seconds. New snaps appear to
+            up to 50MB, and must run at least 30 seconds. New posts appear to
             fans after a quick review.
           </p>
           <div className="mt-3 flex flex-col gap-2">
@@ -525,7 +525,7 @@ export function PrivateSnaps({
               className="btn-luxe flex h-11 items-center justify-center gap-2 text-sm disabled:opacity-50"
             >
               {adding && <Loader2 className="h-4 w-4 animate-spin" />}
-              {adding ? 'Adding...' : 'Add snap'}
+              {adding ? 'Adding...' : 'Add post'}
             </button>
             {formError && <p className="text-sm text-red-600">{formError}</p>}
           </div>
@@ -535,8 +535,8 @@ export function PrivateSnaps({
       {list.length === 0 ? (
         <p className="py-8 text-center text-sm text-neutral-400">
           {ownerView
-            ? 'You have not added any private snaps yet.'
-            : 'No private snaps yet. New drops land here first.'}
+            ? 'You have not added any Fans Only posts yet.'
+            : 'No Fans Only posts yet. New drops land here first.'}
         </p>
       ) : (
         grouped.map((g) => (

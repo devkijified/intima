@@ -60,7 +60,7 @@ export default async function AdminLayout({
               <Link href="/admin/comics" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Comics">
                 <BookOpen className="inline h-5 w-5" />
               </Link>
-              <Link href="/admin/snaps" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Snaps review">
+              <Link href="/admin/snaps" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Fans Only review">
                 <Lock className="inline h-5 w-5" />
               </Link>
               <Link href="/admin/cashouts" className="text-gray-600 hover:text-[#AC244D] transition-colors" title="Cash-outs">
