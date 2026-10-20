@@ -13,6 +13,7 @@ export default function DashboardPage() {
     reviews: 0,
     bookings: 0,
     saved: 0,
+    coins: 0,
   })
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -69,7 +70,9 @@ export default function DashboardPage() {
             .eq('status', 'active'),
         ])
 
+        const { data: cb1 } = await supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle()
         setStats({
+          coins: cb1?.balance ?? 0,
           profileViews: profile?.view_count ?? 0,
           reviews: reviewsCount ?? 0,
           bookings: bookingsCount ?? 0,
@@ -87,7 +90,9 @@ export default function DashboardPage() {
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
 
+        const { data: cb1 } = await supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle()
         setStats({
+          coins: cb1?.balance ?? 0,
           profileViews: 0,
           reviews: 0,
           bookings: clientBookingsCount ?? 0,
@@ -272,8 +277,8 @@ export default function DashboardPage() {
                 <span className="text-xs font-medium uppercase tracking-wider">Wallet Balance</span>
                 <Wallet className="h-4 w-4 text-[#AC244D]" />
               </div>
-              <p className="text-3xl font-serif text-neutral-900">₦0</p>
-              <p className="text-xs text-neutral-400 mt-1">Available funds</p>
+              <p className="text-3xl font-serif text-neutral-900">{stats.coins.toLocaleString()} coins</p>
+              <p className="text-xs text-neutral-400 mt-1">Worth ₦{(stats.coins * 10).toLocaleString()}</p>
             </div>
 
             <div className="bg-white border border-neutral-200/80 rounded-2xl p-4 sm:p-6 shadow-xs">
