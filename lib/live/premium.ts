@@ -264,7 +264,9 @@ export async function getPremiumEligibility(
     current:
       agg.refundedCount === 0
         ? 'No cancellations on record'
-        : `${Math.round((agg.cancellationRate ?? 0) * 100)}%`,
+        : agg.eligibleCount < CANCEL_SAMPLE_MIN
+          ? 'Not enough bookings to judge yet'
+          : `${Math.round((agg.cancellationRate ?? 0) * 100)}%`,
     target: `Under ${t.maxCancelPct}%`,
   });
 
