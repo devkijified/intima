@@ -827,23 +827,23 @@ export default function ModelDetailPage() {
           )}
           <button
             onClick={() => {
+              if (!offersVoice) { showToast('She does not offer voice calls'); return }
               if (!loggedIn) { showToast('Log in to start a voice call'); router.push('/signup?next=/companion/' + (provider.username ?? provider.id)); return }
               void startCall(provider.id, provider.displayName, 'voice', provider.avatar ?? undefined)
             }}
-            disabled={!offersVoice}
             title={offersVoice ? 'Start a voice call' : 'She doesn\u2019t offer voice calls'}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
+            className={`flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 ${!offersVoice ? 'opacity-40 shadow-none' : ''}`}
           >
             <Phone className="h-4 w-4 text-charcoal" />
           </button>
           <button
             onClick={() => {
+              if (!offersVideo) { showToast('She does not offer video calls'); return }
               if (!loggedIn) { showToast('Log in to start a video call'); router.push('/signup?next=/companion/' + (provider.username ?? provider.id)); return }
               void startCall(provider.id, provider.displayName, 'video', provider.avatar ?? undefined)
             }}
-            disabled={!offersVideo}
             title={offersVideo ? 'Start a video call' : 'She doesn\u2019t offer video calls'}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
+            className={`flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 ${!offersVideo ? 'opacity-40 shadow-none' : ''}`}
           >
             <Video className="h-4 w-4 text-charcoal" />
           </button>

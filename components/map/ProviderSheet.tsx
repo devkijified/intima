@@ -45,6 +45,15 @@ export function ProviderSheet({
   showViewProfile,
 }: ProviderSheetProps) {
   const [connectionFee, setConnectionFee] = useState<number | null>(null);
+  // Why a call cannot start, shown in place when a dimmed call button
+  // is tapped. A hard-disabled button explains nothing on a phone.
+  const [callNote, setCallNote] = useState<string | null>(null);
+  const callNoteTimer = useRef<number | null>(null);
+  const flashCallNote = (msg: string) => {
+    setCallNote(msg);
+    if (callNoteTimer.current) window.clearTimeout(callNoteTimer.current);
+    callNoteTimer.current = window.setTimeout(() => setCallNote(null), 3000);
+  };
   const [activeTab, setActiveTab] = useState<SheetTab>('posts');
   const [photoIndex, setPhotoIndex] = useState(0);
   const [lightbox, setLightbox] = useState<number | null>(null);
@@ -340,7 +349,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-neutral-600 active:scale-95"
+            className="absolute right-3 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/5 text-neutral-600 active:scale-95"
           >
             <X className="h-4 w-4" />
           </button>
@@ -422,18 +431,18 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                 )}
               </button>
               <button
-                onClick={() => onVoiceCall(provider)}
-                disabled={voiceDisabled}
+                onClick={() => { if (!offersVoice) { flashCallNote(voiceNote); return } onVoiceCall(provider) }}
                 title={voiceNote}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
+                aria-label={voiceNote}
+                className={"flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90" + (voiceDisabled ? " opacity-40 shadow-none" : "")}
               >
                 <Phone className="h-4 w-4 text-charcoal" />
               </button>
               <button
-                onClick={() => onVideoCall(provider)}
-                disabled={videoDisabled}
+                onClick={() => { if (!offersVideo) { flashCallNote(videoNote); return } onVideoCall(provider) }}
                 title={videoNote}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
+                aria-label={videoNote}
+                className={"flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90" + (videoDisabled ? " opacity-40 shadow-none" : "")}
               >
                 <Video className="h-4 w-4 text-charcoal" />
               </button>
@@ -447,6 +456,10 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
               </button>
             </div>
           </div>
+
+          {callNote && (
+            <p className="mt-2 text-center text-[13px] font-medium text-neutral-500">{callNote}</p>
+          )}
 
           {/* TikTok-style tab bar: icons */}
           <div className="mt-3 flex border-b border-neutral-100">
@@ -580,7 +593,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
         >
           <button
             aria-label="Close"
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
           >
             <X className="h-5 w-5" />
           </button>
