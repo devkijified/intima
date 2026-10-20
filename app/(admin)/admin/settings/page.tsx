@@ -7,7 +7,7 @@ import { clearSettingsCache } from '@/lib/settings/platformSettings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { ShieldAlert, Save, Loader2 } from 'lucide-react'
+import { ShieldAlert, Save, Loader2 } from '@/lib/icons'
 
 interface SettingRow {
   key: string

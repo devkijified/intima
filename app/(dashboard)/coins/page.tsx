@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { COIN_PACKAGES } from '@/lib/coins/packages'
-import { Coins, Loader2, Plus, History } from 'lucide-react'
+import { Coins, Loader2, Plus, History } from '@/lib/icons'
 import Link from 'next/link'
 
 interface Topup {

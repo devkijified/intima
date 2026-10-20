@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { isAdmin } from '@/lib/admin/isAdmin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { ShieldAlert, CheckCircle2, XCircle, Loader2, ExternalLink } from 'lucide-react'
+import { ShieldAlert, CheckCircle2, XCircle, Loader2, ExternalLink } from '@/lib/icons'
 
 interface VerificationRow {
   id: string

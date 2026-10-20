@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Radio, Eye, Ban, Star, CheckCircle } from 'lucide-react'
+import { Radio, Eye, Ban, Star, CheckCircle } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface Stream {

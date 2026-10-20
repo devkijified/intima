@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Users, UserCheck, UserX, Video, Star } from 'lucide-react'
+import { Users, UserCheck, UserX, Video, Star } from '@/lib/icons'
 
 export default function AdminPage() {
   const [stats, setStats] = useState({

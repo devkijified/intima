@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, MessageCircle, Phone, Video, ArrowUpRight, Loader2, Wallet } from 'lucide-react'
+import { Calendar, MessageCircle, Phone, Video, ArrowUpRight, Loader2, Wallet } from '@/lib/icons'
 
 type ConnectionStatus = 'pending_payment' | 'active' | 'refunded' | 'expired'
 

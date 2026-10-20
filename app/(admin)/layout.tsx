@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut, Radio, Mail} from 'lucide-react'
+import { Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings, LogOut, Radio, Mail} from '@/lib/icons'
 import { Button } from '@/components/ui/Button'
 
 export default async function AdminLayout({

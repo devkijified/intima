@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Mail, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { Mail, CheckCircle2, XCircle, Loader2 } from '@/lib/icons'
 
 /**
  * Admin → Email setup: one-time Gmail OAuth connection so the app's

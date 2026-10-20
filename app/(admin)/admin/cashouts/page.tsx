@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, CheckCircle2, Banknote, XCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, Banknote, XCircle } from '@/lib/icons'
 
 interface CashoutRequest {
   id: string

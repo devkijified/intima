@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle } from '@/lib/icons'
 
 /**
  * Paystack callback: verifies the transaction and credits coins,
