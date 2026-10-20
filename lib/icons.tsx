@@ -87,6 +87,7 @@ function wrap(Sax: ComponentType<any>) {
 }
 
 export const X = wrap(SaxCloseSquare)
+export const Timer = wrap(SaxClock)
 export const XCircle = wrap(SaxCloseCircle)
 export const CheckCircle = wrap(SaxTickCircle)
 export const CheckCircle2 = wrap(SaxTickCircle)

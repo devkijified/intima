@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
-import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock } from '@/lib/icons'
+import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock, Timer } from '@/lib/icons'
 
 interface Msg {
   id: string
@@ -16,6 +16,7 @@ interface Msg {
   media_type?: string | null
   ppv_price_coins?: number | null
   unlocked_by?: string[]
+  expires_at?: string | null
 }
 
 interface Counterpart {
@@ -42,6 +43,7 @@ export default function ThreadPage() {
   const [input, setInput] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
   const [showPpv, setShowPpv] = useState(false)
+  const [disappearing, setDisappearing] = useState(false)
   const [ppvUrl, setPpvUrl] = useState('')
   const [ppvPrice, setPpvPrice] = useState('100')
   const [templateTab, setTemplateTab] = useState(0)
@@ -87,7 +89,8 @@ export default function ThreadPage() {
         .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by')
         .eq('connection_id', connectionId)
         .order('created_at', { ascending: true })
-      if (live) { setMsgs(history ?? []); setLoading(false) }
+      const fresh = (history ?? []).filter((m: any) => !m.expires_at || new Date(m.expires_at).getTime() > Date.now())
+      if (live) { setMsgs(fresh as Msg[]); setLoading(false) }
       // Mark their messages as read (best effort; read_at drives unread badges).
       supabase
         .from('messages')
@@ -105,6 +108,7 @@ export default function ThreadPage() {
           { event: 'INSERT', schema: 'public', table: 'messages', filter: `connection_id=eq.${connectionId}` },
           (payload) => {
             const m = payload.new as Msg
+            if (m.expires_at && new Date(m.expires_at).getTime() <= Date.now()) return
             if (live) setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
           }
         )
@@ -123,10 +127,11 @@ export default function ThreadPage() {
     if (!text || !me || sending || !active) return
     setSending(true)
     const supabase = createClient()
-    const { error } = await createClient().from('messages').insert({
+    const { error } = await supabase.from('messages').insert({
       connection_id: connectionId,
       sender_id: me,
       body: text.slice(0, 1000),
+      ...(disappearing ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() } : {}),
     })
     setSending(false)
     if (!error) {
@@ -310,6 +315,14 @@ export default function ThreadPage() {
             } disabled:opacity-40`}
           >
             <Sparkles className="h-5 w-5 text-gold" />
+          </button>
+          <button
+            onClick={() => setDisappearing((v) => !v)}
+            aria-label="Disappearing messages"
+            title="Disappearing messages (24h)"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'bg-cream'} disabled:opacity-40`}
+          >
+            <Timer className={`h-4 w-4 ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
           </button>
           <input
             value={input}

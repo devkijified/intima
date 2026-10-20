@@ -35,6 +35,7 @@ interface ChatMsg {
   name: string
   body: string
   mine: boolean
+  senderId?: string
 }
 
 interface FloatingHeart {
@@ -93,6 +94,11 @@ export default function StreamRoomPage() {
   const [needTopup, setNeedTopup] = useState(false)
 
   const [megaGift, setMegaGift] = useState<GiftEvent | null>(null)
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set())
+  const blockedRef = useRef<Set<string>>(new Set())
+  const [modTarget, setModTarget] = useState<ChatMsg | null>(null)
+  const [myId, setMyId] = useState<string | null>(null)
+  const [hostId, setHostId] = useState<string | null>(null)
   const [miniGifts, setMiniGifts] = useState<GiftEvent[]>([])
 
   /* ------------------------------ helpers --------------------------------- */
@@ -125,6 +131,7 @@ export default function StreamRoomPage() {
         router.replace('/login')
         return
       }
+      setMyId(user.id)
       setMyName(
         (user.user_metadata?.display_name as string | undefined) ??
           user.email?.split('@')[0] ??
@@ -141,6 +148,17 @@ export default function StreamRoomPage() {
       if (!session || session.status !== 'live') {
         setPhase('ended')
         return
+      }
+      setHostId(session.provider_id)
+
+      const { data: mods } = await supabase
+        .from('stream_moderation')
+        .select('user_id')
+        .eq('session_id', id)
+      if (mods && mods.length > 0) {
+        const set = new Set<string>(mods.map((r: any) => r.user_id))
+        blockedRef.current = set
+        setBlockedIds(set)
       }
 
       const { data: prof } = await supabase
@@ -210,11 +228,14 @@ export default function StreamRoomPage() {
             body?: string
           }
           if (parsed.topic === CHAT_TOPIC && parsed.body) {
+            const sid = participant?.identity
+            if (sid && blockedRef.current.has(sid)) return
             pushMessage({
               id: uid(),
-              name: parsed.name ?? participant?.identity ?? 'Guest',
+              name: parsed.name ?? 'Guest',
               body: parsed.body.slice(0, 200),
               mine: false,
+              senderId: sid,
             })
           }
         } catch {
@@ -604,6 +625,60 @@ export default function StreamRoomPage() {
         </Link>
       </div>
 
+      {/* Host moderation sheet */}
+      {modTarget && (
+        <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/60" onClick={() => setModTarget(null)}>
+          <div className="w-full rounded-t-3xl bg-white p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+            <p className="text-center text-sm font-bold text-charcoal">{modTarget.name}</p>
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={async () => {
+                  if (!modTarget.senderId) return
+                  const supabase = createClient()
+                  await supabase.from('stream_moderation').insert({
+                    session_id: id,
+                    user_id: modTarget.senderId,
+                    action: 'mute',
+                  })
+                  const set = new Set(blockedRef.current)
+                  set.add(modTarget.senderId)
+                  blockedRef.current = set
+                  setBlockedIds(set)
+                  setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
+                  setModTarget(null)
+                }}
+                className="w-full rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
+              >
+                Mute for this stream
+              </button>
+              <button
+                onClick={async () => {
+                  if (!modTarget.senderId) return
+                  const supabase = createClient()
+                  await supabase.from('stream_moderation').insert({
+                    session_id: id,
+                    user_id: modTarget.senderId,
+                    action: 'block',
+                  })
+                  const set = new Set(blockedRef.current)
+                  set.add(modTarget.senderId)
+                  blockedRef.current = set
+                  setBlockedIds(set)
+                  setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
+                  setModTarget(null)
+                }}
+                className="w-full rounded-2xl bg-red-50 py-3 text-sm font-semibold text-red-600"
+              >
+                Block from this stream
+              </button>
+              <button onClick={() => setModTarget(null)} className="w-full py-2 text-sm text-neutral-500">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mini gift toasts (basic / premium) */}
       <div className="pointer-events-none absolute left-3 top-20 flex flex-col gap-2">
         {miniGifts.map((g) => (
@@ -649,10 +724,14 @@ export default function StreamRoomPage() {
       <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden">
         {messages.map((m) => (
           <div key={m.id} className="w-fit max-w-full">
-            <p className="text-[13px] leading-snug text-white drop-shadow">
-              <span className={`font-semibold ${m.mine ? 'text-gold' : 'text-white/85'}`}>
+            <p className="pointer-events-auto text-[13px] leading-snug text-white drop-shadow">
+              <button
+                disabled={!hostId || myId !== hostId || !m.senderId || m.mine}
+                onClick={() => setModTarget(m)}
+                className={`font-semibold ${m.mine ? 'text-gold' : 'text-white/85'} ${hostId && myId === hostId && !m.mine ? 'underline decoration-dotted' : ''}`}
+              >
                 {m.name}:{' '}
-              </span>
+              </button>
               <span className="text-white/95">{m.body}</span>
             </p>
           </div>
