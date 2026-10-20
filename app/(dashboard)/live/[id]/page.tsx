@@ -70,6 +70,7 @@ interface GiftEvent {
 }
 
 const CHAT_TOPIC = 'chat'
+const LIKE_TOPIC = 'likes'
 const CHAT_MAX = 60
 
 function uid(): string {
@@ -145,6 +146,11 @@ export default function StreamRoomPage() {
   const [pkBattle, setPkBattle] = useState<PkBattleState | null>(null)
   const [pkOptions, setPkOptions] = useState<{ id: string; label: string }[]>([])
   const [pkOpponent, setPkOpponent] = useState('')
+  const [railStreams, setRailStreams] = useState<
+    { id: string; title: string; name: string; avatar: string | null }[]
+  >([])
+  const railChatRef = useRef<HTMLDivElement>(null)
+  const railStickRef = useRef(true)
   const [, setPkTick] = useState(0)
   const [cohostInvite, setCohostInvite] = useState<'invited' | 'accepted' | null>(null)
   const [cohostBusy, setCohostBusy] = useState(false)
@@ -200,6 +206,13 @@ export default function StreamRoomPage() {
           body?: string
           id?: string
           level?: number
+          n?: number
+        }
+        if (parsed.topic === LIKE_TOPIC) {
+          const n = Math.min(Math.max(Math.floor(parsed.n ?? 1), 1), 20)
+          setLikes((l) => l + n)
+          addHearts(1)
+          return
         }
         if (parsed.topic === CHAT_TOPIC && parsed.body) {
           const sid = participant?.identity
@@ -222,17 +235,107 @@ export default function StreamRoomPage() {
     [pushMessage]
   )
 
-  const spawnHearts = useCallback((n: number) => {
+  const addHearts = useCallback((n: number) => {
     const fresh: FloatingHeart[] = Array.from({ length: n }, () => ({
       id: ++heartIdRef.current,
       x: 8 + Math.random() * 72,
     }))
     setHearts((prev) => [...prev.slice(-24), ...fresh])
-    setLikes((l) => l + n)
     window.setTimeout(() => {
       setHearts((prev) => prev.filter((h) => !fresh.some((f) => f.id === h.id)))
     }, 1400)
   }, [])
+
+  const spawnHearts = useCallback(
+    (n: number) => {
+      addHearts(n)
+      setLikes((l) => l + n)
+    },
+    [addHearts]
+  )
+
+  // Likes are shared with the whole room: own taps count locally at
+  // once and are broadcast in small batches on the data channel, so
+  // every viewer and the host watch the same running total climb.
+  const likePendingRef = useRef(0)
+  const likeTimerRef = useRef<number | null>(null)
+  const flushLikes = useCallback(() => {
+    likeTimerRef.current = null
+    const n = likePendingRef.current
+    likePendingRef.current = 0
+    if (n <= 0) return
+    const room = roomRef.current
+    if (!room) return
+    const payload = new TextEncoder().encode(JSON.stringify({ topic: LIKE_TOPIC, n }))
+    void (async () => {
+      try {
+        await room.localParticipant.publishData(payload, { reliable: false })
+      } catch {
+        /* a lost like batch is not worth an error */
+      }
+    })()
+  }, [])
+  const tapLike = useCallback(
+    (n: number) => {
+      spawnHearts(n)
+      likePendingRef.current += n
+      if (likeTimerRef.current === null) {
+        likeTimerRef.current = window.setTimeout(flushLikes, 900)
+      }
+    },
+    [spawnHearts, flushLikes]
+  )
+
+  // Discovery rail (desktop): other rooms live right now, refreshed
+  // every 30 seconds so the rail never points at a dead stream.
+  useEffect(() => {
+    let live = true
+    const load = async () => {
+      const { data } = await supabase
+        .from('live_sessions')
+        .select('id, title, provider_id')
+        .eq('status', 'live')
+        .neq('id', id)
+        .order('created_at', { ascending: false })
+        .limit(12)
+      if (!live || !data) return
+      const rows = data as { id: string; title: string; provider_id: string }[]
+      const names = new Map<string, { name: string; avatar: string | null }>()
+      if (rows.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, display_name, avatar_url')
+          .in('id', rows.map((r) => r.provider_id))
+        ;(profs ?? []).forEach((p: { id: string; display_name: string | null; avatar_url: string | null }) =>
+          names.set(p.id, { name: p.display_name ?? 'Companion', avatar: p.avatar_url ?? null })
+        )
+      }
+      if (live) {
+        setRailStreams(
+          rows.map((r) => ({
+            id: r.id,
+            title: r.title,
+            name: names.get(r.provider_id)?.name ?? 'Companion',
+            avatar: names.get(r.provider_id)?.avatar ?? null,
+          }))
+        )
+      }
+    }
+    load()
+    const t = window.setInterval(load, 30000)
+    return () => {
+      live = false
+      window.clearInterval(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  // Rail chat follows new comments while the reader is near the
+  // bottom, and stays put when they have scrolled up to read.
+  useEffect(() => {
+    const el = railChatRef.current
+    if (el && railStickRef.current) el.scrollTop = el.scrollHeight
+  }, [messages])
 
   /* ------------------------------ connect --------------------------------- */
 
@@ -757,10 +860,10 @@ export default function StreamRoomPage() {
   const handleVideoTap = useCallback(() => {
     const now = Date.now()
     if (now - lastTapRef.current < 320) {
-      spawnHearts(6)
+      tapLike(6)
     }
     lastTapRef.current = now
-  }, [spawnHearts])
+  }, [tapLike])
 
   const sendGift = useCallback(
     async (gift: GiftItem) => {
@@ -988,7 +1091,44 @@ export default function StreamRoomPage() {
     !!pkBattle && !!pkBattle.opponent && pkBattle.winnerSessionId === pkBattle.opponent.sessionId
 
   return (
-    <div className="relative mx-auto h-[calc(100dvh-4rem)] w-full max-w-md overflow-hidden bg-black md:h-[calc(100dvh-5rem)]">
+    <div className="relative mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-md bg-black md:h-[calc(100dvh-5rem)] lg:max-w-none">
+      {/* Discovery rail: other rooms live now (desktop theatre) */}
+      <aside className="hidden w-[264px] shrink-0 flex-col border-r border-white/10 bg-[#0B0B0F] lg:flex">
+        <p className="px-4 pb-2 pt-4 text-[11px] font-bold uppercase tracking-widest text-white/50">
+          Live now
+        </p>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          {railStreams.length === 0 && (
+            <p className="px-2 py-3 text-xs text-white/40">No other streams are live right now.</p>
+          )}
+          {railStreams.map((s) => (
+            <Link
+              key={s.id}
+              href={`/live/${s.id}`}
+              className="flex items-center gap-3 rounded-2xl px-2 py-2.5 transition-colors hover:bg-white/5"
+            >
+              {s.avatar ? (
+                <img src={s.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" draggable={false} />
+              ) : (
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                  {s.name[0]?.toUpperCase() ?? 'L'}
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-white">{s.name}</span>
+                <span className="block truncate text-xs text-white/50">{s.title}</span>
+              </span>
+              <span className="shrink-0 rounded-md bg-red-600 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-white">
+                LIVE
+              </span>
+            </Link>
+          ))}
+        </div>
+      </aside>
+
+      {/* Centre column: the stage, with the gift bar under it */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative min-w-0 flex-1 overflow-hidden">
       <GiftLeaderboard sessionId={id} />
       {/* Video layer */}
       <video
@@ -1004,7 +1144,7 @@ export default function StreamRoomPage() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
       {/* Top-left: host chip + LIVE + viewers */}
-      <div className="absolute left-3 top-3 flex items-center gap-2">
+      <div className="absolute left-3 top-3 flex items-center gap-2 lg:hidden">
         <div className="flex items-center gap-2 rounded-full bg-black/50 py-1 pl-1 pr-3 backdrop-blur-sm">
           {stream?.provider?.avatar_url ? (
             <img
@@ -1520,7 +1660,7 @@ export default function StreamRoomPage() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
 
       {/* Comments */}
-      <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden">
+      <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden lg:hidden">
         {visibleMessages.map((m) => (
           <div key={m.id} className="w-fit max-w-full">
             <p className="pointer-events-auto text-[13px] leading-snug text-white drop-shadow">
@@ -1545,7 +1685,7 @@ export default function StreamRoomPage() {
 
       {/* Like count */}
       {likes > 0 && (
-        <div className="absolute bottom-24 right-3 flex flex-col items-center gap-1">
+        <div className="absolute bottom-24 right-3 flex flex-col items-center gap-1 lg:hidden">
           <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
             {formatCompactCount(likes)}
           </span>
@@ -1554,14 +1694,14 @@ export default function StreamRoomPage() {
 
       {/* Gate notice: leak scan, blocked word, mute, or slow mode */}
       {chatBlocked && (
-        <div className="absolute inset-x-3 bottom-[4.5rem] z-30 animate-pop-in rounded-2xl bg-red-500/95 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-lg">
+        <div className="absolute inset-x-3 bottom-[4.5rem] z-30 animate-pop-in rounded-2xl bg-red-500/95 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-lg lg:hidden">
           {chatBlocked}
         </div>
       )}
 
       {/* Co-host invitation prompt */}
       {cohostInvite === 'invited' && (
-        <div className="absolute inset-x-3 bottom-36 z-30 rounded-2xl bg-white p-4 shadow-xl">
+        <div className="absolute inset-x-3 bottom-36 z-30 rounded-2xl bg-white p-4 shadow-xl lg:mx-auto lg:max-w-md">
           <p className="text-sm font-bold text-charcoal">Co-host invitation</p>
           <p className="mt-0.5 text-xs text-neutral-500">
             {hostName} invited you to publish in this stream. Your camera and mic will go live to
@@ -1586,7 +1726,7 @@ export default function StreamRoomPage() {
       )}
 
       {/* Bottom bar */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 px-3 pb-5 pt-2">
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 px-3 pb-5 pt-2 lg:hidden">
         <div className="flex min-w-0 flex-1 items-center rounded-full bg-black/50 backdrop-blur-sm">
           <input
             value={draft}
@@ -1613,7 +1753,7 @@ export default function StreamRoomPage() {
           <Gift className="h-5 w-5" />
         </button>
         <button
-          onClick={() => spawnHearts(4)}
+          onClick={() => tapLike(4)}
           aria-label="Like"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
         >
@@ -1744,6 +1884,172 @@ export default function StreamRoomPage() {
           }
         }
       `}</style>
+        </div>
+
+        {/* Gift bar: always visible under the stage (desktop) */}
+        <div className="hidden h-[76px] shrink-0 items-center gap-2 border-t border-white/10 bg-[#0B0B0F] px-3 lg:flex">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+            {catalog.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => sendGift(g)}
+                disabled={sendingGift !== null}
+                className={`flex shrink-0 flex-col items-center rounded-2xl border px-3 py-1 transition-all hover:border-primary/60 active:scale-95 disabled:opacity-50 ${
+                  g.tier === 'mega'
+                    ? 'border-gold/60 bg-gold/10'
+                    : g.tier === 'luxury'
+                      ? 'border-primary/50 bg-primary/10'
+                      : 'border-white/10 bg-white/5'
+                }`}
+              >
+                <GiftGlyph name={g.name} tier={g.tier} size="sm" />
+                <span className="text-[10px] font-medium leading-tight text-white">{g.name}</span>
+                <span className="text-[10px] font-bold leading-tight text-gold">
+                  {sendingGift === g.id ? '...' : g.coin_cost.toLocaleString()}
+                </span>
+              </button>
+            ))}
+            {catalog.length === 0 && (
+              <span className="text-xs text-white/40">Gift catalog unavailable.</span>
+            )}
+          </div>
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold/15 px-3 py-1.5 text-xs font-bold text-gold">
+            <span className="inline-block h-3 w-3 rounded-full bg-gold" />
+            {balance === null ? '...' : balance.toLocaleString()} coins
+          </span>
+          <button
+            onClick={() => setGiftOpen(true)}
+            className="shrink-0 rounded-full bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/15"
+          >
+            All gifts
+          </button>
+          <button
+            onClick={() => tapLike(1)}
+            aria-label="Like"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
+          >
+            <Heart className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Chat rail: host, viewers, top gifters, the full chat (desktop) */}
+      <aside className="hidden w-[340px] shrink-0 flex-col border-l border-white/10 bg-[#0B0B0F] lg:flex">
+        <div className="border-b border-white/10 p-4">
+          <div className="flex items-center gap-3">
+            {stream?.provider?.avatar_url ? (
+              <img
+                src={stream.provider.avatar_url}
+                alt={hostName}
+                className="h-11 w-11 rounded-full object-cover"
+                draggable={false}
+              />
+            ) : (
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary font-bold text-white">
+                {hostName[0]?.toUpperCase() ?? 'H'}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-white">{hostName}</p>
+              <p className="truncate text-xs text-white/50">{stream?.title ?? 'Live stream'}</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[10px] font-bold tracking-wide text-white">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
+            </span>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white">
+              <Eye className="h-3.5 w-3.5" /> {formatCompactCount(viewerCount)} watching
+            </span>
+            <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white">
+              <Heart className="h-3.5 w-3.5" /> {formatCompactCount(likes)} likes
+            </span>
+          </div>
+          {pinnedText && (
+            <p className="mt-3 rounded-xl bg-gold/15 px-3 py-2 text-xs font-medium text-gold">
+              Pinned: {pinnedText}
+            </p>
+          )}
+        </div>
+
+        <div className="border-b border-white/10 p-4">
+          <GiftLeaderboard sessionId={id} variant="rail" />
+        </div>
+
+        <div
+          ref={railChatRef}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            railStickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+          }}
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+        >
+          <div className="flex flex-col gap-2">
+            {visibleMessages.length === 0 && (
+              <p className="text-xs text-white/40">No comments yet. Say the first hello.</p>
+            )}
+            {visibleMessages.map((m) => (
+              <p key={m.id} className="text-[13px] leading-snug text-white">
+                {typeof m.level === 'number' && (
+                  <span className="mr-1 rounded-full bg-gold px-1.5 py-px align-middle text-[9px] font-bold text-charcoal">
+                    FAN {m.level}
+                  </span>
+                )}
+                {m.senderId && fanIds.has(m.senderId) && <FanBadge className="mr-1" />}
+                <button
+                  disabled={!canModerate || m.mine}
+                  onClick={() => setModTarget(m)}
+                  className={`font-semibold ${m.mine || (m.senderId && fanIds.has(m.senderId)) ? 'text-gold' : 'text-white/70'} ${canModerate && !m.mine ? 'underline decoration-dotted' : ''}`}
+                >
+                  {m.name}:{' '}
+                </button>
+                <span className="text-white/95">{m.body}</span>
+              </p>
+            ))}
+          </div>
+        </div>
+
+        {chatBlocked && (
+          <p className="mx-3 mb-2 rounded-xl bg-red-500/95 px-3 py-2 text-center text-xs font-semibold text-white">
+            {chatBlocked}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 border-t border-white/10 p-3">
+          <div className="flex min-w-0 flex-1 items-center rounded-full bg-white/10">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendChat()}
+              placeholder="Say something nice..."
+              maxLength={200}
+              className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/40"
+            />
+            <button
+              onClick={sendChat}
+              disabled={!draft.trim()}
+              aria-label="Send comment"
+              className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => setGiftOpen(true)}
+            aria-label="Send a gift"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
+          >
+            <Gift className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => tapLike(1)}
+            aria-label="Like"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white active:scale-95"
+          >
+            <Heart className="h-5 w-5" />
+          </button>
+        </div>
+      </aside>
     </div>
   )
 }

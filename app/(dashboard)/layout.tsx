@@ -223,7 +223,13 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 pb-24 md:pb-8">
+      <main
+        className={
+          /^\/live\/[^/]+/.test(pathname)
+            ? 'mx-auto max-w-7xl px-4 sm:px-6 py-8 pb-24 md:pb-8 lg:mx-0 lg:max-w-none lg:p-0'
+            : 'mx-auto max-w-7xl px-4 sm:px-6 py-8 pb-24 md:pb-8'
+        }
+      >
         {children}
       </main>
 

@@ -11,8 +11,16 @@ interface LeaderRow {
   level: number
 }
 
-/** In-stream gift leaderboard: top gifters this session, live-updated. */
-export function GiftLeaderboard({ sessionId }: { sessionId: string }) {
+/** In-stream gift leaderboard: top gifters this session, live-updated.
+ * The overlay variant floats over the stage on mobile; the rail
+ * variant is the static top-3 block pinned in the desktop chat rail. */
+export function GiftLeaderboard({
+  sessionId,
+  variant = 'overlay',
+}: {
+  sessionId: string
+  variant?: 'overlay' | 'rail'
+}) {
   const [rows, setRows] = useState<LeaderRow[]>([])
   const supabase = createClient()
 
@@ -51,9 +59,35 @@ export function GiftLeaderboard({ sessionId }: { sessionId: string }) {
     return () => { live = false; supabase.removeChannel(ch) }
   }, [sessionId])
 
+  if (variant === 'rail') {
+    return (
+      <div>
+        <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gold">
+          <Star className="h-3 w-3" /> Top gifters
+        </p>
+        {rows.length === 0 ? (
+          <p className="mt-2 text-xs text-white/40">No gifts yet. The first gift takes the top spot.</p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {rows.slice(0, 3).map((r, i) => (
+              <div key={r.userId} className="flex items-center justify-between text-xs text-white">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className={`font-bold ${i === 0 ? 'text-gold' : 'text-white/60'}`}>{i + 1}.</span>
+                  <span className="truncate">{r.name}</span>
+                  <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-white">Lv{r.level}</span>
+                </span>
+                <span className="shrink-0 font-mono text-white/80">{r.coins.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (rows.length === 0) return null
   return (
-    <div className="pointer-events-none absolute left-3 top-24 z-20 w-44 rounded-2xl bg-black/45 p-2.5 backdrop-blur-sm">
+    <div className="pointer-events-none absolute left-3 top-24 z-20 w-44 rounded-2xl bg-black/45 p-2.5 backdrop-blur-sm lg:hidden">
       <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gold">
         <Star className="h-3 w-3" /> Top gifters
       </p>
