@@ -18,7 +18,7 @@ import {
   SearchX,
   SlidersHorizontal,
   X,
-} from 'lucide-react';
+} from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
 import { MAP_CITIES } from '@/lib/map/mockProviders';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';

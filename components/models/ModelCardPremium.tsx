@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { Star, MapPin, Heart, Shield, Clock, Languages } from 'lucide-react'
+import { Star, MapPin, Heart, Shield, Clock, Languages } from '@/lib/icons'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
 
 interface ModelCardPremiumProps {

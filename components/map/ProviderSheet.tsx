@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from 'lucide-react';
+import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from '@/lib/icons';
 import { RateCard } from '@/components/rates/RateCard';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';

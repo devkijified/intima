@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, Star } from 'lucide-react';
+import { BadgeCheck, Star } from '@/lib/icons';
 import { formatPrice } from '@/lib/utils/helpers';
 import { formatRecency } from '@/lib/utils/recency';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';

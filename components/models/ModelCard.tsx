@@ -15,7 +15,7 @@ import {
   Phone,
   Video,
   UserPlus
-} from 'lucide-react'
+} from '@/lib/icons'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
 import { useCall } from '@/components/calls/CallProvider'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
