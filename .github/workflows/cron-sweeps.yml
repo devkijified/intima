@@ -1,0 +1,18 @@
+name: Daily cron sweeps
+
+on:
+  schedule:
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+# CRON_SECRET must exist in repo secrets and in Vercel env, with the same value.
+jobs:
+  sweeps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispute sweep
+        run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/disputes
+      - name: Subscription sweep
+        run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/subscriptions
+      - name: Reconcile sweep
+        run: curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://intima-snowy.vercel.app/api/cron/reconcile
