@@ -1,7 +1,13 @@
-/* Intima service worker: minimal offline shell + static cache.
- * Installability (the "Add to Home Screen" prompt) requires a service
- * worker; this one stays lean and never caches authenticated pages. */
-const CACHE = 'intima-shell-v2';
+/* Intima service worker: offline shell + Web Push.
+ *
+ * Strategy: NETWORK-FIRST for everything same-origin. A cache-first
+ * static-chunk cache under a fixed cache name previously risked serving
+ * code from an old deploy against a new build after an update, which
+ * surfaced on devices as "Application error: a client-side exception
+ * has occurred". Cached responses are now only an offline fallback,
+ * and the cache name is versioned so old caches are purged on activate.
+ */
+const CACHE = 'intima-shell-v3';
 const SHELL = ['/icons/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -22,21 +28,13 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  // Only cache same-origin GETs for static assets and the shell.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
-  // Navigations always hit the network first: the app shell HTML must
-  // never go stale (new splash, age gate fixes, etc.).
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/'))
-    );
-    return;
-  }
+
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request).then((res) => {
-        // Cache icons, manifest, and Next static chunks.
+    fetch(request)
+      .then((res) => {
+        // Keep a copy of static assets for offline fallback only.
         if (
           res.ok &&
           (url.pathname.startsWith('/icons/') ||
@@ -47,9 +45,8 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE).then((cache) => cache.put(request, copy));
         }
         return res;
-      }).catch(() => cached);
-      return cached || network;
-    })
+      })
+      .catch(() => caches.match(request).then((c) => c || caches.match('/')))
   );
 });
 
