@@ -56,7 +56,7 @@ export function RequestConnectionModal({
   useEffect(() => {
     let cancelled = false
     setEligibility(null)
-    fetch(`/api/connections/eligibility?provider_id=${activeId}`)
+    fetch(`/api/connections?provider_id=${activeId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!cancelled && data) setEligibility(data)

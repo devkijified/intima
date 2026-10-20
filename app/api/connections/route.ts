@@ -32,7 +32,7 @@ async function requirementsFor(
 }
 
 /**
- * GET /api/connections/eligibility?provider_id=...
+ * GET /api/connections?provider_id=...
  * Pre-check shown before payment: does this client meet the companion's
  * requirements (Bybit counterparty conditions)? Returns the checks.
  */
