@@ -57,6 +57,12 @@ export default function MessagesPage() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
+        const { count: unreadCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('connection_id', c.id)
+          .neq('sender_id', user.id)
+          .is('read_at', null)
         rows.push({
           connectionId: c.id,
           counterpartId: otherId,
@@ -64,7 +70,7 @@ export default function MessagesPage() {
           avatar: prof?.avatar_url ?? null,
           lastBody: last?.body ?? null,
           lastAt: last?.created_at ?? c.created_at,
-          unread: 0,
+          unread: unreadCount ?? 0,
         })
       }
       if (live) { setThreads(rows); setLoading(false) }
@@ -118,7 +124,7 @@ export default function MessagesPage() {
                   <span className="shrink-0 text-xs text-neutral-400">{timeAgo(t.lastAt)}</span>
                 </div>
                 <p className="truncate text-sm text-neutral-500">
-                  {t.lastBody ?? 'Connection active — say hello 👋'}
+                  {t.lastBody ?? 'Connection active — say hello'}
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300" />

@@ -81,6 +81,14 @@ export default function ThreadPage() {
         .eq('connection_id', connectionId)
         .order('created_at', { ascending: true })
       if (live) { setMsgs(history ?? []); setLoading(false) }
+      // Mark their messages as read (best effort; read_at drives unread badges).
+      supabase
+        .from('messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('connection_id', connectionId)
+        .neq('sender_id', user.id)
+        .is('read_at', null)
+        .then(() => {})
 
       // Realtime: new messages in this thread.
       const channel = supabase

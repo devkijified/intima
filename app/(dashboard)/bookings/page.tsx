@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { Calendar, MessageCircle, Phone, Video, ArrowUpRight, Loader2, Wallet } from '@/lib/icons'
 
 type ConnectionStatus = 'pending_payment' | 'active' | 'refunded' | 'expired'
@@ -47,6 +48,7 @@ function formatDate(iso: string) {
 
 export default function BookingsPage() {
   const [connections, setConnections] = useState<ConnectionRow[]>([])
+  const [payFor, setPayFor] = useState<ConnectionRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [isModel, setIsModel] = useState(false)
   const supabase = createClient()
@@ -243,18 +245,27 @@ export default function BookingsPage() {
               )}
               {c.status === 'pending_payment' && !isModel && (
                 <div className="mt-4 border-t border-neutral-100 pt-4">
-                  <Link
-                    href="/"
+                  <button
+                    onClick={() => setPayFor(c)}
                     className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-amber-600"
                   >
                     <Wallet className="h-4 w-4" />
                     Complete payment
-                  </Link>
+                  </button>
                 </div>
               )}
             </li>
           ))}
         </ul>
+      )}
+      {payFor && (
+        <RequestConnectionModal
+          providerId={payFor.counterpart.id}
+          providerName={payFor.counterpart.display_name ?? 'Companion'}
+          providerAvatarUrl={payFor.counterpart.avatar_url}
+          onClose={() => setPayFor(null)}
+          onConnected={() => window.location.reload()}
+        />
       )}
     </div>
   )

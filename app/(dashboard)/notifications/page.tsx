@@ -79,7 +79,7 @@ export default function NotificationsPage() {
       if (res.ok) {
         setPushMsg('Push is on. Alerts will pop up here even with the app closed.')
       } else if (res.reason === 'no-key') {
-        setPushMsg("Push isn't set up on the server yet. The site owner needs to add the VAPID keys and redeploy.")
+        setPushMsg("Push notifications are not available right now.")
       } else if (res.reason === 'denied') {
         setPushMsg('Notifications are blocked. Allow them in your browser settings, then try again.')
       } else if (res.reason === 'unsupported') {
@@ -100,7 +100,7 @@ export default function NotificationsPage() {
       if (data?.ok && data?.sent > 0) {
         setPushMsg('Test sent. It should pop up on this device now.')
       } else if (data?.pushSkipped) {
-        setPushMsg("Push isn't set up on the server yet (VAPID keys missing).")
+        setPushMsg("Push notifications are not available right now.")
       } else if (data?.sent === 0) {
         setPushMsg('This device is not subscribed. Turn push on first.')
       } else {
@@ -166,7 +166,7 @@ export default function NotificationsPage() {
         </div>
         {push === 'subscribed' && (
           <button onClick={sendTestPush} disabled={pushBusy} className="mt-3 text-xs font-semibold text-primary hover:underline disabled:opacity-50">
-            Send a test push
+            Send me a test notification
           </button>
         )}
         {pushMsg && <p className="mt-2 text-xs text-neutral-500">{pushMsg}</p>}

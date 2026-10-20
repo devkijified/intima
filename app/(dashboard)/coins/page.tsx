@@ -22,6 +22,15 @@ export default function CoinsPage() {
   const [topups, setTopups] = useState<Topup[]>([])
   const [buying, setBuying] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [cardEnabled, setCardEnabled] = useState(false)
+
+  useEffect(() => {
+    // Card checkout is only shown when the server says Paystack is configured.
+    fetch('/api/coins/methods')
+      .then((r) => (r.ok ? r.json() : { card: false }))
+      .then((d) => setCardEnabled(!!d.card))
+      .catch(() => setCardEnabled(false))
+  }, [])
   const [method, setMethod] = useState<'paystack' | 'transfer'>('transfer')
   const [intent, setIntent] = useState<{
     reference: string; amountNgn: number; coins: number; expiresAt: string
@@ -131,21 +140,23 @@ export default function CoinsPage() {
       {/* Packages */}
       <h2 className="mt-6 text-sm font-bold uppercase tracking-widest text-neutral-400">Buy coins</h2>
 
-      {/* Payment method tabs */}
-      <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-neutral-100 p-1">
-        <button
-          onClick={() => setMethod('transfer')}
-          className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'transfer' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
-        >
-          Bank transfer
-        </button>
-        <button
-          onClick={() => setMethod('paystack')}
-          className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'paystack' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
-        >
-          Card / Paystack
-        </button>
-      </div>
+      {/* Payment method tabs — card checkout only appears once Paystack is live. */}
+      {cardEnabled && (
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-neutral-100 p-1">
+          <button
+            onClick={() => setMethod('transfer')}
+            className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'transfer' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
+          >
+            Bank transfer
+          </button>
+          <button
+            onClick={() => setMethod('paystack')}
+            className={`rounded-xl py-2.5 text-sm font-semibold transition-all ${method === 'paystack' ? 'bg-white text-charcoal shadow-xs' : 'text-neutral-500'}`}
+          >
+            Card / Paystack
+          </button>
+        </div>
+      )}
 
       {method === 'transfer' && intent && (
         <div className="mt-3 rounded-3xl border-2 border-gold/60 bg-gold/5 p-5">
@@ -176,7 +187,14 @@ export default function CoinsPage() {
             Coins land automatically once the transfer confirms (usually a few minutes).
           </p>
           <button
-            onClick={() => setIntent(null)}
+            onClick={async () => {
+              await fetch('/api/coins/transfer-intent/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reference: intent.reference }),
+              }).catch(() => {})
+              setIntent(null)
+            }}
             className="mt-2 w-full text-center text-xs font-medium text-neutral-400 underline"
           >
             Cancel this transfer

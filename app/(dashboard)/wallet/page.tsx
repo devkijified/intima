@@ -9,6 +9,7 @@ export default function WalletPage() {
   const [role, setRole] = useState('client')
   const [coinBalance, setCoinBalance] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [transactions, setTransactions] = useState<any[]>([])
   const supabase = createClient()
 
   useEffect(() => {
@@ -21,6 +22,33 @@ export default function WalletPage() {
       const { data: bal } = await supabase.from('coin_balances')
         .select('balance').eq('user_id', user.id).maybeSingle()
       setCoinBalance(bal?.balance ?? 0)
+      const { data: topups } = await supabase.from('coin_topups')
+        .select('reference, coins, amount_ngn, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      const { data: conns } = await supabase.from('connections')
+        .select('fee_ngn, created_at, provider_id, profiles!connections_provider_id_fkey(display_name)')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      const txs = [
+        ...((topups ?? []) as any[]).map((t) => ({
+          id: `top-${t.reference}`,
+          label: `+${t.coins.toLocaleString()} coins`,
+          sub: t.reference.startsWith('transfer-') ? 'Bank transfer top-up' : 'Card top-up',
+          amount: `₦${t.amount_ngn.toLocaleString()}`,
+          date: t.created_at,
+        })),
+        ...((conns ?? []) as any[]).map((c) => ({
+          id: `conn-${c.created_at}`,
+          label: `Connection fee — ${(c.profiles as any)?.display_name ?? 'companion'}`,
+          sub: 'Unlocked chat, calls, WhatsApp',
+          amount: `-₦${c.fee_ngn.toLocaleString()}`,
+          date: c.created_at,
+        })),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      setTransactions(txs.slice(0, 20))
       setLoading(false)
     }
     load()
@@ -54,26 +82,31 @@ export default function WalletPage() {
         </p>
       </Link>
 
-      <div className="mt-4 rounded-3xl bg-gradient-to-r from-neutral-800 to-neutral-900 p-6 text-white">
-        <p className="text-sm text-white/80">Naira Balance</p>
-        <p className="mt-1 text-4xl font-bold">₦0</p>
-        <p className="mt-2 text-xs text-white/70">
-          {role === 'model'
-            ? 'Your earnings from paid live streams will appear here.'
-            : 'Connection fees you pay will appear here.'}
-        </p>
-      </div>
 
       <div className="mt-6 rounded-3xl border border-neutral-200/80 bg-white p-6">
         <h2 className="font-semibold text-charcoal">Transaction History</h2>
-        <div className="mt-4 rounded-2xl bg-cream p-8 text-center">
-          <Wallet className="mx-auto h-8 w-8 text-neutral-300" />
+        {transactions.length > 0 ? (
+          <div className="mt-3 divide-y divide-neutral-100">
+            {transactions.map((t) => (
+              <div key={t.id} className="flex items-center justify-between py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-charcoal">{t.label}</p>
+                  <p className="text-xs text-neutral-500">{t.sub} · {new Date(t.date).toLocaleDateString()}</p>
+                </div>
+                <span className="shrink-0 text-sm font-bold text-charcoal">{t.amount}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl bg-cream p-8 text-center">
+            <Wallet className="mx-auto h-8 w-8 text-neutral-300" />
           <p className="mt-2 text-sm font-medium text-charcoal">No transactions yet</p>
-          <p className="mt-1 flex items-center justify-center gap-1 text-xs text-neutral-500">
-            <Info className="h-3 w-3" />
-            Coin top-ups appear in <Link href="/coins" className="font-medium text-primary underline">Coins</Link>.
-          </p>
-        </div>
+            <p className="mt-1 flex items-center justify-center gap-1 text-xs text-neutral-500">
+              <Info className="h-3 w-3" />
+              Coin top-ups appear in <Link href="/coins" className="font-medium text-primary underline">Coins</Link>.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
