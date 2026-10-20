@@ -548,7 +548,10 @@ export default function IntimaMap() {
   const showList = view === 'list' || mapFailed;
 
   return (
-    <div className="fixed inset-0 w-full overflow-hidden bg-[#111118]">
+    <div
+      className="fixed left-0 right-0 top-0 w-full overflow-hidden bg-[#111118]"
+      style={{ height: 'calc(100dvh + env(safe-area-inset-bottom, 0px))' }}
+    >
       <div
         ref={containerRef}
         className={`absolute inset-0 ${usingRaster ? 'map-raster-dark' : ''}`}
