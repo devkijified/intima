@@ -9,7 +9,6 @@ import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, Shield
   Banknote,} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
-import PushAutoSubscribe from '@/components/PushAutoSubscribe'
 
 export default function DashboardLayout({
   children,
@@ -64,7 +63,6 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
-      <PushAutoSubscribe />
       <header
         className="border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md sticky top-0 z-50"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
 /**
  * Simple in-memory token bucket rate limiter.
@@ -27,7 +28,7 @@ function clientIp(request: NextRequest): string {
   return 'unknown'
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const ip = clientIp(request)
   const now = Date.now()
 
@@ -54,7 +55,27 @@ export function middleware(request: NextRequest) {
     })
   }
 
-  return NextResponse.next()
+  // Refresh the Supabase session so server components (admin layout, etc.)
+  // see the same auth state as the browser. Without this, an expired
+  // access token looks like "not logged in" to the server.
+  const res = NextResponse.next()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet: { name: string; value: string; options?: object }[]) => {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            res.cookies.set(name, value, options as Record<string, unknown>)
+          )
+        },
+      },
+    }
+  )
+  await supabase.auth.getUser()
+
+  return res
 }
 
 export const config = {

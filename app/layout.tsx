@@ -3,6 +3,7 @@ import { Fraunces, Inter } from 'next/font/google'
 import './globals.css'
 import { AgeGate } from '@/components/AgeGate'
 import { SplashDismiss } from '@/components/SplashDismiss'
+import PushAutoSubscribe from '@/components/PushAutoSubscribe'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
@@ -65,6 +66,7 @@ export default function RootLayout({
           <div className="splash-tag">Where Elegance Meets Connection</div>
         </div>
         <SplashDismiss />
+        <PushAutoSubscribe />
         {/* AgeGate still blocks everything until verified. CallProvider sits
             inside it so voice/video calls work on every route, including the
             public map landing page. */}

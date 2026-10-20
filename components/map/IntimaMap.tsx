@@ -533,7 +533,7 @@ export default function IntimaMap() {
 
   const goToProfile = (p: MapProvider) => {
     if (p.userId) {
-      router.push(`/companion/${p.userId}`);
+      router.push(`/companion/${p.username ?? p.userId}`);
       return;
     }
     setSelected(p);
