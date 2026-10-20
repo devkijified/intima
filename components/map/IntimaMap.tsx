@@ -461,7 +461,7 @@ export default function IntimaMap() {
       if (cancelled || !mapRef.current || !lib) return;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = filtered.map((p) =>
-        new lib.Marker({ element: markerElement(p, setSelected) })
+        new lib.Marker({ element: markerElement(p, goToProfile) })
           .setLngLat([p.lng, p.lat])
           .addTo(mapRef.current as MLMap),
       );
@@ -529,6 +529,14 @@ export default function IntimaMap() {
       return;
     }
     void startCall(p.userId, p.displayName, 'video', p.avatar);
+  };
+
+  const goToProfile = (p: MapProvider) => {
+    if (p.userId) {
+      router.push(`/models/${p.userId}`);
+      return;
+    }
+    setSelected(p);
   };
 
   const handleViewProfile = (p: MapProvider) => {
@@ -820,7 +828,7 @@ export default function IntimaMap() {
           ) : filtered.length > 0 ? (
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {filtered.map((p) => (
-                <ProviderListCard key={p.id} provider={p} onSelect={setSelected} />
+                <ProviderListCard key={p.id} provider={p} onSelect={goToProfile} />
               ))}
             </ul>
           ) : (
