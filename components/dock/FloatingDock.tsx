@@ -111,7 +111,7 @@ function DockShell({
 
   return (
     <div
-      className={`fixed right-3 z-[70] overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/25 transition-all bottom-[calc(5.75rem+env(safe-area-inset-bottom))] md:right-6 md:bottom-6 ${
+      className={`fixed right-3 z-[80] overflow-hidden rounded-2xl bg-black shadow-2xl ring-1 ring-white/25 transition-all bottom-[calc(5.75rem+env(safe-area-inset-bottom))] md:right-6 md:bottom-6 ${
         big ? 'w-[86vw] max-w-[430px]' : 'w-[188px] md:w-[228px]'
       }`}
     >
