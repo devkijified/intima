@@ -31,9 +31,14 @@ CREATE POLICY "transfer_own" ON public.transfer_intents
 -- Inserts/updates go through server routes (service role).
 
 -- Platform bank details, set in Admin → Settings. Never hardcoded.
+-- NOTE: platform_settings.value is a json column, so string values must
+-- be JSON string literals ('""' is an empty string). Plain '' is invalid
+-- JSON and fails the whole script (found when this migration was first
+-- run for real on 2026-10-20; the transfer_intents table above rolled
+-- back with it, so this file is the corrected, complete version).
 INSERT INTO public.platform_settings (key, value, description)
 VALUES
-  ('bank_name', '', 'Platform bank name for transfer top-ups (e.g. UBA)'),
-  ('bank_account_number', '', 'Platform account number for transfer top-ups'),
-  ('bank_account_name', '', 'Platform account name for transfer top-ups')
+  ('bank_name', '""', 'Platform bank name for transfer top-ups (e.g. UBA)'),
+  ('bank_account_number', '""', 'Platform account number for transfer top-ups'),
+  ('bank_account_name', '""', 'Platform account name for transfer top-ups')
 ON CONFLICT (key) DO NOTHING;

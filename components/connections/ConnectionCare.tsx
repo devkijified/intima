@@ -49,12 +49,14 @@ export default function ConnectionCare({
   disputeDeadline,
   feeNgn,
   otherName,
+  viewerIsClient,
 }: {
   connectionId: string
   feeState: string | null
   disputeDeadline: string | null
   feeNgn: number | null
   otherName: string
+  viewerIsClient: boolean
 }) {
   const [fee, setFee] = useState(feeState)
   const [showDispute, setShowDispute] = useState(false)
@@ -124,7 +126,11 @@ export default function ConnectionCare({
         canReview: prev?.canReview ?? true,
         mine: data.mine ?? { rating, comment: comment || null, status: 'pending' },
         counterpartSubmitted: !!data.counterpartSubmitted,
-        counterpartReview: prev?.counterpartReview ?? null,
+        // The POST response carries the post-publish state; when both
+        // reviews are in, the counterpart's review is revealed in it.
+        // Keeping the stale local value here made the reveal look lost
+        // until a page reload.
+        counterpartReview: data.counterpartReview ?? prev?.counterpartReview ?? null,
       }))
     } catch (e) {
       setReviewError(e instanceof Error ? e.message : 'Could not save your review')
@@ -141,7 +147,7 @@ export default function ConnectionCare({
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-charcoal">
-                Your {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
+                {viewerIsClient ? 'Your' : 'The'} {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
               </p>
               <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
                 If anything goes wrong, open a dispute and our team will review it. The fee stays frozen until they decide.

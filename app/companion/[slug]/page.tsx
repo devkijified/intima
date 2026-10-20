@@ -175,7 +175,10 @@ export default function ModelDetailPage() {
   const { startCall } = useCall()
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setLoggedIn(!!user))
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setLoggedIn(!!user)
+      setViewerId(user?.id ?? null)
+    })
   }, [supabase])
 
   const [provider, setProvider] = useState<Provider | null>(null)
@@ -189,6 +192,7 @@ export default function ModelDetailPage() {
   const [connected, setConnected] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [loggedIn, setLoggedIn] = useState(false)
+  const [viewerId, setViewerId] = useState<string | null>(null)
   const [eligibility, setEligibility] = useState<Eligibility | null>(null)
   const showToast = (msg: string) => {
     setToast(msg)
@@ -606,7 +610,14 @@ export default function ModelDetailPage() {
 
         {/* Action row: wraps on narrow phones so the CTA never crushes */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {connected ? (
+          {viewerId !== null && viewerId === provider.id ? (
+            <Link
+              href="/profile"
+              className="btn-luxe h-12 min-w-[218px] flex-1 gap-1.5 whitespace-nowrap px-4 text-[15px]"
+            >
+              Edit your profile
+            </Link>
+          ) : connected ? (
             <span className="flex-1 rounded-full bg-green-50 py-2.5 text-center text-sm font-bold text-green-700">
               Connected
             </span>
@@ -658,13 +669,15 @@ export default function ModelDetailPage() {
           >
             <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
           </button>
-          <button
-            onClick={toggleFollow}
-            disabled={followBusy}
-            className={'rounded-full px-4 py-2 text-xs font-semibold transition-all ' + (following ? 'bg-cream text-charcoal' : 'bg-gold text-charcoal')}
-          >
-            {following ? 'Following' : 'Follow'}
-          </button>
+          {viewerId !== provider.id && (
+            <button
+              onClick={toggleFollow}
+              disabled={followBusy}
+              className={'rounded-full px-4 py-2 text-xs font-semibold transition-all ' + (following ? 'bg-cream text-charcoal' : 'bg-gold text-charcoal')}
+            >
+              {following ? 'Following' : 'Follow'}
+            </button>
+          )}
           <button
             onClick={async () => {
               if (!provider.username) { showToast('Link not ready yet'); return }

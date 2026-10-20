@@ -149,14 +149,22 @@ export default function ThreadPage() {
     if (!text || !me || sending || !active) return
     setSending(true)
     const supabase = createClient()
-    const { error } = await supabase.from('messages').insert({
+    const { data: row, error } = await supabase.from('messages').insert({
       connection_id: connectionId,
       sender_id: me,
       body: text.slice(0, 1000),
       ...(disappearing ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() } : {}),
-    })
+    }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by').single()
     setSending(false)
     if (!error) {
+      // Show the message immediately from the insert result. Relying on
+      // the realtime echo alone made sends look lost (the echo can lag
+      // or miss), which invited duplicate retries. The realtime handler
+      // dedupes by id, so appending here is safe.
+      if (row) {
+        const m = row as Msg
+        setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+      }
       setInput('')
       setShowTemplates(false)
     }
@@ -183,8 +191,8 @@ export default function ThreadPage() {
           <p className="truncate text-sm font-semibold text-charcoal">
             {other?.display_name ?? 'Member'}
           </p>
-          <p className={`text-xs ${active ? 'text-emerald-600' : 'text-neutral-400'}`}>
-            {active ? 'Connection active' : 'Connection not active'}
+          <p className={`text-xs ${!loading && active ? 'text-emerald-600' : 'text-neutral-400'}`}>
+            {loading ? 'Loading…' : active ? 'Connection active' : 'Connection not active'}
             {otherRating && (
               <span className="text-neutral-500"> · ★ {otherRating.avg} ({otherRating.count} review{otherRating.count === 1 ? '' : 's'})</span>
             )}
@@ -211,6 +219,7 @@ export default function ThreadPage() {
           disputeDeadline={connInfo.disputeDeadline}
           feeNgn={connInfo.feeNgn}
           otherName={other?.display_name ?? 'them'}
+          viewerIsClient={!!other?.isProvider}
         />
       )}
 
@@ -315,15 +324,21 @@ export default function ThreadPage() {
                 const price = parseInt(ppvPrice, 10)
                 if (!url || !price || price <= 0 || !me) return
                 const isVideo = /\.mp4|\.webm/i.test(url)
-                const { error } = await createClient().from('messages').insert({
+                const { data: row, error } = await createClient().from('messages').insert({
                   connection_id: connectionId,
                   sender_id: me,
                   body: 'Locked media',
                   media_url: url,
                   media_type: isVideo ? 'video' : 'image',
                   ppv_price_coins: price,
-                })
-                if (!error) { setPpvUrl(''); setShowPpv(false) }
+                }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by').single()
+                if (!error) {
+                  if (row) {
+                    const m = row as Msg
+                    setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+                  }
+                  setPpvUrl(''); setShowPpv(false)
+                }
               }}
               className="rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal"
             >
@@ -336,7 +351,7 @@ export default function ThreadPage() {
 
       {/* Composer */}
       <div className="shrink-0 border-t border-neutral-100 bg-white px-4 py-3">
-        {!active && (
+        {!loading && !active && (
           <p className="mb-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
             This connection is not active. Chat unlocks after payment.
           </p>
