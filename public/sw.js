@@ -7,7 +7,7 @@
  * has occurred". Cached responses are now only an offline fallback,
  * and the cache name is versioned so old caches are purged on activate.
  */
-const CACHE = 'intima-shell-v4';
+const CACHE = 'intima-shell-v5';
 const SHELL = ['/icons/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
