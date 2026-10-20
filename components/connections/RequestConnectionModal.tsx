@@ -49,7 +49,21 @@ export function RequestConnectionModal({
   const [activeId, setActiveId] = useState(providerId)
   const [activeName, setActiveName] = useState(providerName)
   const [activeAvatar, setActiveAvatar] = useState<string | null>(providerAvatarUrl ?? null)
+  const [eligibility, setEligibility] = useState<{ eligible: boolean; checks: { key: string; label: string; ok: boolean; have: string }[] } | null>(null)
   const supabase = createClient()
+
+  // Bybit-style pre-check: never let an unqualified client reach payment.
+  useEffect(() => {
+    let cancelled = false
+    setEligibility(null)
+    fetch(`/api/connections/eligibility?provider_id=${activeId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setEligibility(data)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeId])
 
   /** Switch the modal to a recommended companion (fee already paid). */
   function onPickSimilar(sp: SimilarProvider) {
@@ -108,11 +122,8 @@ export function RequestConnectionModal({
     return scored.slice(0, 3).map(({ score, ...rest }) => rest)
   }
 
-  async function handlePay() {
-    if (fee === null) return
-    setStep('processing')
-    setError('')
-
+  /** Everything after a payment lands, shared by the card and crypto rails. */
+  async function completeBooking(paymentRef: string) {
     try {
       const {
         data: { user },
@@ -120,18 +131,7 @@ export function RequestConnectionModal({
       if (!user) {
         throw new Error('Please sign in to request a connection.')
       }
-
-      const provider = getPaymentProvider()
-      const reference = newPaymentReference()
-      const init = await provider.initialize(fee, reference, {
-        client_id: user.id,
-        provider_id: activeId,
-        kind: 'connection_fee',
-      })
-      const status = await provider.verify(init.reference)
-      if (status !== 'paid') {
-        throw new Error('Payment was not completed. Please try again.')
-      }
+      void user
 
       // Availability check after payment: if she is offline, recommend similar providers.
       const { data: presence } = await supabase
@@ -146,21 +146,96 @@ export function RequestConnectionModal({
         return
       }
 
-      const { error: insertError } = await supabase.from('connections').insert({
-        client_id: user.id,
-        provider_id: activeId,
-        fee_ngn: fee,
-        status: 'active',
-        payment_ref: init.reference,
-        proposed_rate_ngn:
-          ratesNegotiable && proposedRate.trim() !== ''
-            ? Math.max(0, parseInt(proposedRate.replace(/[^0-9]/g, ''), 10) || 0)
-            : null,
+      // The server re-checks her requirements and the fee, then creates
+      // the connection. A 403 here means the client does not qualify.
+      const res = await fetch('/api/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_id: activeId,
+          payment_ref: paymentRef,
+          proposed_rate_ngn:
+            ratesNegotiable && proposedRate.trim() !== ''
+              ? Math.max(0, parseInt(proposedRate.replace(/[^0-9]/g, ''), 10) || 0)
+              : null,
+        }),
       })
-      if (insertError) throw insertError
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? 'Could not create the connection. Please try again.')
+      }
 
       setStep('success')
       onConnected()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setStep('error')
+    }
+  }
+
+  async function handlePay() {
+    if (fee === null) return
+    setStep('processing')
+    setError('')
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) throw new Error('Please sign in to request a connection.')
+
+      const provider = getPaymentProvider()
+      const reference = newPaymentReference()
+      const init = await provider.initialize(fee, reference, {
+        client_id: user.id,
+        provider_id: activeId,
+        kind: 'connection_fee',
+      })
+      const status = await provider.verify(init.reference)
+      if (status !== 'paid') {
+        throw new Error('Payment was not completed. Please try again.')
+      }
+      await completeBooking(init.reference)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setStep('error')
+    }
+  }
+
+  /**
+   * Crypto rail: open the hosted invoice in a new tab, then poll our
+   * status endpoint (driven by the gateway webhook) until it lands.
+   */
+  async function handleCryptoPay() {
+    setStep('processing')
+    setError('')
+    try {
+      const res = await fetch('/api/payments/crypto/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'connection_fee', provider_id: activeId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.invoiceUrl || !data?.reference) {
+        throw new Error(data?.error || 'Could not start crypto checkout.')
+      }
+      window.open(data.invoiceUrl, '_blank', 'noopener')
+      const deadline = Date.now() + 10 * 60 * 1000
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 4000))
+        const st = await fetch(`/api/payments/crypto/status?ref=${data.reference}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null)
+        if (st?.status === 'finished') {
+          await completeBooking(data.reference)
+          return
+        }
+        if (st?.status === 'failed' || st?.status === 'expired') {
+          throw new Error('The crypto payment did not complete. Please try again.')
+        }
+        if (Date.now() > deadline) {
+          throw new Error('Still waiting for the network to confirm. Your booking completes automatically once it does.')
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       setStep('error')
@@ -270,12 +345,48 @@ export function RequestConnectionModal({
               </p>
             )}
 
+            {eligibility && eligibility.checks.length > 0 && (
+              <div className="mb-5 rounded-2xl bg-cream p-4 ring-1 ring-black/[0.04]">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-400">Her requirements</p>
+                <div className="mt-2 space-y-1.5">
+                  {eligibility.checks.map((c) => (
+                    <p key={c.key} className="flex items-center gap-2 text-sm">
+                      {c.ok
+                        ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                        : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />}
+                      <span className="font-medium text-charcoal">{c.label}</span>
+                      <span className="text-xs text-neutral-400">({c.have})</span>
+                    </p>
+                  ))}
+                </div>
+                {!eligibility.eligible && (
+                  <p className="mt-2.5 text-xs leading-relaxed text-neutral-500">
+                    You cannot pay yet. Meet the items above first, then come back.
+                    {eligibility.checks.some((c) => c.key === 'verified' && !c.ok) && (
+                      <> <a href="/verification" className="font-semibold text-primary">Get verified</a></>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handlePay}
-              disabled={fee === null}
+              disabled={fee === null || (eligibility !== null && !eligibility.eligible)}
               className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-3.5 rounded-2xl transition-colors disabled:opacity-50"
             >
-              {fee === null ? 'Loading fee...' : `Pay ${formatPrice(fee)} (Test mode)`}
+              {fee === null
+                ? 'Loading fee...'
+                : eligibility && !eligibility.eligible
+                  ? 'Requirements not met yet'
+                  : `Pay ${formatPrice(fee)} (Test mode)`}
+            </button>
+            <button
+              onClick={handleCryptoPay}
+              disabled={eligibility !== null && !eligibility.eligible}
+              className="mt-3 w-full rounded-2xl border-2 border-charcoal/80 py-3 text-sm font-semibold text-charcoal transition-all hover:bg-charcoal hover:text-white disabled:opacity-40"
+            >
+              Or pay with crypto (USDT)
             </button>
             <p className="text-xs text-gray-400 text-center mt-3">
               One active connection per provider. Refunds follow the published policy.

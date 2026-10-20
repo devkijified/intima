@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, BadgeCheck, ChevronUp, Heart, LayoutGrid, ListChecks,
-  MapPin, Phone, Play, Star, Tag, Video, X,
+  ArrowLeft, BadgeCheck, CheckCircle2, ChevronUp, Heart, LayoutGrid, ListChecks,
+  MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { RateCard } from '@/components/rates/RateCard'
@@ -15,6 +15,8 @@ import { formatCompactCount } from '@/lib/utils/helpers'
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings'
 import { useCall } from '@/components/calls/CallProvider'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
+import { evaluateEligibility, hasRequirements, type Eligibility } from '@/lib/connections/eligibility'
+import { companionShareLink, shareLink } from '@/lib/links'
 import { StoryViewer, type Story } from '@/components/stories/StoryViewer'
 import type { MockReview } from '@/lib/map/mockReviews'
 
@@ -42,6 +44,28 @@ interface Provider {
   gallery: string[]
   videos: string[]
   lastActiveAt: string | null
+  travelMode: string
+  travelCities: string[]
+  reqVerified: boolean
+  reqMinConnections: number
+  reqMinDays: number
+}
+
+/** One requirement row: green check when met, red cross when not, neutral when unknown (guest). */
+function ReqRow({ ok, label, have }: { ok: boolean | undefined; label: string; have?: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      {ok === true ? (
+        <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-500" />
+      ) : ok === false ? (
+        <XCircle className="h-4.5 w-4.5 shrink-0 text-red-400" />
+      ) : (
+        <span className="h-[18px] w-[18px] shrink-0 rounded-full ring-2 ring-neutral-200" />
+      )}
+      <span className="text-sm font-medium text-charcoal">{label}</span>
+      {have && <span className="text-xs text-neutral-400">({have})</span>}
+    </div>
+  )
 }
 
 /** Self-contained video slide: keyframe thumbnail until tapped. */
@@ -165,6 +189,7 @@ export default function ModelDetailPage() {
   const [connected, setConnected] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [loggedIn, setLoggedIn] = useState(false)
+  const [eligibility, setEligibility] = useState<Eligibility | null>(null)
   const showToast = (msg: string) => {
     setToast(msg)
     setTimeout(() => setToast(null), 3200)
@@ -200,7 +225,7 @@ export default function ModelDetailPage() {
       // then raw id as fallback.
       const base = () => supabase
         .from('profiles')
-        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, video_urls, view_count')
+        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, video_urls, view_count, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days')
         .eq('role', 'model')
       const { data: byName } = await base().eq('username', slug).maybeSingle()
       const { data: byId } = byName ? { data: null } : await base().eq('id', slug).maybeSingle()
@@ -251,6 +276,17 @@ export default function ModelDetailPage() {
 
       // Connected already?
       const { data: { user } } = await supabase.auth.getUser()
+      if (user && user.id !== id) {
+        const req = {
+          req_verified_client: (p as any).req_verified_client === true,
+          req_min_connections: (p as any).req_min_connections ?? 0,
+          req_min_account_days: (p as any).req_min_account_days ?? 0,
+        }
+        if (hasRequirements(req)) {
+          const result = await evaluateEligibility(supabase, user.id, user.created_at ?? null, req)
+          if (live) setEligibility(result)
+        }
+      }
       if (user) {
         const { data: conn } = await supabase
           .from('connections')
@@ -296,6 +332,11 @@ export default function ModelDetailPage() {
         gallery: p.gallery_urls ?? [],
         videos: p.video_urls ?? [],
         lastActiveAt: presence?.updated_at ?? null,
+        travelMode: (p as any).travel_mode ?? 'none',
+        travelCities: (p as any).travel_cities ?? [],
+        reqVerified: (p as any).req_verified_client === true,
+        reqMinConnections: (p as any).req_min_connections ?? 0,
+        reqMinDays: (p as any).req_min_account_days ?? 0,
       })
       setReviews(
         (reviewRows ?? []).map((r) => ({
@@ -488,9 +529,22 @@ export default function ModelDetailPage() {
             {tours.map((t: { city: string; start_date: string; end_date: string }, i: number) => (
               <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-3 py-1 text-xs font-semibold text-charcoal">
                 <MapPin className="h-3 w-3 text-primary" />
-                Touring {t.city} · {new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })} – {new Date(t.end_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })}
+                In {t.city} · {new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })} – {new Date(t.end_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })}
               </span>
             ))}
+          </div>
+        )}
+        {(provider.travelMode === 'nationwide' || provider.travelCities.length > 0) && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {provider.travelMode === 'nationwide' ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-muted px-3 py-1 text-xs font-semibold text-primary">
+                <Plane className="h-3 w-3" /> Can travel anywhere in Nigeria
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-muted px-3 py-1 text-xs font-semibold text-primary">
+                <Plane className="h-3 w-3" /> Can travel to {provider.travelCities.join(', ')}
+              </span>
+            )}
           </div>
         )}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -504,12 +558,62 @@ export default function ModelDetailPage() {
           <span className="text-neutral-500">{provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}</span>
         </div>
 
+        {/* Who can book her: Bybit-style counterparty requirements */}
+        {(provider.reqVerified || provider.reqMinConnections > 0 || provider.reqMinDays > 0) && (
+          <div id="book-requirements" className="card-luxe mt-4 scroll-mt-24 p-4">
+            <p className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.1em] text-neutral-400">
+              <ShieldCheck className="h-4 w-4 text-primary" /> Who she accepts
+            </p>
+            <div className="mt-2.5 space-y-2">
+              {provider.reqVerified && (
+                <ReqRow
+                  ok={eligibility ? eligibility.checks.find((c) => c.key === 'verified')?.ok : undefined}
+                  label="ID verified clients only"
+                  have={eligibility?.checks.find((c) => c.key === 'verified')?.have}
+                />
+              )}
+              {provider.reqMinConnections > 0 && (
+                <ReqRow
+                  ok={eligibility ? eligibility.checks.find((c) => c.key === 'connections')?.ok : undefined}
+                  label={`At least ${provider.reqMinConnections} completed bookings`}
+                  have={eligibility?.checks.find((c) => c.key === 'connections')?.have}
+                />
+              )}
+              {provider.reqMinDays > 0 && (
+                <ReqRow
+                  ok={eligibility ? eligibility.checks.find((c) => c.key === 'account_age')?.ok : undefined}
+                  label={`Account at least ${provider.reqMinDays} days old`}
+                  have={eligibility?.checks.find((c) => c.key === 'account_age')?.have}
+                />
+              )}
+            </div>
+            {eligibility && !eligibility.eligible && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {eligibility.checks.find((c) => c.key === 'verified' && !c.ok) && (
+                  <Link href="/verification" className="btn-luxe px-4 py-2 text-[13px]">Get verified</Link>
+                )}
+                <p className="w-full text-xs text-neutral-400">Once you meet these, the booking button opens.</p>
+              </div>
+            )}
+            {!loggedIn && (
+              <p className="mt-2 text-xs text-neutral-400">Sign in and we will check yours against this list.</p>
+            )}
+          </div>
+        )}
+
         {/* Action row */}
         <div className="mt-3 flex items-center gap-2">
           {connected ? (
             <span className="flex-1 rounded-full bg-green-50 py-2.5 text-center text-sm font-bold text-green-700">
               Connected
             </span>
+          ) : eligibility && !eligibility.eligible ? (
+            <button
+              onClick={() => document.getElementById('book-requirements')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              className="h-12 flex-1 rounded-full bg-white text-[15px] font-semibold text-neutral-500 shadow-soft ring-1 ring-black/[0.08] transition-all active:scale-[0.98]"
+            >
+              Requirements not met yet
+            </button>
           ) : (
             <button
               onClick={() => setShowConnectModal(true)}
@@ -557,6 +661,21 @@ export default function ModelDetailPage() {
             className={'rounded-full px-4 py-2 text-xs font-semibold transition-all ' + (following ? 'bg-cream text-charcoal' : 'bg-gold text-charcoal')}
           >
             {following ? 'Following' : 'Follow'}
+          </button>
+          <button
+            onClick={async () => {
+              if (!provider.username) { showToast('Link not ready yet'); return }
+              const how = await shareLink({
+                url: companionShareLink(provider.username),
+                title: `${provider.displayName} on Intima`,
+                text: `Book ${provider.displayName} direct on Intima. Verified, no agents.`,
+              })
+              showToast(how === 'copied' ? 'Link copied' : 'Shared')
+            }}
+            aria-label="Share her page"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90"
+          >
+            <Share className="h-4 w-4 text-charcoal" />
           </button>
         </div>
       </div>
