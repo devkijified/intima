@@ -50,7 +50,15 @@ export function RequestConnectionModal({
   const [activeName, setActiveName] = useState(providerName)
   const [activeAvatar, setActiveAvatar] = useState<string | null>(providerAvatarUrl ?? null)
   const [eligibility, setEligibility] = useState<{ eligible: boolean; checks: { key: string; label: string; ok: boolean; have: string }[] } | null>(null)
+  const [cardEnabled, setCardEnabled] = useState(false)
   const supabase = createClient()
+
+  useEffect(() => {
+    fetch('/api/coins/methods')
+      .then((r) => (r.ok ? r.json() : { card: false }))
+      .then((d) => setCardEnabled(!!d.card))
+      .catch(() => setCardEnabled(false))
+  }, [])
 
   // Bybit-style pre-check: never let an unqualified client reach payment.
   useEffect(() => {
@@ -195,6 +203,30 @@ export function RequestConnectionModal({
         throw new Error('Payment was not completed. Please try again.')
       }
       await completeBooking(init.reference)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setStep('error')
+    }
+  }
+
+  /**
+   * Card rail (Paystack): initialize server-side, then hand the browser
+   * to the hosted checkout. The /payments/callback page verifies and
+   * creates the connection when Paystack returns the client.
+   */
+  async function handleCardPay() {
+    setError('')
+    try {
+      const res = await fetch('/api/payments/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider_id: activeId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.authorizationUrl) {
+        throw new Error(data?.error || 'Could not start card checkout.')
+      }
+      window.location.href = data.authorizationUrl
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       setStep('error')
@@ -371,7 +403,7 @@ export function RequestConnectionModal({
             )}
 
             <button
-              onClick={handlePay}
+              onClick={cardEnabled ? handleCardPay : handlePay}
               disabled={fee === null || (eligibility !== null && !eligibility.eligible)}
               className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-3.5 rounded-2xl transition-colors disabled:opacity-50"
             >
@@ -379,7 +411,9 @@ export function RequestConnectionModal({
                 ? 'Loading fee...'
                 : eligibility && !eligibility.eligible
                   ? 'Requirements not met yet'
-                  : `Pay ${formatPrice(fee)} (Test mode)`}
+                  : cardEnabled
+                    ? `Pay ${formatPrice(fee)} with card`
+                    : `Pay ${formatPrice(fee)} (Test mode)`}
             </button>
             <button
               onClick={handleCryptoPay}

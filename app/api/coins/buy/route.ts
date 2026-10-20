@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        email: `${user.id}@intima.user`,
+        email: user.email ?? `${user.id}@intima.user`,
         amount: pkg.priceNgn * 100, // kobo
         reference,
         callback_url: `${appUrl}/coins/callback`,

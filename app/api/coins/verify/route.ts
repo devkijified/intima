@@ -51,27 +51,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid transaction metadata' }, { status: 400 });
     }
 
-    // Credit coins.
-    const { data: bal } = await service
-      .from('coin_balances')
-      .select('balance')
-      .eq('user_id', userId)
-      .maybeSingle();
-    await service.from('coin_balances').upsert(
-      {
-        user_id: userId,
-        balance: (bal?.balance ?? 0) + coins,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    );
-
-    // Record the topup (idempotency + audit).
-    await service.from('coin_topups').insert({
-      user_id: userId,
+    const { settleCoinTopup } = await import('@/lib/payments/paystack');
+    await settleCoinTopup(service, {
       reference,
+      userId,
       coins,
-      amount_ngn: Math.round(data.data.amount / 100),
+      amountNgn: Math.round(data.data.amount / 100),
     });
 
     return NextResponse.json({ success: true, coins });
