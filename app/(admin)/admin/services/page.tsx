@@ -9,7 +9,7 @@ import { Tag } from '@/lib/icons'
 /**
  * Admin > Services. The catalog is the source of truth in lib/services.ts
  * (service ids are stored on profiles.services as text[]). This page shows
- * the catalog with live usage counts — how many companions offer each.
+ * the catalog with live usage counts: how many companions offer each.
  */
 export default function AdminServicesPage() {
   const [counts, setCounts] = useState<Record<string, number>>({})

@@ -124,7 +124,7 @@ export default function MessagesPage() {
                   <span className="shrink-0 text-xs text-neutral-400">{timeAgo(t.lastAt)}</span>
                 </div>
                 <p className="truncate text-sm text-neutral-500">
-                  {t.lastBody ?? 'Connection active — say hello'}
+                  {t.lastBody ?? 'Connection active. Say hello'}
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300" />

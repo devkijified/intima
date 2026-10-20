@@ -367,7 +367,7 @@ export default function ProfilePage() {
                   placeholder="Tell clients about yourself, your vibe, what to expect..."
                   maxLength={500}
                 />
-                <p className="mt-1 text-xs text-neutral-400">{form.bio.length}/500 · No phone numbers or social handles — clients reach you through Intima.</p>
+                <p className="mt-1 text-xs text-neutral-400">{form.bio.length}/500 · No phone numbers or social handles. Clients reach you through Intima.</p>
                 {bioWarning && (
                   <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {bioWarning}

@@ -116,7 +116,7 @@ export default function AdminComicsPage() {
       body: JSON.stringify({ id, action }),
     })
     if (res.ok) {
-      setMsg(action === 'publish' ? 'Published — every subscriber got a push.' : 'Unpublished.')
+      setMsg(action === 'publish' ? 'Published. Every subscriber got a push.' : 'Unpublished.')
       load()
     }
   }
@@ -147,7 +147,7 @@ export default function AdminComicsPage() {
         </span>
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Comics</h1>
-          <p className="text-sm text-neutral-500">Episodes are house content — you post them, readers come back.</p>
+          <p className="text-sm text-neutral-500">Episodes are house content: you post them, readers come back.</p>
         </div>
       </div>
 

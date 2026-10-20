@@ -42,7 +42,7 @@ export default function WalletPage() {
         })),
         ...((conns ?? []) as any[]).map((c) => ({
           id: `conn-${c.created_at}`,
-          label: `Connection fee — ${(c.profiles as any)?.display_name ?? 'companion'}`,
+          label: `Connection fee: ${(c.profiles as any)?.display_name ?? 'companion'}`,
           sub: 'Unlocked chat, calls, WhatsApp',
           amount: `-₦${c.fee_ngn.toLocaleString()}`,
           date: c.created_at,
@@ -75,7 +75,7 @@ export default function WalletPage() {
           <ArrowRight className="h-4 w-4 text-white/60" />
         </div>
         <p className="mt-2 font-display text-4xl font-bold">
-          {coinBalance === null ? '—' : coinBalance.toLocaleString()}
+          {coinBalance === null ? '…' : coinBalance.toLocaleString()}
         </p>
         <p className="mt-1 text-xs text-white/60">
           ≈ ₦{((coinBalance ?? 0) * 10).toLocaleString()} · 1 coin = ₦10 · Tap to buy more

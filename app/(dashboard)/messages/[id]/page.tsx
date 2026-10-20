@@ -376,7 +376,7 @@ function PpvMedia({ msg, me }: { msg: Msg; me: string | null }) {
     if (res.ok) {
       setUnlocked(true)
     } else if (res.status === 402) {
-      alert(`Not enough coins. You need ${price} coins — top up from Coins.`)
+      alert(`Not enough coins. You need ${price} coins. Top up from Coins.`)
     } else {
       alert('Could not unlock. Please try again.')
     }

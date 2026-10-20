@@ -105,7 +105,7 @@ export default function SignupPage() {
       <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
         <CardHeader>
           <CardTitle className="font-display text-3xl font-semibold tracking-tight text-center">Create your account</CardTitle>
-          <CardDescription className="text-center text-[15px]">Join Intima — verified, private, direct</CardDescription>
+          <CardDescription className="text-center text-[15px]">Join Intima: verified, private, direct</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
