@@ -95,6 +95,25 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reringRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const peerChannelsRef = useRef(new Map<string, RealtimeChannel>());
+  // Remote audio lives in real <audio> elements inside a hidden
+  // holder: a LiveKit audio track nobody attaches is a call nobody
+  // can hear (this was missing entirely, so calls were silent).
+  const remoteAudioHolderRef = useRef<HTMLDivElement | null>(null);
+  const remoteAudioRef = useRef(
+    new Map<string, { track: { detach: () => void }; el: HTMLMediaElement }>(),
+  );
+
+  const detachAllRemoteAudio = useCallback(() => {
+    remoteAudioRef.current.forEach(({ track, el }) => {
+      try {
+        track.detach();
+      } catch {
+        // Already detached.
+      }
+      el.remove();
+    });
+    remoteAudioRef.current.clear();
+  }, []);
 
   useEffect(() => {
     callRef.current = call;
@@ -148,6 +167,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     } catch {
       // Already gone.
     }
+    detachAllRemoteAudio();
     audioTrackRef.current?.stop();
     videoTrackRef.current?.stop();
     audioTrackRef.current = null;
@@ -157,7 +177,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     setMuted(false);
     setCameraOff(false);
     setCall(null);
-  }, [clearRingTimer]);
+  }, [clearRingTimer, detachAllRemoteAudio]);
 
   const endCall = useCallback(
     async (notifyPeerId?: string, room?: string) => {
@@ -170,6 +190,14 @@ export function CallProvider({ children }: { children: ReactNode }) {
   );
 
   const attachRemoteHandlers = useCallback((room: Room, kind: CallKind) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const attachAudio = (t: any) => {
+      if (!t?.sid || remoteAudioRef.current.has(t.sid)) return;
+      const el = t.attach() as HTMLMediaElement;
+      el.setAttribute('playsinline', 'true');
+      remoteAudioHolderRef.current?.appendChild(el);
+      remoteAudioRef.current.set(t.sid, { track: t, el });
+    };
     const onTrackSubscribed = (track: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const t = track as any;
@@ -177,14 +205,36 @@ export function CallProvider({ children }: { children: ReactNode }) {
         const vt = t as RemoteVideoTrack;
         setRemoteStream(vt.mediaStream ?? null);
       }
+      if (t?.kind === Track.Kind.Audio) {
+        attachAudio(t);
+      }
+    };
+    const onTrackUnsubscribed = (track: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t = track as any;
+      if (t?.kind === Track.Kind.Video) {
+        setRemoteStream(null);
+      }
+      if (t?.kind === Track.Kind.Audio && t?.sid) {
+        const held = remoteAudioRef.current.get(t.sid);
+        if (held) {
+          held.track.detach();
+          held.el.remove();
+          remoteAudioRef.current.delete(t.sid);
+        }
+      }
     };
     room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
+    room.on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
     // Already-subscribed tracks (race on fast join).
     room.remoteParticipants.forEach((p) => {
       p.videoTrackPublications.forEach((pub) => {
         if (pub.track && kind === 'video') {
           setRemoteStream((pub.track as RemoteVideoTrack).mediaStream ?? null);
         }
+      });
+      p.audioTrackPublications.forEach((pub) => {
+        if (pub.track) attachAudio(pub.track);
       });
     });
   }, []);
@@ -207,6 +257,14 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
       room.on(RoomEvent.ParticipantConnected, () => {
         setCall((c) => (c ? { ...c, direction: 'active' } : c));
+      });
+      // The peer vanishing without a signal (app closed, network
+      // gone) must end the call here too, not leave a dead "active"
+      // screen up forever.
+      room.on(RoomEvent.ParticipantDisconnected, () => {
+        if (room.remoteParticipants.size === 0) {
+          teardownRoom();
+        }
       });
       room.on(RoomEvent.Disconnected, () => {
         teardownRoom();
@@ -469,11 +527,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
           peerName: call.peerName,
           peerAvatar: call.peerAvatar,
         }
-      : null;
+      : callError
+        ? // A failed call must be VISIBLE: the common failure (no
+          // active connection yet) used to set the error and tear
+          // down in the same breath, so the modal unmounted and the
+          // tap looked like it did nothing.
+          { state: 'error' as const, kind: 'voice' as CallKind, peerName: 'Could not connect', peerAvatar: undefined }
+        : null;
 
   return (
     <CallContext.Provider value={{ startCall }}>
       {children}
+      <div ref={remoteAudioHolderRef} className="hidden" aria-hidden />
       {shown && (
         <CallModal
           state={shown.state}
@@ -489,6 +554,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
           onAccept={() => void acceptCall()}
           onDecline={() => void declineCall()}
           onCancel={() => {
+            if (!callRef.current && !incoming) {
+              setCallError(null);
+              return;
+            }
             const c = callRef.current;
             void endCall(c?.peerId, c?.room);
           }}

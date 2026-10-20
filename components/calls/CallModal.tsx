@@ -15,7 +15,7 @@ import {
 import type { CallKind } from './CallProvider';
 import { getInitials } from '@/lib/utils/helpers';
 
-export type CallModalState = 'outgoing' | 'incoming' | 'active';
+export type CallModalState = 'outgoing' | 'incoming' | 'active' | 'error';
 
 interface CallModalProps {
   state: CallModalState;
@@ -154,13 +154,15 @@ export function CallModal(props: CallModalProps) {
   const showVideoStage = kind === 'video' && state === 'active';
 
   const statusLine =
-    state === 'outgoing'
-      ? `Calling… ${kindLabel(kind).toLowerCase()}`
-      : state === 'incoming'
-        ? `Incoming ${kindLabel(kind).toLowerCase()}`
-        : connecting
-          ? 'Connecting…'
-          : formatDuration(seconds);
+    state === 'error'
+      ? 'Call failed'
+      : state === 'outgoing'
+        ? `Calling… ${kindLabel(kind).toLowerCase()}`
+        : state === 'incoming'
+          ? `Incoming ${kindLabel(kind).toLowerCase()}`
+          : connecting
+            ? 'Connecting…'
+            : formatDuration(seconds);
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-[#141419] text-white">
@@ -238,6 +240,16 @@ export function CallModal(props: CallModalProps) {
 
       {/* Controls, bottom anchored for thumbs */}
       <div className="flex items-center justify-center gap-3 px-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-4">
+        {state === 'error' && (
+          <button
+            onClick={onCancel}
+            className="rounded-full bg-white px-8 py-3.5 font-semibold text-charcoal shadow-lg transition-transform active:scale-95"
+            aria-label="Dismiss"
+          >
+            Close
+          </button>
+        )}
+
         {state === 'outgoing' && (
           <button
             onClick={onCancel}
