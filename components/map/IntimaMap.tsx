@@ -129,10 +129,12 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
   el.setAttribute('aria-label', `${escAttr(provider.displayName)} in ${escAttr(provider.area)}`);
   el.innerHTML =
     `<div style="position:relative;cursor:pointer;transition:transform .15s ease">` +
-    // Photo pin, Instagram-story style: white ring, soft shadow, photo fully visible.
+    // Photo pin, Instagram-story style: ring + soft shadow, photo fully
+    // visible. Elite get a gold ring; boosted get a gold halo.
     `<img src="${escAttr(provider.avatar)}" alt="" loading="lazy" ` +
     `style="width:54px;height:54px;border-radius:9999px;object-fit:cover;background:#222;` +
-    `border:2.5px solid #fff;box-shadow:0 4px 14px rgba(0,0,0,.45)"/>` +
+    `border:${provider.trustTier === 'elite' ? '3px solid #C9A84C' : '2.5px solid #fff'};` +
+    `box-shadow:0 4px 14px rgba(0,0,0,.45)${provider.boosted ? ', 0 0 0 4px rgba(201,168,76,.55)' : ''}"/>` +
     // Verified is an explicit burgundy badge overlapping the pin corner.
     (provider.verified
       ? `<span title="Verified" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;` +
@@ -611,8 +613,8 @@ export default function IntimaMap() {
       {/* Slim floating header: wordmark, city select, auth actions. No marketing copy. */}
       <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-[max(1rem,env(safe-area-inset-top))] sm:px-5 sm:pt-[max(1.25rem,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5 rounded-full bg-black/55 py-1.5 pl-3 pr-1.5 backdrop-blur-md ring-1 ring-white/10 sm:gap-2 sm:pl-4">
-            <span className="font-display text-lg font-semibold tracking-tight text-white sm:text-xl">Intima</span>
+          <div className="glass-dark flex min-w-0 items-center gap-1.5 rounded-full py-1.5 pl-3.5 pr-1.5 sm:gap-2 sm:pl-4">
+            <span className="font-display text-lg font-semibold tracking-tight text-white sm:text-xl">Intima<span className="text-gold">.</span></span>
             <div className="relative">
               <select
                 value={filters.city}
@@ -626,7 +628,7 @@ export default function IntimaMap() {
                   }
                 }}
                 aria-label="Choose city"
-                className="max-w-[110px] appearance-none truncate rounded-full bg-white/10 py-1.5 pl-3 pr-8 text-sm font-medium text-white outline-none sm:max-w-none"
+                className="max-w-[110px] appearance-none truncate rounded-full bg-white/[0.08] py-1.5 pl-3 pr-8 text-sm font-medium text-white/90 outline-none transition-colors hover:bg-white/[0.14] sm:max-w-none"
               >
                 <option value="" className="text-charcoal">
                   All cities
@@ -671,7 +673,7 @@ export default function IntimaMap() {
         <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {!mapFailed && (
             <div
-              className="flex shrink-0 items-center rounded-full bg-black/55 p-1 ring-1 ring-white/10 backdrop-blur-md"
+              className="glass-dark flex shrink-0 items-center rounded-full p-1"
               role="tablist"
               aria-label="Discovery view"
             >
@@ -769,7 +771,7 @@ export default function IntimaMap() {
 
       {/* Legend */}
       {mapReady && !mapFailed && view === 'map' && (
-        <div className="absolute left-3 z-10 rounded-xl bg-black/60 px-3 py-2 text-xs text-white ring-1 ring-white/10 backdrop-blur-sm" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+        <div className="glass-dark absolute left-3 z-10 rounded-2xl px-3.5 py-2.5 text-xs text-white/90 shadow-lift" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
           <p className="flex items-center gap-2">
             <BadgeCheck className="h-3.5 w-3.5" />
             Verified
@@ -826,7 +828,7 @@ export default function IntimaMap() {
               ))}
             </ul>
           ) : filtered.length > 0 ? (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <ul className="stagger grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {filtered.map((p) => (
                 <ProviderListCard key={p.id} provider={p} onSelect={goToProfile} />
               ))}

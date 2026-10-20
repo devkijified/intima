@@ -323,20 +323,20 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
     <>
       {/* Dimmed backdrop */}
       <div
-        className="fixed inset-0 z-[60] bg-black/60 animate-fade-in"
+        className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px] animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
       {/* Bottom sheet */}
       <div
-        className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-3xl bg-white shadow-2xl animate-sheet-up sm:mx-auto sm:max-w-lg"
+        className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-[28px] bg-white shadow-sheet animate-sheet-up sm:mx-auto sm:max-w-lg"
         role="dialog"
         aria-modal="true"
         aria-label={`${provider.displayName} profile`}
       >
         {/* Drag handle + close */}
         <div className="relative shrink-0 pt-2">
-          <div className="mx-auto h-1.5 w-12 rounded-full bg-neutral-200" />
+          <div className="mx-auto h-1.5 w-14 rounded-full bg-neutral-200/90" />
           <button
             onClick={onClose}
             aria-label="Close"
@@ -351,25 +351,38 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           {/* TikTok-style profile header: avatar + stats */}
           <div className="px-4 pt-3">
             <div className="flex items-center gap-4">
-              <img
-                src={provider.avatar}
-                alt={provider.displayName}
-                className="h-20 w-20 shrink-0 rounded-full border-2 border-white object-cover shadow-md"
-              />
-              <div className="flex flex-1 items-center justify-around">
-                <div className="text-center">
-                  <p className="text-lg font-bold text-charcoal">{formatCompactCount(provider.viewCount)}</p>
-                  <p className="text-xs text-neutral-500">Views</p>
+              <div
+                className="shrink-0 rounded-full p-[2.5px]"
+                style={{
+                  background: provider.trustTier === 'elite'
+                    ? 'linear-gradient(135deg, #E8D49E 0%, #C9A84C 45%, #9A7A2E 100%)'
+                    : provider.verified
+                      ? 'linear-gradient(135deg, #D43A6B 0%, #AC244D 60%, #7A1A36 100%)'
+                      : 'transparent',
+                }}
+              >
+                <img
+                  src={provider.avatar}
+                  alt={provider.displayName}
+                  className="h-20 w-20 rounded-full border-2 border-white object-cover shadow-md"
+                />
+              </div>
+              <div className="flex flex-1 items-center">
+                <div className="flex-1 text-center">
+                  <p className="font-display text-[22px] font-semibold text-charcoal">{formatCompactCount(provider.viewCount)}</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Views</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-charcoal">{formatCompactCount(provider.bookingCount)}</p>
-                  <p className="text-xs text-neutral-500">Bookings</p>
+                <div className="h-9 w-px bg-neutral-100" />
+                <div className="flex-1 text-center">
+                  <p className="font-display text-[22px] font-semibold text-charcoal">{formatCompactCount(provider.bookingCount)}</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Bookings</p>
                 </div>
-                <div className="text-center">
-                  <p className="flex items-center justify-center gap-1 text-lg font-bold text-charcoal">
+                <div className="h-9 w-px bg-neutral-100" />
+                <div className="flex-1 text-center">
+                  <p className="font-display text-[22px] font-semibold text-charcoal">
                     {provider.rating !== null ? provider.rating.toFixed(1) : '-'}
                   </p>
-                  <p className="text-xs text-neutral-500">Rating ({provider.reviewCount})</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Rating ({provider.reviewCount})</p>
                 </div>
               </div>
             </div>
@@ -401,18 +414,18 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
             <div className="mt-3 flex items-center gap-2">
               <button
                 onClick={() => onRequestConnection(provider)}
-                className="flex-1 rounded-full bg-primary py-2.5 text-sm font-bold text-white active:scale-[0.98]"
+                className="btn-luxe h-11 flex-1 text-[15px]"
               >
                 Request connection
                 {connectionFee !== null && (
-                  <span className="font-normal opacity-80"> • N{connectionFee.toLocaleString()}</span>
+                  <span className="ml-1.5 font-normal text-white/85">• N{connectionFee.toLocaleString()}</span>
                 )}
               </button>
               <button
                 onClick={() => onVoiceCall(provider)}
                 disabled={voiceDisabled}
                 title={voiceNote}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
               >
                 <Phone className="h-4 w-4 text-charcoal" />
               </button>
@@ -420,7 +433,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                 onClick={() => onVideoCall(provider)}
                 disabled={videoDisabled}
                 title={videoNote}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 disabled:opacity-40 disabled:shadow-none"
               >
                 <Video className="h-4 w-4 text-charcoal" />
               </button>
@@ -428,7 +441,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                 onClick={toggleFav}
                 disabled={favBusy}
                 aria-label={isFav ? 'Remove from favorites' : 'Save to favorites'}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-cream active:scale-90"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] active:scale-90"
               >
                 <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
               </button>

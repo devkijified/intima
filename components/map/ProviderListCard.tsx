@@ -26,18 +26,21 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
     <li>
       <button
         onClick={() => onSelect(provider)}
-        className="group flex w-full flex-col overflow-hidden rounded-[20px] bg-white text-left ring-1 ring-black/[0.05] transition-all duration-150 active:scale-[0.98]"
-        style={{ boxShadow: '0 2px 12px rgba(26,26,26,0.06)' }}
+        className={'group flex w-full flex-col overflow-hidden rounded-[24px] bg-white text-left shadow-soft ring-1 transition-all duration-200 active:scale-[0.98] ' +
+          'sm:hover:-translate-y-1 sm:hover:shadow-lift ' +
+          (provider.trustTier === 'elite' ? 'ring-[#C9A84C]/60' : 'ring-black/[0.05]')}
       >
         <div className="relative aspect-[4/5] w-full overflow-hidden bg-neutral-100">
           <img
             src={provider.avatar}
             alt={provider.displayName}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-300 group-active:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04] animate-fade-in"
           />
+          {/* Top veil keeps the badges legible on bright photos. */}
+          <div className="photo-veil-top pointer-events-none absolute inset-x-0 top-0 h-16" />
           {provider.trustTier === 'elite' ? (
-            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-gold px-2 py-1 text-[10px] font-bold text-charcoal shadow-md">
+            <span className="badge-elite absolute left-2 top-2 shadow-md">
               <Crown className="h-3 w-3" />
               Elite
             </span>
@@ -54,13 +57,13 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
             </span>
           )}
           {provider.boosted && (
-            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-gold px-2 py-1 text-[10px] font-bold text-charcoal">
+            <span className={'badge-elite absolute left-2 ' + (provider.verified || provider.trustTier === 'elite' ? 'top-9' : 'top-2')}>
               <Zap className="h-3 w-3" /> Boosted
             </span>
           )}
           <PhotoWatermark />
         </div>
-        <div className="p-3">
+        <div className="p-3.5">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">
               {nameLine}
@@ -82,9 +85,9 @@ export function ProviderListCard({ provider, onSelect }: ProviderListCardProps) 
             </p>
           )}
           {provider.rateShortTime !== null ? (
-            <p className="mt-1 text-sm font-bold text-[#AC244D]">
+            <p className="mt-1.5 text-[15px] font-bold text-[#AC244D]">
               {formatPrice(provider.rateShortTime)}{' '}
-              <span className="font-normal text-neutral-400">short time</span>
+              <span className="text-xs font-medium text-neutral-400">short time</span>
             </p>
           ) : (
             <p className="mt-1 text-xs text-neutral-400">Rates not listed yet</p>
