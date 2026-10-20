@@ -533,7 +533,7 @@ export default function IntimaMap() {
 
   const goToProfile = (p: MapProvider) => {
     if (p.userId) {
-      router.push(`/models/${p.userId}`);
+      router.push(`/companion/${p.userId}`);
       return;
     }
     setSelected(p);
@@ -542,10 +542,10 @@ export default function IntimaMap() {
   const handleViewProfile = (p: MapProvider) => {
     if (!p.userId) return;
     if (!session) {
-      router.push(`/signup?next=/models/${p.userId}`);
+      router.push(`/signup?next=/companion/${p.userId}`);
       return;
     }
-    router.push(`/models/${p.userId}`);
+    router.push(`/companion/${p.userId}`);
   };
 
   // Call buttons stay enabled for guests (they route to signup with a

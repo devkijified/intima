@@ -30,7 +30,7 @@ interface ModelCardPremiumProps {
 
 export function ModelCardPremium({ model }: ModelCardPremiumProps) {
   return (
-    <Link href={`/models/${model.id}`}>
+    <Link href={`/companion/${model.id}`}>
       <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 bg-white border-0 rounded-2xl">
         {/* Image Container */}
         <div className="relative h-72 overflow-hidden bg-gradient-to-br from-primary-muted to-secondary-muted">

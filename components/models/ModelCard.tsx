@@ -63,7 +63,7 @@ export function ModelCard({ model }: ModelCardProps) {
   const languages = model.languages ?? ['English']
 
   return (
-    <Link href={`/models/${model.id}`}>
+    <Link href={`/companion/${model.id}`}>
       <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 bg-white border-0 rounded-2xl h-full">
         {/* Image Container - Portrait ratio like Tryst */}
         <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-pink-100 to-rose-100">

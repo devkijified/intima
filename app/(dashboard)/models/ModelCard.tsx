@@ -24,7 +24,7 @@ interface ModelCardProps {
 
 export function ModelCard({ model }: ModelCardProps) {
   return (
-    <Link href={`/models/${model.id}`}>
+    <Link href={`/companion/${model.id}`}>
       <Card className="hover:shadow-lg transition-shadow cursor-pointer">
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
