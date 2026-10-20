@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, createLocalVideoTrack, createLocalAudioTrack } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
-import { Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
+import { Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
   PictureInPicture2,} from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
@@ -83,7 +83,7 @@ export default function StreamRoomPage() {
   const supabase = createClient()
   const id = params.id as string
 
-  const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid'>('loading')
+  const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid' | 'fansonly'>('loading')
   const [stream, setStream] = useState<Stream | null>(null)
   const [paidPrice, setPaidPrice] = useState(0)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -326,6 +326,15 @@ export default function StreamRoomPage() {
       if (tokenRes.status === 402) {
         setPaidPrice(session.price_ngn ?? 0)
         setPhase('paid')
+        return
+      }
+      if (tokenRes.status === 403) {
+        const j = await tokenRes.json().catch(() => ({}))
+        if (j.error === 'fans_only') {
+          setPhase('fansonly')
+          return
+        }
+        setPhase('ended')
         return
       }
       if (!tokenRes.ok) {
@@ -917,6 +926,42 @@ export default function StreamRoomPage() {
     )
   }
 
+  if (phase === 'fansonly') {
+    return (
+      <div className="relative flex h-[calc(100dvh-4rem)] items-center justify-center overflow-hidden bg-charcoal px-6">
+        {stream?.provider?.avatar_url && (
+          <img
+            src={stream.provider.avatar_url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-30 blur-sm"
+            draggable={false}
+          />
+        )}
+        <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 text-center">
+          <Crown className="mx-auto h-10 w-10 text-gold" />
+          <h2 className="mt-3 font-display text-xl font-semibold text-charcoal">Fans only</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            {stream?.provider?.display_name ?? 'This companion'} is holding this show for her fan club members.
+          </p>
+          <p className="mt-2 text-sm text-neutral-500">
+            Join her fan club and you are in, for this show and every Premium show she runs.
+          </p>
+          {stream?.provider_id && (
+            <Link
+              href={`/companion/${stream.provider_id}`}
+              className="mt-4 block w-full rounded-full bg-gold py-3 text-sm font-bold text-charcoal hover:bg-gold/90"
+            >
+              Join her fan club
+            </Link>
+          )}
+          <Link href="/live" className="mt-4 inline-block text-sm font-medium text-primary">
+            Back to live
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   /* ---------------------------------- live ---------------------------------- */
 
   const hostName = stream?.provider?.display_name ?? 'Host'
@@ -1021,7 +1066,7 @@ export default function StreamRoomPage() {
           <button
             onClick={() => setPanelOpen(true)}
             aria-label="Stream controls"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
           >
             <Settings className="h-4 w-4" />
           </button>
@@ -1030,7 +1075,7 @@ export default function StreamRoomPage() {
           <button
             onClick={togglePip}
             aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
-            className={`flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
+            className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
               pipActive ? 'bg-primary text-white' : 'bg-black/50 text-white'
             }`}
           >
@@ -1040,14 +1085,14 @@ export default function StreamRoomPage() {
         <button
           onClick={share}
           aria-label="Share stream"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
         >
           <Share2 className="h-4 w-4" />
         </button>
         <Link
           href="/live"
           aria-label="Close stream"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
         >
           <X className="h-4 w-4" />
         </Link>
@@ -1530,7 +1575,7 @@ export default function StreamRoomPage() {
             onClick={sendChat}
             disabled={!draft.trim()}
             aria-label="Send comment"
-            className="mr-1 flex h-8 w-8 items-center justify-center rounded-full text-white disabled:opacity-40"
+            className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
           >
             <Send className="h-4 w-4" />
           </button>
