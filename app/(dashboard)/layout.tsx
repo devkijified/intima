@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, ShieldAlert, Map as MapIcon, Radio, Heart,
   MessageCircle,
   Coins,
+  Trophy,
   Banknote, Bell } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
@@ -162,6 +163,16 @@ export default function DashboardLayout({
               >
                 <Coins className="h-4 w-4" />
                 <span>Coins</span>
+              </Link>
+
+              <Link 
+                href="/perks" 
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  pathname.startsWith('/perks') ? 'bg-[#AC244D] text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100/60'
+                }`}
+              >
+                <Trophy className="h-4 w-4" />
+                <span>Perks</span>
               </Link>
 
               <Link 

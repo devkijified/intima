@@ -31,6 +31,7 @@ import {
   Flag as SaxFlag,
   GalleryExport as SaxGalleryExport,
   Gift as SaxGift,
+  Cup as SaxCup,
   Global as SaxGlobal,
   Grid3 as SaxGrid3,
   Heart as SaxHeart,
@@ -150,6 +151,7 @@ export const LayoutGrid = wrap(SaxGrid3)
 export const Grid = wrap(SaxGrid3)
 export const Info = wrap(SaxInfoCircle)
 export const Gift = wrap(SaxGift)
+export const Trophy = wrap(SaxCup)
 export const Flag = wrap(SaxFlag)
 export const Bell = wrap(SaxNotification)
 export const BadgeCheck = wrap(SaxVerify)
