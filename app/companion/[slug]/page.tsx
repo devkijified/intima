@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, BadgeCheck, CheckCircle2, ChevronUp, Flag, Heart, LayoutGrid, ListChecks,
-  MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
+  Lock, MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { RateCard } from '@/components/rates/RateCard'
@@ -19,10 +19,11 @@ import { evaluateEligibility, hasRequirements, type Eligibility } from '@/lib/co
 import { companionShareLink, shareLink } from '@/lib/links'
 import { StoryViewer, type Story } from '@/components/stories/StoryViewer'
 import { SubscribeCard } from '@/components/social/SubscribeCard'
+import { PrivateSnaps } from '@/components/social/PrivateSnaps'
 import { ProfileViewTracker } from '@/components/analytics/ProfileViewTracker'
 import type { MockReview } from '@/lib/map/mockReviews'
 
-type PageTab = 'posts' | 'services' | 'rates' | 'reviews'
+type PageTab = 'posts' | 'services' | 'rates' | 'reviews' | 'private'
 
 interface Provider {
   id: string
@@ -208,6 +209,10 @@ export default function ModelDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [activeTab, setActiveTab] = useState<PageTab>('posts')
+  // Private snaps tab button visibility, reported by the PrivateSnaps
+  // component from its own summary fetch (owner, any snaps, or a fan
+  // club price set). The owner always sees the tab.
+  const [privateTabVisible, setPrivateTabVisible] = useState(false)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [reviews, setReviews] = useState<MockReview[]>([])
   const [connectionFee, setConnectionFee] = useState<number | null>(null)
@@ -575,6 +580,16 @@ export default function ModelDetailPage() {
         </Link>
       </div>
     )
+  }
+
+  const tabs: { value: PageTab; icon: ComponentType<{ className?: string }>; label: string }[] = [
+    { value: 'posts', icon: LayoutGrid, label: 'Posts' },
+    { value: 'services', icon: ListChecks, label: 'Services' },
+    { value: 'rates', icon: Tag, label: 'Rates' },
+    { value: 'reviews', icon: Star, label: 'Reviews' },
+  ]
+  if (viewerIsOwner || privateTabVisible) {
+    tabs.push({ value: 'private', icon: Lock, label: 'Private snaps' })
   }
 
   const recency = formatRecency(provider.lastActiveAt)
@@ -956,14 +971,7 @@ export default function ModelDetailPage() {
 
       {/* Icon tab bar */}
       <div className="mt-3 flex border-b border-neutral-100">
-        {(
-          [
-            { value: 'posts', icon: LayoutGrid, label: 'Posts' },
-            { value: 'services', icon: ListChecks, label: 'Services' },
-            { value: 'rates', icon: Tag, label: 'Rates' },
-            { value: 'reviews', icon: Star, label: 'Reviews' },
-          ] as const
-        ).map(({ value, icon: Icon, label }) => (
+        {tabs.map(({ value, icon: Icon, label }) => (
           <button
             key={value}
             onClick={() => setActiveTab(value)}
@@ -1049,6 +1057,16 @@ export default function ModelDetailPage() {
             )}
           </div>
         )}
+        {/* Private snaps: always mounted so the component can report
+            tab visibility from its own summary fetch; it renders its
+            body only when the private tab is active. */}
+        <PrivateSnaps
+          providerId={provider.id}
+          providerName={provider.displayName}
+          isOwner={viewerIsOwner}
+          active={activeTab === 'private'}
+          onVisibilityChange={setPrivateTabVisible}
+        />
       </div>
 
       <p className="px-4 pb-2 text-xs text-neutral-500">Area location only, never an exact address</p>

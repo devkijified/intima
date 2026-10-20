@@ -8,7 +8,8 @@ import { createClient } from '@/lib/supabase/server';
  *
  * - Publisher: must own the live session and be a provider.
  * - Viewer: session must be live; if the session is paid (price_ngn > 0),
- *   the viewer must hold an active paid connection OR be the host.
+ *   the viewer must hold an active paid connection, an effective fan
+ *   club subscription with the host (fans enter free), OR be the host.
  * The API secret never leaves the server.
  */
 export async function POST(req: NextRequest) {
@@ -52,7 +53,11 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      // Paid room gate: host always in; others need an active connection.
+      // Paid room gate: host always in; others need an active
+      // connection or an effective fan club subscription with the
+      // host. Fans enter free: their subscription already paid the
+      // platform its cut, so this check grants the token without
+      // charging and without writing any payment rows.
       if (!isHost && !session.is_public && (session.price_ngn ?? 0) > 0) {
         const { data: conn } = await supabase
           .from('connections')
@@ -62,7 +67,26 @@ export async function POST(req: NextRequest) {
           .eq('status', 'active')
           .limit(1)
           .maybeSingle();
-        if (!conn) {
+        let allowed = !!conn;
+        if (!allowed) {
+          // Same effectiveness rule as /api/subscriptions: 'active',
+          // or 'cancelled' with the paid period still running.
+          const { data: subs } = await supabase
+            .from('subscriptions')
+            .select('status, current_period_end')
+            .eq('subscriber_id', user.id)
+            .eq('provider_id', session.provider_id)
+            .order('created_at', { ascending: false })
+            .limit(5);
+          const nowMs = Date.now();
+          allowed = (subs ?? []).some(
+            (s: { status: string; current_period_end: string }) =>
+              s.status === 'active' ||
+              (s.status === 'cancelled' &&
+                new Date(s.current_period_end).getTime() > nowMs)
+          );
+        }
+        if (!allowed) {
           return NextResponse.json({ error: 'This is a paid stream' }, { status: 402 });
         }
       }
