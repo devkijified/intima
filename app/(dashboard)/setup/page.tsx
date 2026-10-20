@@ -7,6 +7,7 @@ import { SERVICE_CATALOG } from '@/lib/services'
 import { NIGERIA_CITIES, cityCoords } from '@/lib/cities'
 import { computeSetupSteps, isLiveOnMap, type SetupProfile } from '@/lib/setup/completeness'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
+import { AvatarUploader, GalleryUploader } from '@/components/uploads/PhotoUploader'
 import {
   ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, Clock, MapPin, Plane, ShieldCheck,
 } from '@/lib/icons'
@@ -40,7 +41,7 @@ export default function SetupWizardPage() {
   const [city, setCity] = useState('Lagos')
   const [presenceCity, setPresenceCity] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState('')
-  const [galleryText, setGalleryText] = useState('')
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([])
   const [rateShort, setRateShort] = useState('')
   const [rateOvernight, setRateOvernight] = useState('')
   const [rateWeekend, setRateWeekend] = useState('')
@@ -69,7 +70,7 @@ export default function SetupWizardPage() {
       if (!live || !p) { setLoading(false); return }
       setDisplayName(p.display_name ?? '')
       setAvatarUrl(p.avatar_url ?? '')
-      setGalleryText((p.gallery_urls ?? []).join('\n'))
+      setGalleryUrls(p.gallery_urls ?? [])
       setRateShort(p.rate_short_time_ngn?.toString() ?? '')
       setRateOvernight(p.rate_overnight_ngn?.toString() ?? '')
       setRateWeekend(p.rate_weekend_ngn?.toString() ?? '')
@@ -132,9 +133,8 @@ export default function SetupWizardPage() {
         setPresenceCity(city)
       }
       if (step === 2) {
-        const gallery = galleryText.split('\n').map((u) => u.trim()).filter(Boolean)
         const { error: e } = await supabase.from('profiles')
-          .update({ avatar_url: avatarUrl.trim() || null, gallery_urls: gallery }).eq('id', userId)
+          .update({ avatar_url: avatarUrl.trim() || null, gallery_urls: galleryUrls }).eq('id', userId)
         if (e) throw e
       }
       if (step === 3) {
@@ -240,18 +240,19 @@ export default function SetupWizardPage() {
       {step === 2 && (
         <div className="mt-4 space-y-4">
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Your photos</h1>
-          <p className="text-sm text-neutral-500">Your profile photo is required for the map. Add photo links below; you can upload from your phone in the profile editor later.</p>
+          <p className="text-sm text-neutral-500">Your profile photo is required for the map. Add photos straight from your phone.</p>
           <div className="card-luxe space-y-4 p-5">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Main photo link</label>
-              <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://…"
-                className="mt-1.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm outline-none focus:border-primary" />
-              {avatarUrl && <img src={avatarUrl} alt="" className="mt-3 h-40 w-full rounded-2xl object-cover" />}
+              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Main photo</label>
+              <div className="mt-1.5">
+                <AvatarUploader userId={userId} value={avatarUrl} onChange={setAvatarUrl} />
+              </div>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">More photos, one link per line</label>
-              <textarea value={galleryText} onChange={(e) => setGalleryText(e.target.value)} rows={4} placeholder={'https://…\nhttps://…'}
-                className="mt-1.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 font-mono text-xs outline-none focus:border-primary" />
+              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">More photos</label>
+              <div className="mt-1.5">
+                <GalleryUploader userId={userId} value={galleryUrls} onChange={setGalleryUrls} />
+              </div>
             </div>
           </div>
         </div>

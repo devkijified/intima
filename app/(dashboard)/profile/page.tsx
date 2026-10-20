@@ -4,6 +4,7 @@ import { StoryManager } from '@/components/stories/StoryManager'
 import { TouringPanel } from '@/components/profile/TouringPanel'
 import { BoostPanel } from '@/components/profile/BoostPanel';
 import { TravelRequirementsPanel } from '@/components/profile/TravelRequirementsPanel';
+import { AvatarUploader, GalleryUploader } from '@/components/uploads/PhotoUploader';
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -47,7 +48,7 @@ interface ProviderForm {
   ratesNegotiable: boolean
   whatsappNumber: string
   bio: string
-  galleryUrls: string
+  galleryUrls: string[]
   showOnMap: boolean
   isAvailable: boolean
 }
@@ -63,7 +64,7 @@ const EMPTY_FORM: ProviderForm = {
   ratesNegotiable: true,
     whatsappNumber: '',
   bio: '',
-  galleryUrls: '',
+  galleryUrls: [],
   showOnMap: true,
   isAvailable: true,
 }
@@ -127,7 +128,7 @@ export default function ProfilePage() {
           ratesNegotiable: profile?.rates_negotiable ?? true,
     whatsappNumber: profile?.whatsapp_number ?? '',
     bio: profile?.bio ?? '',
-          galleryUrls: (profile?.gallery_urls ?? []).join('\n'),
+          galleryUrls: profile?.gallery_urls ?? [],
           showOnMap: presence?.show_on_map ?? true,
           isAvailable: presence?.is_available ?? true,
         })
@@ -185,10 +186,7 @@ export default function ProfilePage() {
     setError(null)
     try {
       const [lat, lng] = form.city ? CITY_COORDS[form.city] ?? [6.5244, 3.3792] : [6.5244, 3.3792]
-      const gallery = form.galleryUrls
-        .split('\n')
-        .map((u) => u.trim())
-        .filter(Boolean)
+      const gallery = form.galleryUrls.filter(Boolean)
 
       const { error: pErr } = await supabase.from('profiles').upsert(
         {
@@ -376,20 +374,14 @@ export default function ProfilePage() {
                 )}
               </div>
               <div>
-                <label className={labelCls}>Profile photo URL</label>
-                <input
-                  className={inputCls}
-                  value={form.avatarUrl}
-                  onChange={(e) => setForm({ ...form, avatarUrl: e.target.value })}
-                  placeholder="https://..."
-                />
-                {form.avatarUrl.trim() && (
-                  <img
-                    src={form.avatarUrl.trim()}
-                    alt="Profile preview"
-                    className="mt-2 h-20 w-20 rounded-2xl object-cover"
+                <label className={labelCls}>Profile photo</label>
+                <div className="mt-1 max-w-[220px]">
+                  <AvatarUploader
+                    userId={userId}
+                    value={form.avatarUrl}
+                    onChange={(url) => setForm({ ...form, avatarUrl: url })}
                   />
-                )}
+                </div>
               </div>
               <div>
                 <label className={labelCls}>
@@ -545,13 +537,12 @@ export default function ProfilePage() {
               <ImageIcon className="h-4 w-4 text-[#AC244D]" /> Gallery photos
             </h2>
             <p className="mb-3 text-xs text-neutral-500">
-              One photo URL per line. Your profile photo is the cover; these are the rest.
+              Add photos straight from your phone. Your profile photo is the cover; these are the rest.
             </p>
-            <textarea
-              className={`${inputCls} min-h-[110px] font-mono text-xs`}
+            <GalleryUploader
+              userId={userId}
               value={form.galleryUrls}
-              onChange={(e) => setForm({ ...form, galleryUrls: e.target.value })}
-              placeholder={'https://.../photo1.jpg\nhttps://.../photo2.jpg'}
+              onChange={(urls) => setForm({ ...form, galleryUrls: urls })}
             />
           </div>
 
@@ -654,20 +645,10 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className={labelCls}>Avatar URL</label>
-              <input
-                className={inputCls}
-                value={clientAvatar}
-                onChange={(e) => setClientAvatar(e.target.value)}
-                placeholder="https://..."
-              />
-              {clientAvatar.trim() && (
-                <img
-                  src={clientAvatar.trim()}
-                  alt="Avatar preview"
-                  className="mt-2 h-20 w-20 rounded-full object-cover"
-                />
-              )}
+              <label className={labelCls}>Your photo</label>
+              <div className="mt-1 max-w-[220px]">
+                <AvatarUploader userId={userId} value={clientAvatar} onChange={setClientAvatar} />
+              </div>
             </div>
             <button
               onClick={saveClient}
