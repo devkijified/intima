@@ -28,6 +28,7 @@ import { FilterSheet } from './FilterSheet';
 import { ProviderListCard, ProviderListSkeleton } from './ProviderListCard';
 import { useCall } from '@/components/calls/CallProvider';
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
@@ -602,7 +603,7 @@ export default function IntimaMap() {
       {mapStalled && !mapReady && !mapFailed && view === 'map' && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#111118] px-6 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#AC244D]/15">
-            <MapPin className="h-7 w-7 text-[#AC244D]" />
+            <MapPin aria-hidden className="h-7 w-7 text-[#AC244D]" />
           </div>
           <div>
             <p className="text-base font-semibold text-white">The map is stuck loading</p>
@@ -614,13 +615,13 @@ export default function IntimaMap() {
           <div className="flex gap-3">
             <button
               onClick={retryMap}
-              className="rounded-full bg-[#AC244D] px-5 py-2.5 text-sm font-semibold text-white"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#AC244D] px-5 py-2.5 text-sm font-semibold text-white"
             >
               Try again
             </button>
             <button
               onClick={() => setView('list')}
-              className="rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white"
             >
               View as list
             </button>
@@ -646,7 +647,7 @@ export default function IntimaMap() {
                   }
                 }}
                 aria-label="Choose city"
-                className="max-w-[110px] appearance-none truncate rounded-full bg-white/[0.08] py-1.5 pl-3 pr-8 text-sm font-medium text-white/90 outline-none transition-colors hover:bg-white/[0.14] sm:max-w-none"
+                className="min-h-[44px] max-w-[110px] appearance-none truncate rounded-full bg-white/[0.08] py-1.5 pl-3 pr-8 text-base font-medium text-white/90 outline-none transition-colors hover:bg-white/[0.14] sm:max-w-none md:text-sm"
               >
                 <option value="" className="text-charcoal">
                   All cities
@@ -657,14 +658,14 @@ export default function IntimaMap() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
+              <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             </div>
           </div>
           <div className="flex items-center gap-2">
             {session ? (
               <Link
                 href="/dashboard"
-                className="rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
+                className="inline-flex min-h-[44px] items-center rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
               >
                 Dashboard
               </Link>
@@ -672,13 +673,13 @@ export default function IntimaMap() {
               <>
                 <Link
                   href="/login"
-                  className="hidden rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95 min-[380px]:block"
+                  className="hidden min-h-[44px] items-center rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95 min-[380px]:inline-flex"
                 >
                   Log in
                 </Link>
                 <Link
                   href="/signup"
-                  className="rounded-full bg-[#AC244D] px-3.5 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95 sm:px-4"
+                  className="inline-flex min-h-[44px] items-center rounded-full bg-[#AC244D] px-3.5 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95 sm:px-4"
                 >
                   Sign up
                 </Link>
@@ -706,13 +707,13 @@ export default function IntimaMap() {
                   role="tab"
                   aria-selected={view === value}
                   onClick={() => setView(value)}
-                  className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                  className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
                     view === value
                       ? 'bg-white text-charcoal shadow'
                       : 'text-white/75 hover:text-white'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon aria-hidden className="h-4 w-4" />
                   {label}
                 </button>
               ))}
@@ -722,19 +723,19 @@ export default function IntimaMap() {
           <button
             onClick={() => toggle('verifiedOnly')}
             aria-pressed={filters.verifiedOnly}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.verifiedOnly
                 ? 'border-[#AC244D] bg-[#AC244D] text-white shadow-lg'
                 : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
             }`}
           >
-            <BadgeCheck className="h-3.5 w-3.5" />
+            <BadgeCheck aria-hidden className="h-3.5 w-3.5" />
             Verified
           </button>
           <button
             onClick={() => toggle('availableNow')}
             aria-pressed={filters.availableNow}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.availableNow
                 ? 'border-green-600 bg-green-600 text-white shadow-lg'
                 : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
@@ -746,7 +747,7 @@ export default function IntimaMap() {
           <button
             onClick={() => toggle('negotiableOnly')}
             aria-pressed={filters.negotiableOnly}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.negotiableOnly
                 ? 'border-[#C9A84C] bg-[#C9A84C] text-charcoal shadow-lg'
                 : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
@@ -756,13 +757,13 @@ export default function IntimaMap() {
           </button>
           <button
             onClick={() => setFilterOpen(true)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
               sheetFilterCount > 0
                 ? 'bg-[#C9A84C] text-charcoal shadow-lg'
                 : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
             }`}
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <SlidersHorizontal aria-hidden className="h-4 w-4" />
             Filters
             {sheetFilterCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-charcoal px-1 text-[11px] font-bold text-white">
@@ -788,7 +789,7 @@ export default function IntimaMap() {
       </div>
 
       {/* Build tag: tiny, bottom-right. Tells us exactly what version is running. */}
-      <div className="pointer-events-none absolute bottom-1 right-2 z-40 select-none text-[10px] text-white/25">
+      <div className="pointer-events-none absolute bottom-1 right-2 z-40 select-none text-[11px] text-white/25">
         {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev'}
       </div>
 
@@ -796,7 +797,7 @@ export default function IntimaMap() {
       {mapReady && !mapFailed && view === 'map' && (
         <div className="glass-dark absolute left-3 z-10 rounded-2xl px-3.5 py-2.5 text-xs text-white/90 shadow-lift" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
           <p className="flex items-center gap-2">
-            <BadgeCheck className="h-3.5 w-3.5" />
+            <BadgeCheck aria-hidden className="h-3.5 w-3.5" />
             Verified
           </p>
           <p className="mt-1 flex items-center gap-2">
@@ -811,7 +812,7 @@ export default function IntimaMap() {
         <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[124px]">
           {mapFailed && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
               <div className="min-w-0">
                 <p>
                   The live map could not load on this connection, so here are
@@ -859,7 +860,7 @@ export default function IntimaMap() {
           ) : (
             <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-black/[0.04]">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#AC244D]/10">
-                <SearchX className="h-6 w-6 text-[#AC244D]" />
+                <SearchX aria-hidden className="h-6 w-6 text-[#AC244D]" />
               </div>
               <h3 className="font-display text-lg font-semibold text-charcoal">
                 No providers match
@@ -869,7 +870,7 @@ export default function IntimaMap() {
               </p>
               <button
                 onClick={clearFilters}
-                className="mt-4 rounded-full bg-[#AC244D] px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#8F1D40] active:scale-95"
+                className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#AC244D] px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#8F1D40] active:scale-95"
               >
                 Clear filters
               </button>
@@ -923,14 +924,16 @@ export default function IntimaMap() {
                   toast.onAction?.();
                   setToast(null);
                 }}
-                className="rounded-full bg-[#AC244D] px-4 py-1.5 font-medium transition-all hover:bg-[#8F1D40] active:scale-95"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-[#AC244D] px-4 py-1.5 font-medium transition-all hover:bg-[#8F1D40] active:scale-95"
               >
                 {toast.actionLabel}
               </button>
             )}
-            <button onClick={() => setToast(null)} aria-label="Dismiss" className="-mr-2 flex h-11 w-11 items-center justify-center">
-              <X className="h-4 w-4 text-white/70" />
-            </button>
+            <Tooltip label="Dismiss">
+              <button onClick={() => setToast(null)} aria-label="Dismiss" className="-mr-2 flex h-11 w-11 items-center justify-center">
+                <X aria-hidden className="h-4 w-4 text-white/70" />
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}

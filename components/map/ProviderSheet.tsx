@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronDown, ChevronUp, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from '@/lib/icons';
+import { BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from '@/lib/icons';
 import { RateCard } from '@/components/rates/RateCard';
+import { HelpTip } from '@/components/ui/Tooltip';
 import { ServiceChips } from '@/components/services/ServiceChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import { formatRecency } from '@/lib/utils/recency';
@@ -399,9 +400,12 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
             <div className="mt-2 flex items-center gap-1.5">
               <h2 className="font-display text-lg font-semibold text-charcoal">{nameLine}</h2>
               {provider.verified && <BadgeCheck className="h-4 w-4 text-primary" />}
+              {provider.verified && (
+                <HelpTip text="This badge means Intima checked the companion's government ID against a live selfie, so the person in the photos is the person you meet. A gold ring on the photo marks an Elite companion with a strong booking record." />
+              )}
             </div>
             <p className="flex items-center gap-1 text-sm text-neutral-500">
-              <MapPin className="h-3.5 w-3.5" />
+              <MapPin aria-hidden className="h-3.5 w-3.5" />
               {provider.area}, {provider.city}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -417,13 +421,20 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
               <span className="text-neutral-500">
                 {provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}
               </span>
+              <HelpTip
+                text={
+                  provider.ratesNegotiable
+                    ? 'Negotiable means you can propose your own rate when you request a connection. The companion can accept your offer or keep the listed rate.'
+                    : 'Fixed rates means the listed rate is final, so there is no propose a rate box for this companion.'
+                }
+              />
             </div>
 
             {/* Action row: request + calls + favorite (wraps on narrow phones) */}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => onRequestConnection(provider)}
-                className="btn-luxe h-11 min-w-[218px] flex-1 gap-1.5 whitespace-nowrap px-4 text-[15px]"
+                className="btn-luxe min-h-[48px] min-w-[218px] flex-1 gap-1.5 whitespace-nowrap px-4 text-[15px]"
               >
                 Request connection
                 {connectionFee !== null && (
@@ -475,7 +486,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                 key={value}
                 onClick={() => setActiveTab(value)}
                 aria-label={label}
-                className={`relative flex flex-1 items-center justify-center py-2.5 transition-colors ${
+                className={`relative flex min-h-[44px] flex-1 items-center justify-center py-2.5 transition-colors ${
                   activeTab === value ? 'text-charcoal' : 'text-neutral-300'
                 }`}
               >
@@ -507,8 +518,8 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                     ) : (
                       <VideoSlide src={slide.src} active={false} />
                     )}
-                    <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-semibold text-white drop-shadow">
-                      <Play className="h-2.5 w-2.5 fill-white" />
+                    <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[11px] font-semibold text-white drop-shadow">
+                      <Play aria-hidden className="h-2.5 w-2.5 fill-white" />
                       {formatCompactCount(Math.max(1, Math.round(provider.viewCount / Math.max(1, totalSlides))))}
                     </span>
                     {slide.kind === 'video' && (
@@ -574,7 +585,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           {showViewProfile && (
             <button
               onClick={() => onViewProfile(provider)}
-              className="w-full py-2 text-center text-sm font-medium text-primary hover:underline"
+              className="flex min-h-[48px] w-full items-center justify-center py-2 text-center text-sm font-medium text-primary hover:underline"
             >
               View full profile
             </button>
@@ -592,10 +603,11 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           onClick={() => setLightbox(null)}
         >
           <button
+            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
             aria-label="Close"
             className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
           >
-            <X className="h-5 w-5" />
+            <X aria-hidden className="h-5 w-5" />
           </button>
           <div className="max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
             {slides[lightbox].kind === 'photo' ? (
@@ -613,17 +625,17 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
             <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + totalSlides) % totalSlides); }}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
                 aria-label="Previous"
               >
-                <ChevronUp className="h-5 w-5 -rotate-90" />
+                <ChevronLeft aria-hidden className="h-5 w-5" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % totalSlides); }}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
                 aria-label="Next"
               >
-                <ChevronUp className="h-5 w-5 rotate-90" />
+                <ChevronRight aria-hidden className="h-5 w-5" />
               </button>
             </div>
           )}

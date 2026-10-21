@@ -47,13 +47,13 @@ export function ProviderListCard({ provider, onSelect, travelNote }: ProviderLis
               Elite
             </span>
           ) : provider.verified && (
-            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-[#AC244D] px-2 py-1 text-[10px] font-semibold text-white shadow-md">
+            <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-[#AC244D] px-2 py-1 text-[11px] font-semibold text-white shadow-md">
               <BadgeCheck className="h-3 w-3" />
               Verified
             </span>
           )}
           {provider.available && (
-            <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+            <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
               Available
             </span>
