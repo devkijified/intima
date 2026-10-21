@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils/helpers'
 
 /**
  * Wraps a list or feed surface with pull to refresh. The indicator
- * is the shared TikTok dots in a small pill that slides in over the
+ * is the shared Intima dots in a small pill that slides in over the
  * top of the surface (safe-area aware) as you pull; the content
  * itself never moves, so nothing shifts layout. Wire onRefresh to
  * the surface's real refetch function.
