@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { ngnForCoins } from '@/lib/utils/helpers'
 import { Star } from '@/lib/icons'
 
 interface LeaderRow {
@@ -68,8 +69,8 @@ export function GiftLeaderboard({
   if (variant === 'rail') {
     return (
       <div>
-        <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gold">
-          <Star className="h-3 w-3" /> Top gifters
+        <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-gold">
+          <Star className="h-3 w-3" aria-hidden /> Top gifters
         </p>
         {rows.length === 0 ? (
           <p className="mt-2 text-xs text-white/40">No gifts yet. The first gift takes the top spot.</p>
@@ -82,7 +83,10 @@ export function GiftLeaderboard({
                   <span className="truncate">{r.name}</span>
                   <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-white">Lv{r.level}</span>
                 </span>
-                <span className="shrink-0 font-mono text-white/80">{r.coins.toLocaleString()}</span>
+                <span className="shrink-0 font-mono text-white/80">
+                  {r.coins.toLocaleString()}
+                  <span className="ml-1.5 font-sans text-[10px] font-normal text-white/45">≈ {ngnForCoins(r.coins)}</span>
+                </span>
               </div>
             ))}
           </div>
@@ -94,8 +98,8 @@ export function GiftLeaderboard({
   if (rows.length === 0) return null
   return (
     <div className="pointer-events-none absolute left-3 top-24 z-20 w-44 rounded-2xl bg-black/45 p-2.5 backdrop-blur-sm lg:hidden">
-      <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-gold">
-        <Star className="h-3 w-3" /> Top gifters
+      <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-gold">
+        <Star className="h-3 w-3" aria-hidden /> Top gifters
       </p>
       <div className="mt-1.5 space-y-1.5">
         {rows.slice(0, 5).map((r, i) => (

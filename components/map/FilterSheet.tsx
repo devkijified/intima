@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from '@/lib/icons';
+import { HelpTip } from '@/components/ui/Tooltip';
 import { SERVICE_CATALOG, type ServiceCategory } from '@/lib/services';
 import { cn } from '@/lib/utils/helpers';
 import type { Filters } from './IntimaMap';
@@ -68,7 +69,7 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
               <div className="flex items-center gap-2">
                 <button
                   onClick={clearAll}
-                  className="rounded-full px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-muted"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-muted"
                 >
                   Clear all
                 </button>
@@ -77,15 +78,16 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
                   aria-label="Close filters"
                   className="flex h-11 w-11 items-center justify-center rounded-full bg-black/5 text-charcoal transition-colors hover:bg-black/10"
                 >
-                  <X className="h-4 w-4" />
+                  <X aria-hidden className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
             <div className="max-h-[58dvh] overflow-y-auto px-5 pb-4">
               {/* Budget */}
-              <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+              <p className="mb-2 mt-3 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
                 Budget, short time
+                <HelpTip text="Budget filters by the short time rate only. Overnight and weekend rates may differ, and every profile lists all three." />
               </p>
               <div className="flex flex-wrap gap-2">
                 {BUDGET_OPTIONS.map((opt) => (
@@ -94,7 +96,7 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
                     onClick={() => onChange({ ...filters, budget: opt.value })}
                     aria-pressed={filters.budget === opt.value}
                     className={cn(
-                      'rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95',
+                      'inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95',
                       filters.budget === opt.value
                         ? 'bg-charcoal text-white shadow-md'
                         : 'bg-white text-charcoal ring-1 ring-black/10 hover:ring-black/20',
@@ -122,7 +124,7 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
                             onClick={() => toggleService(s.id)}
                             aria-pressed={active}
                             className={cn(
-                              'rounded-full px-3.5 py-2 text-sm font-medium transition-all active:scale-95',
+                              'inline-flex min-h-[44px] items-center justify-center rounded-full px-3.5 py-2 text-sm font-medium transition-all active:scale-95',
                               active
                                 ? 'bg-primary text-white shadow-md shadow-primary/25'
                                 : 'bg-white text-charcoal ring-1 ring-black/10 hover:ring-black/20',
@@ -144,7 +146,7 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
             <div className="border-t border-black/[0.06] bg-cream/95 p-4 backdrop-blur">
               <button
                 onClick={onClose}
-                className="w-full rounded-2xl bg-primary py-3.5 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-[0.99]"
+                className="min-h-[44px] w-full rounded-2xl bg-primary py-3.5 text-base font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-[0.99]"
               >
                 Show {resultCount} {resultCount === 1 ? 'result' : 'results'}
               </button>
