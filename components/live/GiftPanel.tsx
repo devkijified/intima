@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { COIN_PACKAGES } from '@/lib/coins/packages'
+import { GIFT_CATEGORY_CHIPS, GIFT_CATEGORY_OF, type GiftCategoryKey } from '@/lib/gifts/categories'
 import { ngnForCoins } from '@/lib/utils/helpers'
 import { ChevronLeft, Star, X } from '@/lib/icons'
 import type { GiftCatalogItem } from './giftTypes'
 import GiftObjectIcon from './GiftObjectIcon'
+
+type PanelTab = 'all' | 'favs' | 'recent' | 'premium' | GiftCategoryKey
 
 export type GiftSendResult = 'ok' | 'topup' | 'fail'
 
@@ -39,17 +42,21 @@ function writeList(key: string, list: string[]) {
 }
 
 /**
- * The gift store sheet: TikTok-grade panel over the live room.
- * Four-column grid ordered by price, every tile carrying its exact
- * naira twin; All / Favourites / Recent tabs; the host's pinned
- * gift menu as a strip above the grid; a sticky footer with the
- * balance and Buy coins, which swaps the sheet to the coin packages
- * in place (checkout still runs through /api/coins/buy, and the
- * parent stashes the selected gift so the room restores it on
- * return). After a float or burst send, a combo button with a 4s
- * draining ring re-sends per tap with running count and spend;
- * when the window lapses, the parent posts the summary to chat.
- * Stage and takeover gifts never combo.
+ * The gift store sheet, modelled on TikTok LIVE's gift panel: a
+ * bottom sheet over the room (the video stays visible above it),
+ * one scrollable chip row to browse by (All, Favourites, Recent,
+ * the store categories, and Premium for the animated gifts), a
+ * four-column grid ordered by price with every tile carrying its
+ * exact naira twin, the host's pinned gift menu as a strip above
+ * the grid, and a sticky footer with the coin balance and a
+ * Recharge-style Buy coins button that swaps the sheet to the coin
+ * packages in place (checkout still runs through /api/coins/buy,
+ * and the parent stashes the selected gift so the room restores
+ * it on return). Tap a gift to send it, TikTok style; after a
+ * float or burst send, a combo button with a 4s draining ring
+ * re-sends per tap with running count and spend; when the window
+ * lapses, the parent posts the summary to chat. Stage and
+ * takeover gifts never combo.
  */
 export function GiftPanel({
   catalog,
@@ -75,7 +82,7 @@ export function GiftPanel({
   onClose: () => void
 }) {
   const [view, setView] = useState<'gifts' | 'packages'>('gifts')
-  const [tab, setTab] = useState<'all' | 'favs' | 'recent'>('all')
+  const [tab, setTab] = useState<PanelTab>('all')
   const [favs, setFavs] = useState<string[]>(() => readList(FAVS_KEY))
   const [recent, setRecent] = useState<string[]>(() => readList(RECENT_KEY))
   const [selectedId, setSelectedId] = useState<string | null>(initialGiftId ?? null)
@@ -102,7 +109,11 @@ export function GiftPanel({
         ? recent
             .map((id) => catalog.find((g) => g.id === id))
             .filter((g): g is GiftCatalogItem => !!g)
-        : catalog
+        : tab === 'premium'
+          ? catalog.filter((g) => g.anim_tier === 'stage' || g.anim_tier === 'takeover')
+          : tab === 'all'
+            ? catalog
+            : catalog.filter((g) => GIFT_CATEGORY_OF[g.id] === tab)
 
   const endCombo = (fireSummary: boolean) => {
     if (comboTimer.current) {
@@ -293,20 +304,26 @@ export function GiftPanel({
               </div>
             )}
 
-            <div className="mb-3 flex gap-1 rounded-full bg-white/5 p-1">
+            <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
               {(
                 [
                   { key: 'all', label: 'All' },
                   { key: 'favs', label: 'Favourites' },
                   { key: 'recent', label: 'Recent' },
-                ] as const
+                  ...GIFT_CATEGORY_CHIPS,
+                  { key: 'premium', label: 'Premium' },
+                ] as Array<{ key: PanelTab; label: string }>
               ).map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setTab(t.key)}
                   aria-pressed={tab === t.key}
-                  className={`min-h-[44px] flex-1 rounded-full py-2 text-xs font-bold transition-colors ${
-                    tab === t.key ? 'bg-primary text-white' : 'text-white/55'
+                  className={`min-h-[40px] shrink-0 rounded-full px-3.5 py-2 text-xs font-bold transition-colors ${
+                    tab === t.key
+                      ? t.key === 'premium'
+                        ? 'bg-gold text-charcoal'
+                        : 'bg-primary text-white'
+                      : 'bg-white/5 text-white/55'
                   }`}
                 >
                   {t.label}
@@ -323,7 +340,7 @@ export function GiftPanel({
               </div>
             )}
 
-            <div className="grid max-h-60 grid-cols-4 gap-2 overflow-y-auto">
+            <div className="grid max-h-[44vh] grid-cols-4 gap-2 overflow-y-auto">
               {visibleGifts.map((g) => {
                 const unaffordable = balance !== null && g.coin_cost > balance
                 const isFav = favs.includes(g.id)
@@ -375,7 +392,9 @@ export function GiftPanel({
                   ? 'Tap the star on a gift to keep it here.'
                   : tab === 'recent'
                     ? 'Gifts you send will appear here.'
-                    : 'Gift catalog unavailable.'}
+                    : tab === 'all'
+                      ? 'Gift catalog unavailable.'
+                      : 'No gifts in this section yet.'}
               </p>
             )}
 
