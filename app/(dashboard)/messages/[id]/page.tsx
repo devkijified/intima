@@ -8,7 +8,7 @@ import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
 import ConnectionCare from '@/components/connections/ConnectionCare'
 import { FanBadge } from '@/components/social/FanBadge'
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { formatCompactPrice, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { serviceTypeLabel } from '@/lib/connections/serviceType'
 import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, Image as ImageIcon } from '@/lib/icons'
@@ -595,7 +595,7 @@ export default function ThreadPage() {
       <div className="flex-1 overflow-y-auto bg-cream/40 px-4 py-4">
         {loading ? (
           <div className="flex h-full items-center justify-center">
-            <TikTokLoader size="lg" />
+            <IntimaLoader size="lg" />
           </div>
         ) : msgs.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">

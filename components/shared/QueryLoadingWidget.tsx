@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { subscribeQueryLoading } from '@/lib/queryLoading'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 
 /**
  * Global background-query pill: floats at the top centre of the app
@@ -58,7 +58,7 @@ export function QueryLoadingWidget() {
       className="animate-pop-in pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+4.5rem)] z-[90] -translate-x-1/2"
     >
       <div className="flex items-center gap-2.5 rounded-full bg-charcoal/95 py-2 pl-4 pr-5 shadow-2xl backdrop-blur-md">
-        <TikTokLoader size="sm" />
+        <IntimaLoader size="sm" />
         <span className="text-xs font-semibold text-white">Loading</span>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { usePullToRefresh } from '@/lib/hooks/usePullToRefresh'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { cn } from '@/lib/utils/helpers'
 
 /**
@@ -49,7 +49,7 @@ export function PullToRefresh({
         }}
       >
         <div className="flex h-10 items-center rounded-full bg-white px-4 shadow-lg ring-1 ring-black/5">
-          <TikTokLoader size="sm" />
+          <IntimaLoader size="sm" />
         </div>
       </div>
       {children}

@@ -1,7 +1,7 @@
 'use client'
 
 import { PullToRefresh } from '@/components/shared/PullToRefresh'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -128,7 +128,7 @@ export default function NotificationsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <TikTokLoader size="lg" />
+        <IntimaLoader size="lg" />
       </div>
     )
   }

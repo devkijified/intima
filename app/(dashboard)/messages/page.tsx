@@ -1,7 +1,7 @@
 'use client'
 
 import { PullToRefresh } from '@/components/shared/PullToRefresh'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -88,7 +88,7 @@ export default function MessagesPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <TikTokLoader size="lg" />
+          <IntimaLoader size="lg" />
         </div>
       ) : threads.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-dashed border-neutral-200 bg-white p-10 text-center">
