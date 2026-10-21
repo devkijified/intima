@@ -8,6 +8,7 @@ import { useDock } from '@/components/dock/FloatingDock'
 import { FanBadge } from '@/components/social/FanBadge'
 import { GiftFxLayer, type GiftFxHandle } from '@/components/live/GiftFx'
 import { GiftPanel, type GiftSendResult } from '@/components/live/GiftPanel'
+import GiftObjectIcon from '@/components/live/GiftObjectIcon'
 import type { GiftCatalogItem, GiftFxEvent } from '@/components/live/giftTypes'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -793,7 +794,7 @@ export default function StreamRoomPage() {
               pushMessage({
                 id: `gift-${row.id}`,
                 name: senderName,
-                body: `sent ${gift.name} ${gift.emoji} · ${gift.coin_cost.toLocaleString()} coins (${ngnForCoins(gift.coin_cost)})`,
+                body: `sent ${gift.name} · ${gift.coin_cost.toLocaleString()} coins (${ngnForCoins(gift.coin_cost)})`,
                 mine: row.sender_id === user.id,
                 senderId: row.sender_id,
               })
@@ -2176,7 +2177,7 @@ export default function StreamRoomPage() {
                       : 'border-white/10 bg-white/5'
                 }`}
               >
-                <span className="text-[22px] leading-none">{g.emoji}</span>
+                <GiftObjectIcon giftId={g.id} size={30} />
                 <span className="text-[11px] font-medium leading-tight text-white">{g.name}</span>
                 <span className="text-[11px] font-bold leading-tight text-gold">
                   {sendingGift === g.id ? '...' : g.coin_cost.toLocaleString()}
