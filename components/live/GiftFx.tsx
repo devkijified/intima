@@ -242,7 +242,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
     // Rose sprays gold. Anything else keeps the sparkle set.
     const glyphs =
       evt.giftId === 'chest'
-        ? ['🌹', '🪄', '🍆', '💋']
+        ? ['🌹', '⚡', '🍆', '💋']
         : evt.giftId === 'golden-rose'
           ? ['✦', '✨', '💛']
           : ['✨', '💕', '✦']
