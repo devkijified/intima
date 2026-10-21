@@ -40,15 +40,15 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
             <h2 className="text-2xl font-bold text-charcoal">Age Verification</h2>
             <p className="text-gray-500 text-sm mt-1">Please confirm you are 18 or older</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
+          <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-gray-600">
+            <X aria-hidden className="w-6 h-6" />
           </button>
         </div>
 
         <div className="space-y-4">
           <div className="bg-primary-muted p-4 rounded-xl text-sm text-gray-700">
             <p className="font-medium flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-primary" />
+              <ShieldAlert aria-hidden className="w-4 h-4 text-primary" />
               Age Restriction
             </p>
             <p>This platform is strictly for adults aged 18 and above.</p>
@@ -65,7 +65,7 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
                 setAge(e.target.value)
                 setError('')
               }}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition"
+              className="min-h-[48px] w-full px-4 py-3 text-base md:text-sm border border-gray-300 rounded-xl focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition"
               placeholder="Enter your age..."
               min="18"
               max="120"
@@ -77,7 +77,7 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
 
           <button
             onClick={handleVerify}
-            className="w-full bg-primary text-white py-3 rounded-xl font-medium 
+            className="min-h-[48px] w-full bg-primary text-white py-3 rounded-xl font-medium 
                      hover:bg-primary-dark transition-all duration-300"
           >
             Verify & Continue

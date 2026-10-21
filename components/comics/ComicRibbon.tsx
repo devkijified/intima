@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { BookOpen } from '@/lib/icons'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 /**
  * Retention hook on the map home: if an episode dropped in the last 7
@@ -35,26 +36,32 @@ export function ComicRibbon() {
   if (!ep) return null
   return (
     <div className="pointer-events-auto flex items-center justify-center px-3">
-      <Link
-        href={`/comics/${ep.id}`}
-        className="glass-dark flex items-center gap-2 rounded-full py-2 pl-3 pr-4 text-white animate-pop-in active:scale-[0.97] transition-transform"
-      >
-        <BookOpen className="h-4 w-4 text-gold" />
-        <span className="text-[13px] font-medium">
-          New comic episode: <span className="font-semibold">{ep.title}</span>
-        </span>
+      {/* The pill is a plain container: the link and the dismiss
+          button are siblings, never nested, so a tap on dismiss
+          cannot also trigger navigation. */}
+      <div className="glass-dark flex items-center gap-2 rounded-full py-2 pl-3 pr-2 text-white animate-pop-in">
+        <Link
+          href={`/comics/${ep.id}`}
+          className="flex items-center gap-2 active:scale-[0.97] transition-transform"
+        >
+          <BookOpen aria-hidden className="h-4 w-4 text-gold" />
+          <span className="text-[13px] font-medium">
+            New comic episode: <span className="font-semibold">{ep.title}</span>
+          </span>
+        </Link>
+        <Tooltip label="Dismiss">
         <button
           aria-label="Dismiss"
-          onClick={(e) => {
-            e.preventDefault()
+          onClick={() => {
             try { localStorage.setItem('comic_dismissed', ep.id) } catch { /* ignore */ }
             setEp(null)
           }}
-          className="ml-1 -my-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/15 p-3 text-[11px] text-white/80"
+          className="ml-1 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/15 p-3 text-[11px] text-white/80"
         >
           ×
         </button>
-      </Link>
+        </Tooltip>
+      </div>
     </div>
   )
 }

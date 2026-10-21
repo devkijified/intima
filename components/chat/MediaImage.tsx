@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 /**
  * Media URL resolution for private chat media (migration 052).
@@ -150,12 +151,14 @@ export function MediaViewerOverlay({
       className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/95"
       onClick={onClose}
     >
-      <button
-        aria-label="Close"
-        className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-lg text-white"
-      >
-        ×
-      </button>
+      <Tooltip label="Close" wrapperClassName="absolute right-4 top-4">
+        <button
+          aria-label="Close"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-lg text-white"
+        >
+          ×
+        </button>
+      </Tooltip>
       <div className="max-h-[82vh] w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
         {!url ? (
           <div className="flex h-56 items-center justify-center text-sm text-white/60">

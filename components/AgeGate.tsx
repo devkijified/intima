@@ -39,7 +39,7 @@ export function AgeGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-dvh bg-cream flex flex-col items-center justify-center px-4">
         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-          <ShieldCheck className="w-8 h-8 text-primary" />
+          <ShieldCheck aria-hidden className="w-8 h-8 text-primary" />
         </div>
         <h1 className="text-2xl font-bold text-charcoal">Intima</h1>
         <p className="text-gray-500 mt-1 mb-6">Where Elegance Meets Connection</p>

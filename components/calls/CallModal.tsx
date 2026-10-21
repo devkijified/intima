@@ -189,7 +189,7 @@ export function CallModal(props: CallModalProps) {
                 </div>
               )}
               <p className="flex items-center gap-2 text-sm text-white/70">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 Connecting…
               </p>
             </div>
@@ -228,7 +228,7 @@ export function CallModal(props: CallModalProps) {
           </div>
           {state === 'active' && kind === 'voice' && !connecting && <AudioBars />}
           {state === 'outgoing' && !error && (
-            <Loader2 className="h-6 w-6 animate-spin text-[#C9A84C]" />
+            <Loader2 className="h-6 w-6 animate-spin text-[#C9A84C]" aria-hidden />
           )}
           {error && (
             <p className="max-w-xs rounded-2xl bg-red-500/15 px-4 py-2 text-sm text-red-300">
@@ -256,7 +256,7 @@ export function CallModal(props: CallModalProps) {
             className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 shadow-lg transition-transform active:scale-95"
             aria-label="Cancel call"
           >
-            <PhoneOff className="h-7 w-7" />
+            <PhoneOff className="h-7 w-7" aria-hidden />
           </button>
         )}
 
@@ -267,14 +267,14 @@ export function CallModal(props: CallModalProps) {
               className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 shadow-lg transition-transform active:scale-95"
               aria-label="Decline call"
             >
-              <PhoneOff className="h-7 w-7" />
+              <PhoneOff className="h-7 w-7" aria-hidden />
             </button>
             <button
               onClick={onAccept}
               className="flex h-16 w-16 items-center justify-center rounded-full bg-[#AC244D] shadow-lg transition-transform active:scale-95"
               aria-label="Accept call"
             >
-              <Phone className="h-7 w-7" />
+              <Phone className="h-7 w-7" aria-hidden />
             </button>
           </>
         )}
@@ -288,7 +288,7 @@ export function CallModal(props: CallModalProps) {
               }`}
               aria-label={muted ? 'Unmute' : 'Mute'}
             >
-              {muted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+              {muted ? <MicOff className="h-6 w-6" aria-hidden /> : <Mic className="h-6 w-6" aria-hidden />}
             </button>
             {kind === 'video' && (
               <>
@@ -299,14 +299,14 @@ export function CallModal(props: CallModalProps) {
                   }`}
                   aria-label={cameraOff ? 'Turn camera on' : 'Turn camera off'}
                 >
-                  {cameraOff ? <VideoOff className="h-6 w-6" /> : <Video className="h-6 w-6" />}
+                  {cameraOff ? <VideoOff className="h-6 w-6" aria-hidden /> : <Video className="h-6 w-6" aria-hidden />}
                 </button>
                 <button
                   onClick={onSwitchCamera}
                   className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-white shadow-lg transition-all active:scale-95"
                   aria-label="Switch camera"
                 >
-                  <SwitchCamera className="h-6 w-6" />
+                  <SwitchCamera className="h-6 w-6" aria-hidden />
                 </button>
               </>
             )}
@@ -317,14 +317,14 @@ export function CallModal(props: CallModalProps) {
               }`}
               aria-label="Toggle speaker"
             >
-              <Volume2 className="h-6 w-6" />
+              <Volume2 className="h-6 w-6" aria-hidden />
             </button>
             <button
               onClick={onEnd}
               className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 shadow-lg transition-transform active:scale-95"
               aria-label="End call"
             >
-              <PhoneOff className="h-7 w-7" />
+              <PhoneOff className="h-7 w-7" aria-hidden />
             </button>
           </>
         )}
