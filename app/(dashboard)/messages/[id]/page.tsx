@@ -7,7 +7,15 @@ import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
 import ConnectionCare from '@/components/connections/ConnectionCare'
 import { FanBadge } from '@/components/social/FanBadge'
-import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock, Timer } from '@/lib/icons'
+import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock, Timer, Image as ImageIcon } from '@/lib/icons'
+import { reencodeImage } from '@/lib/uploads/reencode'
+import {
+  isPrivateMediaPath,
+  noteMediaUnlocked,
+  resolveMediaUrls,
+  useMediaUrl,
+  MediaViewerOverlay,
+} from '@/components/chat/MediaImage'
 
 interface Msg {
   id: string
@@ -32,6 +40,41 @@ interface Counterpart {
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * Upload one chat media file into the private 'chat-media' bucket
+ * (migration 052), under the sender's own folder. Images are
+ * re-encoded first (EXIF stripped, capped size), like profile
+ * photos. Returns the storage path stored on the message plus a
+ * signed URL for the sender's own immediate render: storage has
+ * no select policy at all, so even the uploader reads back
+ * through signed URLs minted server-side.
+ */
+async function uploadChatMedia(file: File): Promise<{ path: string; signedUrl: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('not signed in')
+  const isVideo = file.type.startsWith('video/')
+  const blob: Blob = isVideo ? file : await reencodeImage(file)
+  const ext = isVideo
+    ? (file.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4'
+    : blob.type === 'image/png'
+      ? 'png'
+      : 'jpg'
+  const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`
+  const { error } = await supabase.storage.from('chat-media').upload(path, blob, {
+    contentType: blob.type || file.type,
+    upsert: false,
+  })
+  if (error) throw error
+  const { data, error: signErr } = await supabase.storage
+    .from('chat-media')
+    .createSignedUrl(path, 3600)
+  if (signErr || !data?.signedUrl) throw signErr ?? new Error('Could not sign the upload')
+  return { path, signedUrl: data.signedUrl }
 }
 
 export default function ThreadPage() {
@@ -63,6 +106,19 @@ export default function ThreadPage() {
   const [viewerMsg, setViewerMsg] = useState<Msg | null>(null)
   const [screenshotNotice, setScreenshotNotice] = useState(false)
 
+  // Private chat media (migration 052): signed URLs resolved for
+  // messages whose media_url is a chat-media storage path, keyed
+  // by message id. Locked media the viewer has not unlocked never
+  // appears here: the server refuses to mint one.
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+  const [uploading, setUploading] = useState(false)
+  const [sendingMedia, setSendingMedia] = useState(false)
+  const [ppvPath, setPpvPath] = useState<string | null>(null)
+  const mediaFileRef = useRef<HTMLInputElement>(null)
+  const ppvFileRef = useRef<HTMLInputElement>(null)
+  const ppvFileTypeRef = useRef('')
+  const uploadUrlRef = useRef<string | null>(null)
+
   // Record that I viewed their media. Best effort: the primary key
   // makes repeats harmless, and duplicate errors are ignored.
   const recordMediaView = async (msg: Msg) => {
@@ -85,6 +141,10 @@ export default function ThreadPage() {
   // single allowed open for view-once media).
   const openMediaViewer = (msg: Msg) => {
     void recordMediaView(msg)
+    // Opening the viewer is the sanctioned view for view-once
+    // media, including a paid message the viewer just unlocked:
+    // the signed URL endpoint may mint for this open.
+    noteMediaUnlocked(msg.id)
     setViewerMsg(msg)
   }
 
@@ -203,6 +263,17 @@ export default function ThreadPage() {
       // Media view state for this thread: drives my view-once blur
       // and the sender side Seen labels. RLS returns only rows I am
       // allowed to see (my own views, plus views of my media).
+      // Resolve signed URLs for private chat media in one batch.
+      // The server only mints for media I may actually view, so a
+      // locked PPV message stays URL-less here by design.
+      const privateIds = (fresh as Msg[])
+        .filter((m) => isPrivateMediaPath(m.media_url))
+        .map((m) => m.id)
+      if (privateIds.length > 0) {
+        const urls = await resolveMediaUrls(privateIds)
+        if (live) setSignedUrls((prev) => ({ ...prev, ...urls }))
+      }
+
       const mediaIds = (fresh as Msg[]).filter((m) => m.media_url).map((m) => m.id)
       if (mediaIds.length > 0) {
         const { data: views } = await supabase
@@ -231,6 +302,11 @@ export default function ThreadPage() {
           (payload) => {
             const m = payload.new as Msg
             if (m.expires_at && new Date(m.expires_at).getTime() <= Date.now()) return
+            // Private media paths never travel through realtime to
+            // the other side: the receiving component resolves its
+            // own signed URL from the id alone, and the server
+            // refuses when the media is locked and unpaid.
+            if (isPrivateMediaPath(m.media_url) && m.sender_id !== user.id) m.media_url = null
             if (live) setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
           }
         )
@@ -278,6 +354,132 @@ export default function ThreadPage() {
             type: 'booking_message',
             title: 'New message',
             body: text.slice(0, 80),
+            link: `/messages/${connectionId}`,
+          }),
+        }).catch(() => {})
+      }
+    }
+  }
+
+  // Send a free photo or video: upload to the private bucket,
+  // then insert the message with the storage path.
+  const uploadAndSendMedia = async (file: File) => {
+    if (!me || uploading || !active) return
+    if (file.size > 50 * 1024 * 1024) {
+      alert('That file is too large. Please keep media under 50MB.')
+      return
+    }
+    setUploading(true)
+    try {
+      const { path, signedUrl } = await uploadChatMedia(file)
+      const supabase = createClient()
+      const { data: row, error } = await supabase
+        .from('messages')
+        .insert({
+          connection_id: connectionId,
+          sender_id: me,
+          body: file.type.startsWith('video/') ? 'Video' : 'Photo',
+          media_url: path,
+          media_type: file.type.startsWith('video/') ? 'video' : 'image',
+          ...(disappearing
+            ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() }
+            : {}),
+        })
+        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
+        .single()
+      if (!error && row) {
+        const m = row as Msg
+        // Own upload: show it at once with the upload-time signed
+        // URL instead of waiting for a resolution round trip.
+        setSignedUrls((prev) => ({ ...prev, [m.id]: signedUrl }))
+        setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+        if (other?.id) {
+          void fetch('/api/push/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_ids: [other.id],
+              type: 'booking_message',
+              title: 'New media',
+              body: 'You received media in your chat.',
+              link: `/messages/${connectionId}`,
+            }),
+          }).catch(() => {})
+        }
+      }
+    } catch {
+      alert('Upload failed. Please try again.')
+    }
+    setUploading(false)
+  }
+
+  // Upload a file as the PPV attachment: it lands in the private
+  // bucket and the panel holds its path until Send locked.
+  const uploadPpvFile = async (file: File) => {
+    if (!me || uploading) return
+    if (file.size > 50 * 1024 * 1024) {
+      alert('That file is too large. Please keep media under 50MB.')
+      return
+    }
+    setUploading(true)
+    try {
+      const { path, signedUrl } = await uploadChatMedia(file)
+      ppvFileTypeRef.current = file.type
+      uploadUrlRef.current = signedUrl
+      setPpvPath(path)
+    } catch {
+      alert('Upload failed. Please try again.')
+    }
+    setUploading(false)
+  }
+
+  // Send the locked message: an uploaded private file when one is
+  // attached, otherwise the pasted URL exactly as before.
+  const sendPpv = async () => {
+    const price = parseInt(ppvPrice, 10)
+    if (!price || price <= 0 || !me || sendingMedia) return
+    const path = ppvPath
+    const url = ppvUrl.trim()
+    if (!path && !url) return
+    setSendingMedia(true)
+    const isVideo = path
+      ? ppvFileTypeRef.current.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(path)
+      : /\.mp4|\.webm/i.test(url)
+    const { data: row, error } = await createClient()
+      .from('messages')
+      .insert({
+        connection_id: connectionId,
+        sender_id: me,
+        body: 'Locked media',
+        media_url: path ?? url,
+        media_type: isVideo ? 'video' : 'image',
+        ppv_price_coins: price,
+      })
+      .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
+      .single()
+    setSendingMedia(false)
+    if (!error) {
+      if (row) {
+        const m = row as Msg
+        if (uploadUrlRef.current) {
+          const upUrl = uploadUrlRef.current
+          setSignedUrls((prev) => ({ ...prev, [m.id]: upUrl }))
+        }
+        setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+      }
+      uploadUrlRef.current = null
+      setPpvUrl('')
+      setPpvPath(null)
+      setShowPpv(false)
+      if (other?.id) {
+        void fetch('/api/push/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_ids: [other.id],
+            type: 'booking_message',
+            title: 'New locked media',
+            body: 'You received locked media in your chat.',
             link: `/messages/${connectionId}`,
           }),
         }).catch(() => {})
@@ -397,6 +599,7 @@ export default function ThreadPage() {
                         hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
                         onOpen={openMediaViewer}
                         onViewed={recordMediaView}
+                        signedUrl={signedUrls[m.id]}
                       />
                     )}
                     <p className={`mt-1 text-right text-[10px] ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
@@ -474,52 +677,84 @@ export default function ThreadPage() {
       {showPpv && active && (
         <div className="shrink-0 border-t border-neutral-100 bg-gold/5 px-4 py-3">
           <p className="text-xs font-semibold text-charcoal">Send locked media (PPV)</p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input value={ppvUrl} onChange={(e) => setPpvUrl(e.target.value)} placeholder="Photo or video URL" className="flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
-            <input value={ppvPrice} onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Coins" inputMode="numeric" className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
-            <button
-              onClick={async () => {
-                const url = ppvUrl.trim()
-                const price = parseInt(ppvPrice, 10)
-                if (!url || !price || price <= 0 || !me) return
-                const isVideo = /\.mp4|\.webm/i.test(url)
-                const { data: row, error } = await createClient().from('messages').insert({
-                  connection_id: connectionId,
-                  sender_id: me,
-                  body: 'Locked media',
-                  media_url: url,
-                  media_type: isVideo ? 'video' : 'image',
-                  ppv_price_coins: price,
-                }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once').single()
-                if (!error) {
-                  if (row) {
-                    const m = row as Msg
-                    setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
-                  }
-                  setPpvUrl(''); setShowPpv(false)
-                  if (other?.id) {
-                    void fetch('/api/push/notify', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        user_ids: [other.id],
-                        type: 'booking_message',
-                        title: 'New locked media',
-                        body: 'You received locked media in your chat.',
-                        link: `/messages/${connectionId}`,
-                      }),
-                    }).catch(() => {})
-                  }
-                }
-              }}
-              className="rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal"
-            >
-              Send locked
-            </button>
+          <div className="mt-2 flex flex-col gap-2">
+            {ppvPath ? (
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate rounded-xl border border-gold/40 bg-white px-3 py-2 text-sm text-charcoal">
+                  {ppvPath.split('/').pop()}
+                </span>
+                <button
+                  onClick={() => {
+                    setPpvPath(null)
+                    uploadUrlRef.current = null
+                  }}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-500"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : ppvUrl.trim() ? (
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-charcoal">
+                  {ppvUrl.trim()}
+                </span>
+                <button
+                  onClick={() => setPpvUrl('')}
+                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-500"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => ppvFileRef.current?.click()}
+                disabled={uploading}
+                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-charcoal disabled:opacity-50"
+              >
+                {uploading ? 'Uploading…' : 'Upload a photo or video'}
+              </button>
+            )}
+            {!ppvPath && (
+              <input value={ppvUrl} onChange={(e) => setPpvUrl(e.target.value)} placeholder="Or paste a photo or video URL" className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
+            )}
+            <div className="flex gap-2">
+              <input value={ppvPrice} onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Coins" inputMode="numeric" className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
+              <button
+                onClick={sendPpv}
+                disabled={sendingMedia || uploading || (!ppvPath && !ppvUrl.trim())}
+                className="flex-1 rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal disabled:opacity-50"
+              >
+                {sendingMedia ? 'Sending…' : 'Send locked'}
+              </button>
+            </div>
           </div>
-          <p className="mt-1 text-[11px] text-neutral-500">Clients pay coins to view. You keep your share automatically.</p>
+          <p className="mt-1 text-[11px] text-neutral-500">Clients pay coins to view. Uploaded files stay private until a client unlocks them. You keep your share automatically.</p>
         </div>
       )}
+
+      {/* Hidden pickers for the attach button and the PPV panel */}
+      <input
+        ref={mediaFileRef}
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ''
+          if (f) void uploadAndSendMedia(f)
+        }}
+      />
+      <input
+        ref={ppvFileRef}
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ''
+          if (f) void uploadPpvFile(f)
+        }}
+      />
 
       {/* Composer */}
       <div className="shrink-0 border-t border-neutral-100 bg-white px-4 py-3">
@@ -546,6 +781,14 @@ export default function ThreadPage() {
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'bg-cream'} disabled:opacity-40`}
           >
             <Timer className={`h-4 w-4 ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
+          </button>
+          <button
+            onClick={() => mediaFileRef.current?.click()}
+            disabled={!active || uploading}
+            aria-label="Attach a photo or video"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+          >
+            <ImageIcon className="h-5 w-5 text-neutral-500" />
           </button>
           <input
             value={input}
@@ -577,29 +820,11 @@ export default function ThreadPage() {
       </div>
 
       {/* Media viewer overlay: the one place shared media opens big.
-          PrintScreen or a window blur closes it (see effect above). */}
+          PrintScreen or a window blur closes it (see effect above).
+          Private media renders through the signed URL overlay, so
+          the raw value on the message is never a usable address. */}
       {viewerMsg && viewerMsg.media_url && (
-        <div
-          className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/95"
-          onClick={() => setViewerMsg(null)}
-        >
-          <button
-            aria-label="Close"
-            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-lg text-white"
-          >
-            ×
-          </button>
-          <div className="max-h-[82vh] w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
-            {viewerMsg.media_type === 'video' ? (
-              <video src={viewerMsg.media_url} controls autoPlay className="max-h-[76vh] w-full rounded-2xl object-contain" />
-            ) : (
-              <img src={viewerMsg.media_url} alt="" className="max-h-[76vh] w-full rounded-2xl object-contain" draggable={false} />
-            )}
-          </div>
-          <p className="px-6 pb-5 text-center text-[11px] text-white/50">
-            We discourage screenshots, but no app can fully prevent them.
-          </p>
-        </div>
+        <MediaViewerOverlay msg={viewerMsg} onClose={() => setViewerMsg(null)} />
       )}
     </div>
   )
@@ -610,20 +835,32 @@ function PpvMedia({
   msg,
   me,
   hasViewed,
+  signedUrl,
   onOpen,
   onViewed,
 }: {
   msg: Msg
   me: string | null
   hasViewed: boolean
+  signedUrl?: string | null
   onOpen: (msg: Msg) => void
   onViewed: (msg: Msg) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [unlocked, setUnlocked] = useState(false)
+  const [retry, setRetry] = useState(0)
   const price = msg.ppv_price_coins ?? 0
   const isMine = msg.sender_id === me
   const isOpen = isMine || unlocked || (msg.unlocked_by ?? []).includes(me ?? '') || price <= 0
+
+  // Resolve the display URL only once the media is open to me. A
+  // locked message is never even asked about, so nothing usable
+  // exists in the payload, the DOM, or this component's state.
+  // The thread may already hold a signed URL (batch resolve on
+  // load, or the upload-time URL for my own sends); the hook
+  // covers realtime arrivals and post-unlock retries.
+  const resolved = useMediaUrl(msg.id, isOpen ? msg.media_url : null, retry)
+  const url = signedUrl ?? resolved
 
   async function unlock() {
     if (busy) return
@@ -636,6 +873,11 @@ function PpvMedia({
     setBusy(false)
     if (res.ok) {
       setUnlocked(true)
+      // The unlock is recorded server-side now, so the signed URL
+      // endpoint may mint for this message: note it locally (the
+      // viewer exemption below needs it too) and re-resolve.
+      noteMediaUnlocked(msg.id)
+      setRetry((n) => n + 1)
       // Unlocking is the view for paid media: record it for the
       // sender. View-once media opens in the viewer instead, so the
       // single allowed open is a real look, not just the unlock.
@@ -668,38 +910,36 @@ function PpvMedia({
     )
   }
 
-  // View-once, already opened by me: the media stays blurred for
-  // good. The sender keeps her normal view of her own media.
+  // View-once, already opened by me: gone for good. No media
+  // element at all, so there is nothing left to reopen or scrape.
+  // The sender keeps her normal view of her own media below.
   if (!isMine && msg.view_once && hasViewed) {
     return (
-      <div className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800">
-        {msg.media_type === 'video' ? (
-          <video src={msg.media_url!} className="h-full w-full object-cover blur-xl" muted playsInline />
-        ) : (
-          <img src={msg.media_url!} alt="" className="h-full w-full object-cover blur-xl" draggable={false} />
-        )}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/45 px-4 text-center">
-          <span className="text-xs font-semibold text-white">
-            Already viewed. View once media can only be opened once.
-          </span>
-        </div>
+      <div className="relative mt-2 flex h-44 w-56 items-center justify-center overflow-hidden rounded-xl bg-neutral-800 px-4 text-center">
+        <span className="text-xs font-semibold text-white">
+          Already viewed. View once media can only be opened once.
+        </span>
       </div>
     )
   }
 
   // View-once, not opened yet: a deliberate tap is the one open, so
-  // loading the thread never burns it.
+  // loading the thread never burns it. Legacy public media keeps
+  // its blurred backdrop; private media shows a plain card, since
+  // no URL for it exists on this device until it is opened.
   if (!isMine && msg.view_once && !hasViewed) {
+    const legacy = typeof msg.media_url === 'string' && msg.media_url.startsWith('http')
     return (
       <button
         onClick={() => onOpen(msg)}
         className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800 text-left"
       >
-        {msg.media_type === 'video' ? (
-          <video src={msg.media_url!} className="h-full w-full object-cover blur-xl" muted playsInline />
-        ) : (
-          <img src={msg.media_url!} alt="" className="h-full w-full object-cover blur-xl" draggable={false} />
-        )}
+        {legacy &&
+          (msg.media_type === 'video' ? (
+            <video src={msg.media_url!} className="h-full w-full object-cover blur-xl" muted playsInline />
+          ) : (
+            <img src={msg.media_url!} alt="" className="h-full w-full object-cover blur-xl" draggable={false} />
+          ))}
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/45">
           <span className="text-sm font-semibold text-white">View once</span>
           <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-charcoal">
@@ -710,10 +950,18 @@ function PpvMedia({
     )
   }
 
+  if (!url) {
+    return (
+      <div className="mt-2 flex h-44 w-56 items-center justify-center rounded-xl bg-neutral-800">
+        <span className="text-xs font-medium text-white/60">Loading media…</span>
+      </div>
+    )
+  }
+
   if (msg.media_type === 'video') {
     return (
       <video
-        src={msg.media_url!}
+        src={url}
         controls
         onPlay={() => onViewed(msg)}
         className="mt-2 max-h-64 w-56 rounded-xl object-cover"
@@ -722,7 +970,7 @@ function PpvMedia({
   }
   return (
     <img
-      src={msg.media_url!}
+      src={url}
       alt=""
       onClick={() => onOpen(msg)}
       className="mt-2 max-h-64 w-56 cursor-pointer rounded-xl object-cover"
