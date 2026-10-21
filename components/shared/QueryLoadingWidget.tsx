@@ -75,9 +75,8 @@ export function QueryLoadingWidget() {
       aria-hidden
       className="animate-pop-in pointer-events-none fixed inset-0 z-[94] flex items-center justify-center"
     >
-      <div className="flex items-center gap-2.5 rounded-full bg-charcoal/95 py-2 pl-4 pr-5 shadow-2xl backdrop-blur-md">
+      <div className="flex items-center justify-center rounded-full bg-charcoal/95 p-3 shadow-2xl backdrop-blur-md">
         <IntimaLoader size="sm" />
-        <span className="text-xs font-semibold text-white">Loading</span>
       </div>
     </div>
   )
