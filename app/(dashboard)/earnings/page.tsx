@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { Coins, Loader2, Banknote, Clock, CheckCircle2, XCircle } from '@/lib/icons'
+import { HelpTip } from '@/components/ui/Tooltip'
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
+
 
 interface CashoutRequest {
   id: string
@@ -86,7 +90,7 @@ export default function EarningsPage() {
   const coinValue = Number(coins) || 0
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-6 pb-28 md:pb-10">
+    <PullToRefresh onRefresh={refresh} className="mx-auto max-w-xl px-4 py-6 pb-28 md:pb-10">
       <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-charcoal">
         <Banknote className="h-6 w-6 text-gold" /> Earnings
       </h1>
@@ -102,13 +106,16 @@ export default function EarningsPage() {
           <span className="ml-2 text-base font-normal text-white/70">coins</span>
         </p>
         <p className="mt-1 text-xs text-white/60">
-          ≈ ₦{((balance ?? 0) * 10).toLocaleString()} · Lifetime earned: {lifetime === null ? '…' : lifetime.toLocaleString()} coins
+          ≈ {ngnForCoins(balance ?? 0)} · Lifetime earned: {lifetime === null ? '…' : coinsWithNgn(lifetime)}
         </p>
       </div>
 
       {/* Cash-out form */}
       <form onSubmit={submit} className="mt-5 rounded-3xl border border-neutral-200/80 bg-white p-5 shadow-xs">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-neutral-400">Cash out</h2>
+        <h2 className="flex items-center gap-1 text-sm font-bold uppercase tracking-widest text-neutral-400">
+          Cash out
+          <HelpTip text={`You can cash out from ${coinsWithNgn(minCoins)}. Each coin pays ₦10 into your bank account. Transfers are manual: we review your request and send the money within 48 hours.`} />
+        </h2>
 
         {done && (
           <p className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
@@ -122,7 +129,7 @@ export default function EarningsPage() {
         )}
 
         <label className="mt-4 block">
-          <span className="text-xs font-semibold text-neutral-500">Coins (min {minCoins.toLocaleString()})</span>
+          <span className="text-xs font-semibold text-neutral-500">Coins (min {minCoins.toLocaleString()} · {ngnForCoins(minCoins)})</span>
           <input
             type="number" min={minCoins} value={coins} onChange={(e) => setCoins(e.target.value)}
             required
@@ -130,7 +137,7 @@ export default function EarningsPage() {
             placeholder={String(minCoins)}
           />
           {coinValue > 0 && (
-            <span className="mt-1 block text-xs text-neutral-400">≈ ₦{(coinValue * 10).toLocaleString()}</span>
+            <span className="mt-1 block text-xs text-neutral-400">≈ {ngnForCoins(coinValue)}</span>
           )}
         </label>
         <label className="mt-3 block">
@@ -200,6 +207,6 @@ export default function EarningsPage() {
           </div>
         </>
       )}
-    </div>
+    </PullToRefresh>
   )
 }

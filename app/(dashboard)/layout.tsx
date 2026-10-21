@@ -10,6 +10,7 @@ import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, Shield
   Banknote, Bell } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { getSetting } from '@/lib/settings/platformSettings'
 
 export default function DashboardLayout({
   children,
@@ -17,6 +18,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [userRole, setUserRole] = useState<string>('client')
+  const [channelEnabled, setChannelEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
@@ -45,6 +47,19 @@ export default function DashboardLayout({
 
     checkUser()
   }, [supabase])
+
+  // Channel is parked in draft behind the channel_enabled platform
+  // setting. The tab renders only when the flag is explicitly on, so
+  // while it is off the bottom nav shows five items. One settings flip
+  // restores the whole surface (nav entry plus the page itself gates
+  // on the same flag).
+  useEffect(() => {
+    let cancelled = false
+    getSetting<boolean | string>('channel_enabled', false).then((v) => {
+      if (!cancelled) setChannelEnabled(v === true || v === 'true')
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -202,7 +217,7 @@ export default function DashboardLayout({
               {isModel && (
                 <Link 
                   href="/models/live" 
-                  className="hidden sm:inline-flex items-center gap-1.5 bg-[#AC244D] hover:bg-[#8F1D40] text-white text-xs font-medium px-4 py-2 rounded-full shadow-xs transition-all"
+                  className="hidden sm:inline-flex min-h-[44px] items-center gap-1.5 bg-[#AC244D] hover:bg-[#8F1D40] text-white text-xs font-medium px-4 py-2 rounded-full shadow-xs transition-all"
                 >
                   <Video className="h-3.5 w-3.5 animate-pulse" />
                   <span>Go Live</span>
@@ -211,10 +226,11 @@ export default function DashboardLayout({
 
               <NotificationBell />
 
-              <button 
-                onClick={handleLogout} 
-                className="p-2 text-neutral-500 hover:text-[#AC244D] hover:bg-white rounded-full border border-transparent hover:border-neutral-200 transition-all"
+              <button
+                onClick={handleLogout}
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-neutral-500 hover:text-[#AC244D] hover:bg-white rounded-full border border-transparent hover:border-neutral-200 transition-all"
                 title="Log out"
+                aria-label="Log out"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -237,19 +253,21 @@ export default function DashboardLayout({
       <nav
         className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden"
       >
-        <div className="grid grid-cols-6 px-1 py-1.5">
+        <div className={'grid px-1 py-1.5 ' + (channelEnabled ? 'grid-cols-6' : 'grid-cols-5')}>
           {[
             { href: '/dashboard', icon: LayoutDashboard, label: 'Home', active: pathname === '/dashboard' },
             { href: '/live', icon: Radio, label: 'Live', active: pathname.startsWith('/live') },
             { href: '/', icon: MapIcon, label: 'Map', active: pathname === '/' },
-            { href: '/channel', icon: Bell, label: 'Channel', active: pathname.startsWith('/channel') },
+            ...(channelEnabled
+              ? [{ href: '/channel', icon: Bell, label: 'Channel', active: pathname.startsWith('/channel') }]
+              : []),
             { href: '/saved', icon: Heart, label: 'Saved', active: pathname.startsWith('/saved') },
             { href: '/profile', icon: User, label: 'Profile', active: pathname.startsWith('/profile') },
           ].map(({ href, icon: Icon, label, active }) => (
             <Link
               key={href}
               href={href}
-              className={'flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium transition-colors ' + (active ? 'text-primary' : 'text-neutral-400')}
+              className={'flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-colors ' + (active ? 'text-primary' : 'text-neutral-400')}
             >
               <Icon className="h-5 w-5" />
               {label}

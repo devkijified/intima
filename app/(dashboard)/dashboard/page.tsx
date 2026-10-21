@@ -1,5 +1,7 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -7,7 +9,8 @@ import { computeSetupSteps, isLiveOnMap, setupProgress, type SetupProfile } from
 import { Walkthrough } from '@/components/setup/Walkthrough'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
   Banknote, BookOpen, Gift } from '@/lib/icons'
-import { formatCompactCount } from '@/lib/utils/helpers'
+import { formatCompactCount, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -30,105 +33,106 @@ export default function DashboardPage() {
   const [isAvailable, setIsAvailable] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => {
-    async function fetchUserData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        window.location.href = '/login'
-        return
-      }
-
-      // Real tables: profiles (role, display_name, view_count),
-      // provider_presence (is_available), connections, reviews.
-      setUserId(user.id)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name, role, view_count, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, verification_status, username')
-        .eq('id', user.id)
-        .maybeSingle()
-      setSetupProfile((profile as unknown as SetupProfile) ?? null)
-      setUsername((profile as any)?.username ?? null)
-
-      const role = profile?.role ?? user.user_metadata?.role ?? 'client'
-      const name =
-        profile?.display_name ||
-        user.user_metadata?.full_name ||
-        user.email?.split('@')[0] ||
-        'Member'
-
-      setUserRole(role)
-      setUserName(name)
-
-      // Referral earnings (migration 043): total coins plus friends joined.
-      const { data: referralRows } = await supabase
-        .from('referral_rewards')
-        .select('coins')
-        .eq('referrer_id', user.id)
-        .eq('reward_kind', 'coins')
-      const referralCoins = (referralRows ?? []).reduce((s, r) => s + (r.coins ?? 0), 0)
-      const referralCount = referralRows?.length ?? 0
-
-      if (role === 'model') {
-        // Availability lives in provider_presence.
-        const { data: presence } = await supabase
-          .from('provider_presence')
-          .select('is_available, city')
-          .eq('provider_id', user.id)
-          .maybeSingle()
-        setIsAvailable(presence?.is_available ?? true)
-        setPresenceCity(presence?.city ?? null)
-
-        // Traction stats: views, reviews, active connections.
-        const [{ count: reviewsCount }, { count: bookingsCount }] = await Promise.all([
-          supabase
-            .from('reviews')
-            .select('*', { count: 'exact', head: true })
-            .eq('provider_id', user.id),
-          supabase
-            .from('connections')
-            .select('*', { count: 'exact', head: true })
-            .eq('provider_id', user.id)
-            .eq('status', 'active'),
-        ])
-
-        const { data: cb1 } = await supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle()
-        setStats({
-          coins: cb1?.balance ?? 0,
-          profileViews: profile?.view_count ?? 0,
-          reviews: reviewsCount ?? 0,
-          bookings: bookingsCount ?? 0,
-          saved: 0,
-          referralCoins,
-          referralCount,
-        })
-      } else {
-        const { count: clientBookingsCount } = await supabase
-          .from('connections')
-          .select('*', { count: 'exact', head: true })
-          .eq('client_id', user.id)
-          .eq('status', 'active')
-
-        const { count: savedCount } = await supabase
-          .from('favorites')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-
-        const { data: cb1 } = await supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle()
-        setStats({
-          coins: cb1?.balance ?? 0,
-          profileViews: 0,
-          reviews: 0,
-          bookings: clientBookingsCount ?? 0,
-          saved: savedCount ?? 0,
-          referralCoins,
-          referralCount,
-        })
-      }
-
-      setLoading(false)
+  async function fetchUserData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      window.location.href = '/login'
+      return
     }
 
+    // Real tables: profiles (role, display_name, view_count),
+    // provider_presence (is_available), connections, reviews.
+    setUserId(user.id)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('display_name, role, view_count, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, verification_status, username')
+      .eq('id', user.id)
+      .maybeSingle()
+    setSetupProfile((profile as unknown as SetupProfile) ?? null)
+    setUsername((profile as any)?.username ?? null)
+
+    const role = profile?.role ?? user.user_metadata?.role ?? 'client'
+    const name =
+      profile?.display_name ||
+      user.user_metadata?.full_name ||
+      user.email?.split('@')[0] ||
+      'Member'
+
+    setUserRole(role)
+    setUserName(name)
+
+    // Referral earnings (migration 043): total coins plus friends joined.
+    const { data: referralRows } = await supabase
+      .from('referral_rewards')
+      .select('coins')
+      .eq('referrer_id', user.id)
+      .eq('reward_kind', 'coins')
+    const referralCoins = (referralRows ?? []).reduce((s, r) => s + (r.coins ?? 0), 0)
+    const referralCount = referralRows?.length ?? 0
+
+    if (role === 'model') {
+      // Availability lives in provider_presence.
+      const { data: presence } = await supabase
+        .from('provider_presence')
+        .select('is_available, city')
+        .eq('provider_id', user.id)
+        .maybeSingle()
+      setIsAvailable(presence?.is_available ?? true)
+      setPresenceCity(presence?.city ?? null)
+
+      // Traction stats: views, reviews, active connections.
+      const [{ count: reviewsCount }, { count: bookingsCount }] = await Promise.all([
+        supabase
+          .from('reviews')
+          .select('*', { count: 'exact', head: true })
+          .eq('provider_id', user.id),
+        supabase
+          .from('connections')
+          .select('*', { count: 'exact', head: true })
+          .eq('provider_id', user.id)
+          .eq('status', 'active'),
+      ])
+
+      const { data: cb1 } = await supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle()
+      setStats({
+        coins: cb1?.balance ?? 0,
+        profileViews: profile?.view_count ?? 0,
+        reviews: reviewsCount ?? 0,
+        bookings: bookingsCount ?? 0,
+        saved: 0,
+        referralCoins,
+        referralCount,
+      })
+    } else {
+      const { count: clientBookingsCount } = await supabase
+        .from('connections')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', user.id)
+        .eq('status', 'active')
+
+      const { count: savedCount } = await supabase
+        .from('favorites')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+
+      const { data: cb1 } = await supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle()
+      setStats({
+        coins: cb1?.balance ?? 0,
+        profileViews: 0,
+        reviews: 0,
+        bookings: clientBookingsCount ?? 0,
+        saved: savedCount ?? 0,
+        referralCoins,
+        referralCount,
+      })
+    }
+
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchUserData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase])
 
   const handleToggleAvailability = async () => {
@@ -158,7 +162,7 @@ export default function DashboardPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[#AC244D] border-t-transparent"></div>
+          <TikTokLoader size="lg" />
           <p className="mt-3 text-sm font-medium text-neutral-500 tracking-wide font-sans">Loading your dashboard...</p>
         </div>
       </div>
@@ -171,7 +175,7 @@ export default function DashboardPage() {
   const showSetupBanner = isModel && !loading && !isLiveOnMap(setupSteps)
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-rise-in">
+    <PullToRefresh onRefresh={fetchUserData} className="max-w-5xl mx-auto space-y-8 animate-rise-in">
 
       {/* Top Welcome Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-neutral-200/70">
@@ -182,7 +186,7 @@ export default function DashboardPage() {
             </span>
             <span className="text-neutral-300">•</span>
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
-              <ShieldCheck className="h-3.5 w-3.5 text-[#AC244D]" /> Securely Verified
+              <ShieldCheck aria-hidden className="h-3.5 w-3.5 text-[#AC244D]" /> Securely Verified
             </span>
           </div>
           <h1 className="font-display text-[34px] font-semibold leading-tight tracking-tight text-charcoal">
@@ -200,7 +204,7 @@ export default function DashboardPage() {
             <span className="block font-display text-lg font-semibold tracking-tight text-charcoal">Finish setting up your account</span>
             <span className="block text-sm text-neutral-500">Complete your setup so clients can find and book you on the map.</span>
           </span>
-          <ArrowUpRight className="h-5 w-5 shrink-0 text-primary" />
+          <ArrowUpRight aria-hidden className="h-5 w-5 shrink-0 text-primary" />
         </Link>
       )}
 
@@ -214,7 +218,7 @@ export default function DashboardPage() {
               <button
                 onClick={handleToggleAvailability}
                 disabled={updatingStatus}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
+                className={`flex min-h-[44px] items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full transition-colors ${
                   isAvailable ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-neutral-100 text-neutral-600'
                 } ${updatingStatus ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
@@ -229,7 +233,7 @@ export default function DashboardPage() {
           ) : (
             <Link
               href="/"
-              className="inline-flex items-center justify-center bg-[#AC244D] hover:bg-[#8F1D40] text-white text-sm font-medium px-5 py-2.5 rounded-full transition-all shadow-xs"
+              className="inline-flex min-h-[44px] items-center justify-center bg-[#AC244D] hover:bg-[#8F1D40] text-white text-sm font-medium px-5 py-2.5 rounded-full transition-all shadow-xs"
             >
               Browse Companions
             </Link>
@@ -246,7 +250,7 @@ export default function DashboardPage() {
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Profile views</span>
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-muted">
-                  <Eye className="h-4 w-4 text-[#AC244D]" />
+                  <Eye aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </span>
               </div>
               <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{formatCompactCount(stats.profileViews)}</p>
@@ -277,13 +281,13 @@ export default function DashboardPage() {
 
             <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Referral earnings</span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Referral earnings <HelpTip text={`Share your link. When a friend joins through it and opens their first connection, you earn ${coinsWithNgn(100)}. When a companion joins through your link, you earn ${coinsWithNgn(500)}.`} /></span>
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15">
-                  <Gift className="h-4 w-4 text-[#C9A84C]" />
+                  <Gift aria-hidden className="h-4 w-4 text-[#C9A84C]" />
                 </span>
               </div>
               <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.referralCoins.toLocaleString()}<span className="ml-1 text-base font-normal text-neutral-400">coins</span></p>
-              <p className="mt-1 text-xs text-neutral-400">From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
+              <p className="mt-1 text-xs text-neutral-400">≈ {ngnForCoins(stats.referralCoins)} · From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
             </div>
           </div>
 
@@ -293,15 +297,15 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <Link href="/profile" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Edit Public Listing & Photos</span>
-                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                  <ArrowUpRight aria-hidden className="h-4 w-4 text-neutral-400" />
                 </Link>
                 <Link href="/models/live" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Broadcast Live Show</span>
-                  <Video className="h-4 w-4 text-[#AC244D]" />
+                  <Video aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
                 <Link href="/comics" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Read Intima Comics</span>
-                  <BookOpen className="h-4 w-4 text-[#AC244D]" />
+                  <BookOpen aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
@@ -311,19 +315,19 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <Link href="/bookings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Manage Bookings</span>
-                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                  <ArrowUpRight aria-hidden className="h-4 w-4 text-neutral-400" />
                 </Link>
                 <Link href="/wallet" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Wallet & Payouts</span>
-                  <Wallet className="h-4 w-4 text-[#AC244D]" />
+                  <Wallet aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
                 <Link href="/earnings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Gift Earnings & Cash Out</span>
-                  <Banknote className="h-4 w-4 text-[#AC244D]" />
+                  <Banknote aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
                 <Link href="/analytics" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Analytics: Views, Bookings & Gifts</span>
-                  <Eye className="h-4 w-4 text-[#AC244D]" />
+                  <Eye aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
@@ -336,7 +340,7 @@ export default function DashboardPage() {
             <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Connections</span>
-                <Calendar className="h-4 w-4 text-[#AC244D]" />
+                <Calendar aria-hidden className="h-4 w-4 text-[#AC244D]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
               <p className="text-xs text-neutral-400 mt-1">Active companion chats</p>
@@ -345,16 +349,16 @@ export default function DashboardPage() {
             <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Wallet Balance</span>
-                <Wallet className="h-4 w-4 text-[#AC244D]" />
+                <Wallet aria-hidden className="h-4 w-4 text-[#AC244D]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.coins.toLocaleString()} coins</p>
-              <p className="text-xs text-neutral-400 mt-1">Worth ₦{(stats.coins * 10).toLocaleString()}</p>
+              <p className="text-xs text-neutral-400 mt-1">Worth {ngnForCoins(stats.coins)}</p>
             </div>
 
             <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
                 <span className="text-xs font-medium uppercase tracking-wider">Saved</span>
-                <Sparkles className="h-4 w-4 text-[#AC244D]" />
+                <Sparkles aria-hidden className="h-4 w-4 text-[#AC244D]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.saved}</p>
               <p className="text-xs text-neutral-400 mt-1">Favorite companions</p>
@@ -362,11 +366,11 @@ export default function DashboardPage() {
 
             <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Referral earnings</span>
-                <Gift className="h-4 w-4 text-[#C9A84C]" />
+                <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider">Referral earnings <HelpTip text={`Share your link. When a friend joins through it and opens their first connection, you earn ${coinsWithNgn(100)}. When a companion joins through your link, you earn ${coinsWithNgn(500)}.`} /></span>
+                <Gift aria-hidden className="h-4 w-4 text-[#C9A84C]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.referralCoins.toLocaleString()} coins</p>
-              <p className="text-xs text-neutral-400 mt-1">From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
+              <p className="text-xs text-neutral-400 mt-1">≈ {ngnForCoins(stats.referralCoins)} · From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
             </div>
           </div>
 
@@ -376,15 +380,15 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <Link href="/" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Browse All Verified Companions</span>
-                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                  <ArrowUpRight aria-hidden className="h-4 w-4 text-neutral-400" />
                 </Link>
                 <Link href="/bookings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">View Booking History</span>
-                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                  <ArrowUpRight aria-hidden className="h-4 w-4 text-neutral-400" />
                 </Link>
                 <Link href="/comics" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Read Intima Comics</span>
-                  <BookOpen className="h-4 w-4 text-[#AC244D]" />
+                  <BookOpen aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
@@ -394,11 +398,11 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 <Link href="/profile" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Edit Profile & Contact Info</span>
-                  <ArrowUpRight className="h-4 w-4 text-neutral-400" />
+                  <ArrowUpRight aria-hidden className="h-4 w-4 text-neutral-400" />
                 </Link>
                 <Link href="/wallet" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Fund Wallet / Payments</span>
-                  <Wallet className="h-4 w-4 text-[#AC244D]" />
+                  <Wallet aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
               </div>
             </div>
@@ -406,6 +410,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-    </div>
+    </PullToRefresh>
   )
 }
