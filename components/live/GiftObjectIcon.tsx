@@ -1,3 +1,5 @@
+import { renderMoreArt } from './giftArtMore'
+
 /**
  * Modeled gift icons: original vector artwork of the REAL sex objects
  * behind each gift, drawn from product references (the Rose is modeled
@@ -248,13 +250,16 @@ export default function GiftObjectIcon({
             <circle cx="24" cy="22.8" r="1.2" fill="#57122B" />
           </>
         )
-      default:
+      default: {
+        const more = renderMoreArt(giftId, p)
+        if (more) return more
         return (
           <>
             <circle cx="24" cy="24" r="15" fill="#AC244D" opacity="0.9" />
             <circle cx="24" cy="24" r="15" fill="none" stroke="#C9A84C" strokeWidth="1.6" />
           </>
         )
+      }
     }
   })()
   return (
