@@ -65,12 +65,12 @@ export function TouringPanel() {
         Visiting another city? Announce it. You show on that city&apos;s map with a Touring tag for those dates.
       </p>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <select value={city} onChange={(e) => setCity(e.target.value)} className="rounded-xl border border-neutral-200 bg-cream/60 px-3 py-2 text-sm">
+        <select value={city} onChange={(e) => setCity(e.target.value)} className="min-h-[44px] rounded-xl border border-neutral-200 bg-cream/60 px-3 py-2 text-base md:text-sm">
           {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="rounded-xl border border-neutral-200 bg-cream/60 px-3 py-2 text-sm" />
-        <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded-xl border border-neutral-200 bg-cream/60 px-3 py-2 text-sm" />
-        <button onClick={add} disabled={busy || !start || !end} className="inline-flex items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">
+        <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="min-h-[44px] rounded-xl border border-neutral-200 bg-cream/60 px-3 py-2 text-base md:text-sm" />
+        <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="min-h-[44px] rounded-xl border border-neutral-200 bg-cream/60 px-3 py-2 text-base md:text-sm" />
+        <button onClick={add} disabled={busy || !start || !end} className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">
           <Plus className="h-4 w-4" /> Add
         </button>
       </div>
@@ -84,7 +84,7 @@ export function TouringPanel() {
                 <span className="font-medium">{t.city}</span>
                 <span className="text-neutral-500">{fmt(t.start_date)} – {fmt(t.end_date)}</span>
               </p>
-              <button onClick={() => remove(t.id)} aria-label="Remove tour" className="rounded-full p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-500">
+              <button onClick={() => remove(t.id)} aria-label="Remove tour" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

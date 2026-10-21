@@ -120,9 +120,9 @@ export function InstallPrompt() {
         <button
           onClick={later}
           aria-label="Not now"
-          className="absolute right-4 top-4 rounded-full p-2 text-neutral-400 transition-colors hover:text-charcoal"
+          className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full text-neutral-400 transition-colors hover:text-charcoal"
         >
-          <X className="h-5 w-5" />
+          <X aria-hidden className="h-5 w-5" />
         </button>
 
         <div className="flex flex-col items-center text-center">
@@ -158,13 +158,13 @@ export function InstallPrompt() {
             </p>
             <ol className="mt-4 space-y-3 text-left">
               <Step n={1}>
-                Tap the <Share className="inline h-4 w-4 align-[-2px] text-primary" />{' '}
+                Tap the <Share aria-hidden className="inline h-4 w-4 align-[-2px] text-primary" />{' '}
                 <strong className="font-semibold text-charcoal">Share</strong> button at
                 the bottom of Safari.
               </Step>
               <Step n={2}>
                 Scroll down and tap{' '}
-                <PlusSquare className="inline h-4 w-4 align-[-2px] text-primary" />{' '}
+                <PlusSquare aria-hidden className="inline h-4 w-4 align-[-2px] text-primary" />{' '}
                 <strong className="font-semibold text-charcoal">Add to Home Screen</strong>.
               </Step>
               <Step n={3}>
@@ -200,7 +200,7 @@ export function InstallPrompt() {
 
         <button
           onClick={later}
-          className="mt-5 w-full py-2 text-center text-sm font-medium text-neutral-400 transition-colors hover:text-charcoal"
+          className="mt-5 flex min-h-[44px] w-full items-center justify-center py-2 text-center text-sm font-medium text-neutral-400 transition-colors hover:text-charcoal"
         >
           Maybe later
         </button>

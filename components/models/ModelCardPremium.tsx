@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Star, MapPin, Heart, Shield, Clock, Languages } from '@/lib/icons'
 import { formatPrice, getInitials } from '@/lib/utils/helpers'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface ModelCardPremiumProps {
   model: {
@@ -50,7 +51,7 @@ export function ModelCardPremium({ model }: ModelCardPremiumProps) {
           <div className="absolute top-4 left-4 flex flex-col gap-2">
             {model.is_verified && (
               <div className="bg-primary/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-                <Shield className="w-3 h-3" />
+                <Shield aria-hidden className="w-3 h-3" />
                 Verified
               </div>
             )}
@@ -67,11 +68,13 @@ export function ModelCardPremium({ model }: ModelCardPremiumProps) {
           </div>
 
           {/* Quick Actions */}
-          <button className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full 
-                           flex items-center justify-center hover:bg-primary hover:text-white 
+          <Tooltip label="Add to favourites" wrapperClassName="absolute top-4 right-4">
+          <button aria-label="Add to favourites" className="w-11 h-11 bg-white/90 backdrop-blur-sm rounded-full
+                           flex items-center justify-center hover:bg-primary hover:text-white
                            transition-all duration-300 shadow-lg group-hover:scale-110">
-            <Heart className="w-5 h-5" />
+            <Heart aria-hidden className="w-5 h-5" />
           </button>
+          </Tooltip>
 
           {/* Rate Badge */}
           <div className="absolute bottom-4 right-4 bg-white/95 backdrop-blur-sm px-4 py-2 rounded-xl shadow-lg">
@@ -90,12 +93,12 @@ export function ModelCardPremium({ model }: ModelCardPremiumProps) {
                 {model.display_name}, {model.age}
               </h3>
               <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                <MapPin className="w-4 h-4" />
+                <MapPin aria-hidden className="w-4 h-4" />
                 <span>{model.city}, {model.state}</span>
               </div>
             </div>
             <div className="flex items-center gap-1 bg-secondary-muted px-3 py-1 rounded-full">
-              <Star className="w-4 h-4 fill-secondary text-secondary" />
+              <Star aria-hidden className="w-4 h-4 fill-secondary text-secondary" />
               <span className="text-sm font-semibold">{model.rating_avg || 'New'}</span>
               <span className="text-xs text-gray-500">({model.review_count})</span>
             </div>
@@ -112,7 +115,7 @@ export function ModelCardPremium({ model }: ModelCardPremiumProps) {
             ))}
             {model.languages?.slice(0, 2).map((lang, idx) => (
               <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full flex items-center gap-1">
-                <Languages className="w-3 h-3" />
+                <Languages aria-hidden className="w-3 h-3" />
                 {lang}
               </span>
             ))}
@@ -120,7 +123,7 @@ export function ModelCardPremium({ model }: ModelCardPremiumProps) {
 
           {/* View Profile Button */}
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <button className="w-full text-center text-sm font-medium text-primary hover:text-primary-dark transition-colors">
+            <button className="w-full min-h-[44px] inline-flex items-center justify-center text-center text-sm font-medium text-primary hover:text-primary-dark transition-colors">
               View Full Profile →
             </button>
           </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { formatCompactPrice } from '@/lib/utils/helpers';
+import { HelpTip } from '@/components/ui/Tooltip';
 
 export interface RateCardRates {
   shortTime: number | null;
@@ -24,8 +25,9 @@ export function RateCard({ rates }: { rates: RateCardRates }) {
 
   return (
     <div className="rounded-2xl bg-cream p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+      <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
         Rates
+        <HelpTip text="Short time is a brief meet, Overnight runs till morning, and Weekend covers two days. These are the companion's own rates, separate from the one time Intima connection fee." />
       </p>
       {listed.length === 0 ? (
         <p className="mt-1 text-sm text-neutral-400">Rates not listed yet</p>
@@ -36,7 +38,7 @@ export function RateCard({ rates }: { rates: RateCardRates }) {
               key={key}
               className="min-w-0 rounded-xl bg-white px-1.5 py-2 text-center ring-1 ring-black/5 sm:px-2"
             >
-              <p className="truncate text-[10px] text-neutral-500 sm:text-[11px]">{label}</p>
+              <p className="truncate text-[11px] text-neutral-500">{label}</p>
               <p className="mt-0.5 text-[13px] font-bold text-charcoal sm:text-sm">
                 {formatCompactPrice(rates[key] as number)}
               </p>

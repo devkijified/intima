@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Zap } from '@/lib/icons'
+import { coinsWithNgn } from '@/lib/utils/helpers'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 /** Boost: companions spend 500 coins for 30 min top-of-map placement. */
 export function BoostPanel() {
@@ -37,10 +39,11 @@ export function BoostPanel() {
   return (
     <div className="rounded-3xl border border-neutral-200/80 bg-white p-5">
       <h3 className="flex items-center gap-2 font-semibold text-charcoal">
-        <Zap className="h-5 w-5 text-gold" /> Boost visibility
+        <Zap className="h-5 w-5 text-gold" aria-hidden /> Boost visibility
+        <HelpTip text={`A boost pins your profile to the top of the map and browse lists for 30 minutes, so more clients see you first. It costs ${coinsWithNgn(500)} and starts the moment you tap.`} />
       </h3>
       <p className="mt-1 text-xs text-neutral-500">
-        Pin yourself to the top of the map and browse lists for 30 minutes. Costs 500 coins.
+        Pin yourself to the top of the map and browse lists for 30 minutes. Costs {coinsWithNgn(500)}.
       </p>
       {remaining > 0 ? (
         <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
@@ -50,9 +53,9 @@ export function BoostPanel() {
         <button
           onClick={boost}
           disabled={busy}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-charcoal px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          className="mt-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-charcoal px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
         >
-          <Zap className="h-4 w-4 text-gold" /> {busy ? 'Activating…' : 'Boost for 30 min · 500 coins'}
+          <Zap className="h-4 w-4 text-gold" /> {busy ? 'Activating…' : `Boost for 30 min · ${coinsWithNgn(500)}`}
         </button>
       )}
       {msg && <p className="mt-2 text-xs text-neutral-600">{msg}</p>}

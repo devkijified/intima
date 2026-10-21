@@ -96,7 +96,7 @@ export function TravelRequirementsPanel() {
             const on = travelCities.includes(c)
             return (
               <button key={c} onClick={() => setTravelCities(on ? travelCities.filter((x) => x !== c) : [...travelCities, c])}
-                className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                 {c}
               </button>
             )
@@ -124,7 +124,7 @@ export function TravelRequirementsPanel() {
           <div className="mt-2 flex gap-2">
             {[0, 1, 3, 5, 10].map((n) => (
               <button key={n} onClick={() => setReqConnections(n)}
-                className={`rounded-full px-3.5 py-2 text-[13px] font-medium ${reqConnections === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium ${reqConnections === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                 {n === 0 ? 'Any' : `${n}+`}
               </button>
             ))}
@@ -135,7 +135,7 @@ export function TravelRequirementsPanel() {
           <div className="mt-2 flex gap-2">
             {[0, 7, 30, 90].map((n) => (
               <button key={n} onClick={() => setReqDays(n)}
-                className={`rounded-full px-3.5 py-2 text-[13px] font-medium ${reqDays === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium ${reqDays === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                 {n === 0 ? 'Any' : `${n} days`}
               </button>
             ))}
@@ -143,7 +143,7 @@ export function TravelRequirementsPanel() {
         </div>
       </div>
 
-      <button onClick={save} disabled={saving} className="btn-luxe mt-5 w-full py-3 text-sm disabled:opacity-50">
+      <button onClick={save} disabled={saving} className="btn-luxe mt-5 inline-flex min-h-[44px] w-full items-center justify-center py-3 text-sm disabled:opacity-50">
         {saving ? 'Saving…' : 'Save travel and requirements'}
       </button>
       {msg && <p className="mt-2 text-center text-xs text-neutral-500">{msg}</p>}

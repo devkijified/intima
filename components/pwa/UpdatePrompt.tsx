@@ -93,7 +93,7 @@ export function UpdatePrompt() {
     <div className="fixed bottom-24 left-4 right-4 z-[95] sm:left-auto sm:right-6 sm:w-96">
       <div className="flex items-center gap-3 rounded-3xl bg-charcoal p-4 text-white shadow-2xl">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary">
-          <RefreshCw className={`h-5 w-5 ${reloading ? 'animate-spin' : ''}`} />
+          <RefreshCw aria-hidden className={`h-5 w-5 ${reloading ? 'animate-spin' : ''}`} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold">A new version of Intima is ready</p>
@@ -102,16 +102,16 @@ export function UpdatePrompt() {
         <button
           onClick={reload}
           disabled={reloading}
-          className="shrink-0 rounded-full bg-primary px-4 py-2.5 text-sm font-bold text-white transition-transform active:scale-95 disabled:opacity-60"
+          className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2.5 text-sm font-bold text-white transition-transform active:scale-95 disabled:opacity-60"
         >
           {reloading ? 'Reloading' : 'Reload'}
         </button>
         <button
           onClick={dismiss}
           aria-label="Later"
-          className="shrink-0 rounded-full p-2 text-white/60 transition-colors hover:text-white"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:text-white"
         >
-          <X className="h-4 w-4" />
+          <X aria-hidden className="h-4 w-4" />
         </button>
       </div>
     </div>

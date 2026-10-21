@@ -30,7 +30,7 @@ export function ModelFilters({ filters, setFilters }: ModelFiltersProps) {
     <Card className="border-neutral-200/85 rounded-2xl">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-          <Sliders className="h-4 w-4" />
+          <Sliders aria-hidden className="h-4 w-4" />
           Filters
         </CardTitle>
         {hasActiveFilters && (
@@ -43,9 +43,9 @@ export function ModelFilters({ filters, setFilters }: ModelFiltersProps) {
                 availability: 'all',
               })
             }}
-            className="text-xs text-primary hover:text-primary-dark flex items-center gap-1"
+            className="text-xs text-primary hover:text-primary-dark flex min-h-[44px] items-center gap-1 px-2"
           >
-            <X className="h-3 w-3" />
+            <X aria-hidden className="h-3 w-3" />
             Clear all
           </button>
         )}
@@ -59,7 +59,7 @@ export function ModelFilters({ filters, setFilters }: ModelFiltersProps) {
           <select
             value={filters.city}
             onChange={(e) => handleChange('city', e.target.value)}
-            className="mt-1.5 block w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 text-sm bg-neutral-50/50 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
+            className="mt-1.5 block w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 text-base md:text-sm bg-neutral-50/50 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
           >
             <option value="">All Cities</option>
             {cities.map((city) => (
@@ -101,7 +101,7 @@ export function ModelFilters({ filters, setFilters }: ModelFiltersProps) {
           <select
             value={filters.availability}
             onChange={(e) => handleChange('availability', e.target.value)}
-            className="mt-1.5 block w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 text-sm bg-neutral-50/50 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
+            className="mt-1.5 block w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 text-base md:text-sm bg-neutral-50/50 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
           >
             <option value="all">All</option>
             <option value="available">Available Now</option>
