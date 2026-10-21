@@ -1,7 +1,7 @@
 'use client'
 
 import { PullToRefresh } from '@/components/shared/PullToRefresh'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -162,7 +162,7 @@ export default function DashboardPage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <TikTokLoader size="lg" />
+          <IntimaLoader size="lg" />
           <p className="mt-3 text-sm font-medium text-neutral-500 tracking-wide font-sans">Loading your dashboard...</p>
         </div>
       </div>

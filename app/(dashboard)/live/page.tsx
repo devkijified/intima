@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, Calendar, Clock, Crown, Eye, Lock, Radio } from '@/lib/icons'
 import { showToast } from '@/lib/toast'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface LiveStream {
@@ -304,7 +304,7 @@ export default function LiveFeedPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <TikTokLoader size="lg" />
+        <IntimaLoader size="lg" />
       </div>
     )
   }
