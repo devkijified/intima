@@ -6,6 +6,8 @@ import {
   markCardPaymentPaid,
 } from '@/lib/payments/paystack';
 import { dvaCreditMath, settleDvaTopup } from '@/lib/payments/dva';
+import { settleConnectionFeePayment } from '@/lib/payments/settleConnection';
+import { settleOpenIfPaid, type BoardRequestRow } from '@/lib/board/board';
 
 function service() {
   return createServiceClient(
@@ -31,7 +33,9 @@ interface PaystackEvent {
  * secret key (HMAC-SHA512 of the raw body). On charge.success it
  * settles server-side so money lands even if the payer closes the tab
  * before the callback: coin top-ups credit through the shared
- * idempotent settler; connection fees flip card_payments to paid.
+ * idempotent settler; connection fees flip card_payments to paid; a
+ * board fee also opens its request right here, so nothing depends on
+ * the payer's browser coming back.
  */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -105,11 +109,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, settled: 'coins' });
   }
 
-  // Connection fees settle by flipping the payment row.
+  // Connection fees settle by flipping the payment row, and the
+  // connection itself is created here too: a board fee opens its
+  // request, a companion fee opens the connection, so neither
+  // depends on the payer's browser coming back.
   if (meta.kind === 'connection_fee') {
     await markCardPaymentPaid(svc, reference);
+    await openBoardRequestIfAny(svc, reference);
+    await settleConnectionFeePayment(svc, 'card', reference);
     return NextResponse.json({ ok: true, settled: 'connection_fee' });
   }
 
   return NextResponse.json({ ok: true, ignored: true });
+}
+
+/**
+ * A board fee names no companion: settlement opens the request on
+ * the board instead of creating a connection. This mirrors the
+ * verify endpoint so the webhook alone is sufficient when the
+ * payer's browser never returns. settleOpenIfPaid is guarded (the
+ * request must still be awaiting_payment and its stored payment_ref
+ * must be the settled one), so duplicate webhooks are harmless.
+ */
+async function openBoardRequestIfAny(
+  svc: ReturnType<typeof service>,
+  reference: string
+): Promise<void> {
+  const { data: row } = await svc
+    .from('card_payments')
+    .select('board_request_id')
+    .eq('reference', reference)
+    .maybeSingle();
+  if (!row?.board_request_id) return;
+  const { data: request } = await svc
+    .from('board_requests')
+    .select('*')
+    .eq('id', row.board_request_id)
+    .maybeSingle();
+  if (request) {
+    await settleOpenIfPaid(svc, request as BoardRequestRow).catch(() => {});
+  }
 }

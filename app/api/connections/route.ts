@@ -4,11 +4,16 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 import {
   evaluateEligibility,
   hasRequirements,
-  type CompanionRequirements,
 } from '@/lib/connections/eligibility';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 import { notifyUsers } from '@/lib/push-server';
 import { verifyConnectionFeePayment } from '@/lib/payments/connectionFee';
+import {
+  requirementsFor,
+  intakeQuestionsFor,
+  maybeGrantReferralReward,
+  type IntakeAnswer,
+} from '@/lib/payments/settleConnection';
 import { isServiceType } from '@/lib/connections/serviceType';
 
 function service() {
@@ -16,47 +21,6 @@ function service() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-async function requirementsFor(
-  svc: ReturnType<typeof service>,
-  providerId: string
-): Promise<CompanionRequirements | null> {
-  const { data } = await svc
-    .from('profiles')
-    .select('req_verified_client, req_min_connections, req_min_account_days')
-    .eq('id', providerId)
-    .maybeSingle();
-  if (!data) return null;
-  return {
-    req_verified_client: data.req_verified_client === true,
-    req_min_connections: data.req_min_connections ?? 0,
-    req_min_account_days: data.req_min_account_days ?? 0,
-  };
-}
-
-/** The companion's screening questions (up to 3 short strings). */
-async function intakeQuestionsFor(
-  svc: ReturnType<typeof service>,
-  providerId: string
-): Promise<string[]> {
-  const { data } = await svc
-    .from('profiles')
-    .select('intake_questions')
-    .eq('id', providerId)
-    .maybeSingle();
-  const raw = (data as { intake_questions?: unknown } | null)?.intake_questions;
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((q): q is string => typeof q === 'string')
-    .map((q) => q.trim().slice(0, 120))
-    .filter(Boolean)
-    .slice(0, 3);
-}
-
-interface IntakeAnswer {
-  q: string;
-  a: string;
 }
 
 /**
@@ -96,106 +60,6 @@ function normalizeIntakeAnswers(
     answers.push({ q: q.trim().slice(0, 120), a: answer });
   }
   return { answers, error: null };
-}
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Referral reward on a genuinely new first connection. Best effort by
- * design: any failure is logged and swallowed so booking never breaks.
- * The referral_rewards row is inserted BEFORE crediting (its unique
- * index on referee_id is the double-pay guard); if the credit fails,
- * the row stays and an admin can reconcile.
- *
- * Amounts: a client referrer earns 100 coins. A companion referrer
- * was specced for one free boost credit, but boosts have no credit
- * concept (migration 027 only records paid placements), so she gets
- * 500 coins labeled referral instead. Both go through credit_coins
- * (migration 036) when that function exists.
- */
-async function maybeGrantReferralReward(
-  svc: ReturnType<typeof service>,
-  clientId: string,
-  connectionId: string
-): Promise<void> {
-  try {
-    const { data: clientProfile } = await svc
-      .from('profiles')
-      .select('referred_by')
-      .eq('id', clientId)
-      .maybeSingle();
-    const referredBy = (clientProfile as { referred_by?: string | null } | null)
-      ?.referred_by?.trim();
-    if (!referredBy) return;
-
-    // referred_by stores a username from the share link (see migration
-    // 043); accept a raw profile uuid too.
-    let referrer: { id: string; role: string | null } | null = null;
-    if (UUID_RE.test(referredBy)) {
-      const { data } = await svc
-        .from('profiles')
-        .select('id, role')
-        .eq('id', referredBy)
-        .maybeSingle();
-      referrer = data;
-    } else {
-      const { data } = await svc
-        .from('profiles')
-        .select('id, role')
-        .eq('username', referredBy.toLowerCase())
-        .maybeSingle();
-      referrer = data;
-    }
-    if (!referrer || referrer.id === clientId) return;
-
-    const { data: existingReward } = await svc
-      .from('referral_rewards')
-      .select('id')
-      .eq('referee_id', clientId)
-      .maybeSingle();
-    if (existingReward) return;
-
-    const coins = referrer.role === 'model' ? 500 : 100;
-
-    const { error: rewardErr } = await svc.from('referral_rewards').insert({
-      referrer_id: referrer.id,
-      referee_id: clientId,
-      reward_kind: 'coins',
-      coins,
-      connection_id: connectionId,
-    });
-    if (rewardErr) {
-      // Unique violation means a concurrent request already granted it.
-      console.error('referral reward insert failed', rewardErr.message);
-      return;
-    }
-
-    try {
-      const { error: creditErr } = await svc.rpc('credit_coins', {
-        p_user_id: referrer.id,
-        p_amount: coins,
-        p_kind: 'referral',
-        p_ref: `referral-${clientId}`,
-        p_meta: { referee_id: clientId, connection_id: connectionId },
-      });
-      if (creditErr) {
-        console.error('referral credit_coins failed', creditErr.message);
-      } else {
-        await notifyUsers({
-          userIds: [referrer.id],
-          type: 'referral_reward',
-          title: 'Referral reward',
-          body: `You earned ${coins} coins because someone you referred made their first connection. The coins are in your wallet.`,
-          link: '/wallet',
-        }).catch(() => {});
-      }
-    } catch (e) {
-      console.error('referral credit_coins failed', e);
-    }
-  } catch (e) {
-    console.error('referral reward failed', e);
-  }
 }
 
 /**
