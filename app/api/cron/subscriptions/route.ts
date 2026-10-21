@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { notifyUsers } from '@/lib/push-server';
+import { getSnapStanding, type SnapStanding } from '@/lib/snaps/rules';
 
 /**
  * GET /api/cron/subscriptions
@@ -17,6 +18,17 @@ import { notifyUsers } from '@/lib/push-server';
  *    idempotent on (kind, ref), so a retried run never pays twice.
  * 3. On insufficient balance the subscription lapses and the fan is
  *    notified that they can resubscribe anytime.
+ *
+ * Fans Only stage 2: before any charge, the companion's current
+ * standing is checked with the same rules the subscribe gate uses
+ * (getSnapStanding from lib/snaps/rules). If the companion no longer
+ * passes, for example the gallery has gone stale or dropped below
+ * the content bar, no charge is taken. The subscription is marked
+ * 'cancelled', the same not-renewing state a fan lands in when they
+ * cancel, so access runs to the end of the paid period and then
+ * ends. The fan is notified, and the companion is notified once per
+ * run that renewals paused and posting new approved content
+ * restarts them.
  *
  * Cancelled subscriptions are never selected here: cancelling keeps
  * perks until current_period_end and then simply ends.
@@ -64,6 +76,13 @@ export async function GET(req: NextRequest) {
 
   let renewed = 0;
   let lapsed = 0;
+  let paused = 0;
+
+  // Stage 2 state for this run: standing is cached per companion so
+  // a companion with many fans due is only evaluated once, and the
+  // companion renewal-paused notice also goes out once per run.
+  const standingByProvider = new Map<string, SnapStanding>();
+  const companionNotified = new Set<string>();
 
   for (const sub of due ?? []) {
     const oldEnd = sub.current_period_end as string;
@@ -71,6 +90,61 @@ export async function GET(req: NextRequest) {
       new Date(oldEnd).getTime() + 30 * 24 * 3600 * 1000
     );
     const marker = `${sub.id}:${newEnd.toISOString().slice(0, 10)}`;
+
+    // Stage 2 gate: before charging, re-check the companion against
+    // the same Fans Only rules that gate new subscriptions. If the
+    // check itself errors, fall through and charge as before: a
+    // transient read failure should never end a subscription.
+    let standing: SnapStanding | null =
+      standingByProvider.get(sub.provider_id as string) ?? null;
+    if (!standing) {
+      try {
+        standing = await getSnapStanding(svc, sub.provider_id as string);
+        standingByProvider.set(sub.provider_id as string, standing);
+      } catch (e) {
+        console.error('[cron/subscriptions] standing check failed', sub.id, e);
+      }
+    }
+
+    if (standing && !standing.canEarn) {
+      // No charge. Mark the subscription cancelled, the same
+      // not-renewing state a fan lands in when they cancel, guarded
+      // like every other write in this sweep. Access runs to the
+      // end of the paid period (current_period_end) and then ends.
+      const { data: updated } = await svc
+        .from('subscriptions')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', sub.id)
+        .eq('status', 'active')
+        .eq('current_period_end', oldEnd)
+        .select('id')
+        .maybeSingle();
+      if (!updated) continue;
+
+      const isStale = standing.blockedBy === 'stale';
+      await notifyUsers({
+        userIds: [sub.subscriber_id as string],
+        type: 'system',
+        title: 'Fan club subscription ended',
+        body: isStale
+          ? 'Your fan club subscription was not renewed because the companion has not posted new approved content recently. No coins were charged. You can join again from their profile once fresh content lands.'
+          : 'Your fan club subscription was not renewed because this fan club is not open for renewals right now. No coins were charged. You can join again from their profile when it reopens.',
+      }).catch(() => {});
+
+      if (!companionNotified.has(sub.provider_id as string)) {
+        companionNotified.add(sub.provider_id as string);
+        await notifyUsers({
+          userIds: [sub.provider_id as string],
+          type: 'system',
+          title: 'Fan club renewals paused',
+          body: isStale
+            ? 'Renewals for your fan club have paused because your Fans Only gallery has not had new approved content recently. Post new content and pass review to restart renewals. Fans keep the access they already paid for.'
+            : 'Renewals for your fan club have paused because the club no longer meets the Fans Only bar. Open your Fans Only checklist to see what needs fixing. Fans keep the access they already paid for.',
+        }).catch(() => {});
+      }
+      paused++;
+      continue;
+    }
 
     const { error: spendErr } = await svc.rpc('spend_coins', {
       p_user_id: sub.subscriber_id,
@@ -139,5 +213,5 @@ export async function GET(req: NextRequest) {
     renewed++;
   }
 
-  return NextResponse.json({ renewed, lapsed });
+  return NextResponse.json({ renewed, lapsed, paused });
 }
