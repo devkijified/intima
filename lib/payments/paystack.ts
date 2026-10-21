@@ -148,6 +148,32 @@ export async function settleCoinTopup(
   return { credited: true };
 }
 
+/**
+ * Refund a settled transaction in full through Paystack. Used by
+ * the request board when a request expires unfilled (or is
+ * cancelled after payment): the fee goes back through the rail it
+ * arrived on. Paystack processes refunds asynchronously, so the
+ * answer is a state, not a guarantee: 'success' and 'processed'
+ * mean the money is moving, 'pending' means it is queued.
+ */
+export async function refundTransaction(
+  reference: string
+): Promise<{ status: 'success' | 'pending' | 'failed' }> {
+  const res = await fetch(`${API_BASE}/refund`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ transaction: reference }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.status) {
+    throw new Error(data?.message ?? `Paystack refund failed (${res.status})`);
+  }
+  const s = String(data.data?.status ?? '');
+  if (s === 'success' || s === 'processed') return { status: 'success' };
+  if (s === 'pending' || s === 'processing') return { status: 'pending' };
+  return { status: 'failed' };
+}
+
 /** Flip a card_payments row to paid, claiming the transition once. */
 export async function markCardPaymentPaid(
   svc: SupabaseClient,
