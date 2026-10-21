@@ -6,6 +6,7 @@ import {
   verifyTransaction,
   markCardPaymentPaid,
 } from '@/lib/payments/paystack';
+import { settleOpenIfPaid, type BoardRequestRow } from '@/lib/board/board';
 
 function service() {
   return createServiceClient(
@@ -45,13 +46,14 @@ export async function GET(req: NextRequest) {
   const svc = service();
   const { data: row } = await svc
     .from('card_payments')
-    .select('id, user_id, kind, reference, amount_ngn, target_provider_id, status, intake_answers, service_type')
+    .select('id, user_id, kind, reference, amount_ngn, target_provider_id, status, intake_answers, service_type, board_request_id')
     .eq('reference', reference)
     .eq('user_id', user.id)
     .maybeSingle();
   if (!row) return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
 
   if (row.status === 'paid') {
+    await openBoardRequestIfAny(svc, row.board_request_id as string | null);
     return NextResponse.json({ paid: true, alreadyPaid: true, ...publicRow(row) });
   }
 
@@ -67,7 +69,28 @@ export async function GET(req: NextRequest) {
   }
 
   await markCardPaymentPaid(svc, reference);
+  await openBoardRequestIfAny(svc, row.board_request_id as string | null);
   return NextResponse.json({ paid: true, ...publicRow(row) });
+}
+
+/**
+ * A board fee has no companion to connect to: settlement opens the
+ * request on the board instead, and the callback page branches on
+ * boardRequestId to say so.
+ */
+async function openBoardRequestIfAny(
+  svc: ReturnType<typeof service>,
+  boardRequestId: string | null
+): Promise<void> {
+  if (!boardRequestId) return;
+  const { data: request } = await svc
+    .from('board_requests')
+    .select('*')
+    .eq('id', boardRequestId)
+    .maybeSingle();
+  if (request) {
+    await settleOpenIfPaid(svc, request as BoardRequestRow).catch(() => {});
+  }
 }
 
 function publicRow(row: {
@@ -77,6 +100,7 @@ function publicRow(row: {
   target_provider_id: string | null;
   intake_answers?: unknown;
   service_type?: string | null;
+  board_request_id?: string | null;
 }) {
   return {
     kind: row.kind,
@@ -85,5 +109,6 @@ function publicRow(row: {
     targetProviderId: row.target_provider_id,
     intakeAnswers: Array.isArray(row.intake_answers) ? row.intake_answers : null,
     serviceType: row.service_type ?? null,
+    boardRequestId: row.board_request_id ?? null,
   };
 }

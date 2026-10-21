@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { notifyUsers } from '@/lib/push-server';
+import { sweepBoard } from '@/lib/board/board';
 
 /**
  * GET /api/cron/disputes
@@ -69,5 +70,11 @@ export async function GET(req: NextRequest) {
     released++;
   }
 
-  return NextResponse.json({ released });
+  // The request board rides this sweep: settle paid requests,
+  // expire due ones and refund their fees, retry stuck refunds.
+  // Reads also settle and expire lazily, so this is the backstop,
+  // not the only path.
+  const board = await sweepBoard(svc).catch(() => null);
+
+  return NextResponse.json({ released, board });
 }
