@@ -394,20 +394,18 @@
   }
 }
 
-/* Intima loader (components/shared/IntimaLoader.tsx): three dots in
-   burgundy and gold rising in a slow wave; reduced motion falls back
-   to a gentle pulse so nothing moves for users who opt out. */
-@keyframes il-wave {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
-  30% { transform: translateY(-4px); opacity: 1; }
+/* Intima loader (components/shared/IntimaLoader.tsx): the rose in
+   black and white while colour fills it from the base up, holds,
+   and drains, on a loop. Reduced motion rests at full colour. */
+@keyframes il-fill {
+  0% { clip-path: inset(100% 0 0 0); }
+  55% { clip-path: inset(0% 0 0 0); }
+  78% { clip-path: inset(0% 0 0 0); }
+  100% { clip-path: inset(100% 0 0 0); }
 }
-@keyframes il-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
-.il-dot { animation: il-wave 0.9s ease-in-out infinite; }
+.il-rose-color { animation: il-fill 2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .il-dot { animation: il-pulse 1.4s ease-in-out infinite; }
+  .il-rose-color { animation: none; clip-path: inset(0% 0 0 0); }
   .animate-rise-in, .animate-pop-in, .stagger > * { animation: none; }
 }
 
