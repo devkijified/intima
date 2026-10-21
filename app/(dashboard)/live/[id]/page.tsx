@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { GiftLeaderboard } from '@/components/live/GiftLeaderboard'
+import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import { useDock } from '@/components/dock/FloatingDock'
 import { FanBadge } from '@/components/social/FanBadge'
-import { GiftGlyph } from '@/components/live/GiftGlyph'
+import { GiftFxLayer, type GiftFxHandle } from '@/components/live/GiftFx'
+import { GiftPanel, type GiftSendResult } from '@/components/live/GiftPanel'
+import type { GiftCatalogItem, GiftFxEvent } from '@/components/live/giftTypes'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, VideoPresets, createLocalVideoTrack, createLocalAudioTrack, type RemoteTrackPublication, type TrackPublishOptions } from 'livekit-client'
@@ -13,7 +16,7 @@ import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
   PictureInPicture2, Smartphone } from '@/lib/icons'
-import { formatCompactCount } from '@/lib/utils/helpers'
+import { formatCompactCount, ngnForCoins } from '@/lib/utils/helpers'
 
 /* ---------------------------------- types --------------------------------- */
 
@@ -49,13 +52,7 @@ interface Stream {
   provider: { display_name: string; avatar_url: string | null } | null
 }
 
-interface GiftItem {
-  id: string
-  name: string
-  emoji: string
-  coin_cost: number
-  tier: 'basic' | 'premium' | 'luxury' | 'mega'
-}
+type GiftItem = GiftCatalogItem
 
 interface ChatMsg {
   id: string
@@ -81,13 +78,7 @@ interface FloatingHeart {
   x: number
 }
 
-interface GiftEvent {
-  id: string
-  emoji: string
-  name: string
-  senderName: string
-  tier: GiftItem['tier']
-}
+type GiftEvent = GiftFxEvent
 
 const CHAT_TOPIC = 'chat'
 const LIKE_TOPIC = 'likes'
@@ -111,6 +102,24 @@ export default function StreamRoomPage() {
   useEffect(() => {
     dock.clearLiveSession(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  // Return from an in-panel coin top-up: the gift panel stashes the
+  // session and the selected gift before checkout redirects away.
+  // Landing back in this room reopens the panel on the same gift.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('intima_gift_return')
+      if (!raw) return
+      const stash = JSON.parse(raw) as { sessionId?: string; giftId?: string | null }
+      if (stash.sessionId === id) {
+        setGiftReturnId(stash.giftId ?? null)
+        setGiftOpen(true)
+        sessionStorage.removeItem('intima_gift_return')
+      }
+    } catch {
+      /* storage unavailable */
+    }
   }, [id])
 
   const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid' | 'fansonly' | 'elsewhere'>('loading')
@@ -138,9 +147,12 @@ export default function StreamRoomPage() {
   const [catalog, setCatalog] = useState<GiftItem[]>([])
   const [balance, setBalance] = useState<number | null>(null)
   const [sendingGift, setSendingGift] = useState<string | null>(null)
-  const [needTopup, setNeedTopup] = useState(false)
 
-  const [megaGift, setMegaGift] = useState<GiftEvent | null>(null)
+  // Gift FX engine (components/live/GiftFx.tsx): the realtime feed
+  // pushes events into it; it owns all tier queues and rendering.
+  const fxRef = useRef<GiftFxHandle>(null)
+  const [hostGiftMenu, setHostGiftMenu] = useState<Record<string, string>>({})
+  const [giftReturnId, setGiftReturnId] = useState<string | null>(null)
   const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set())
   const blockedRef = useRef<Set<string>>(new Set())
   const [modTarget, setModTarget] = useState<ChatMsg | null>(null)
@@ -183,7 +195,6 @@ export default function StreamRoomPage() {
   const [hostId, setHostId] = useState<string | null>(null)
   const [fanIds, setFanIds] = useState<Set<string>>(new Set())
   const hostIdRef = useRef<string | null>(null)
-  const [miniGifts, setMiniGifts] = useState<GiftEvent[]>([])
 
   // Live depth: server-gated chat, pins, moderation, PK, co-hosts.
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
@@ -597,11 +608,15 @@ export default function StreamRoomPage() {
 
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name, avatar_url')
+        .select('display_name, avatar_url, gift_menu')
         .eq('id', session.provider_id)
         .maybeSingle()
       if (cancelled) return
       setStream({ ...session, provider: prof })
+      const menu = (prof as { gift_menu?: unknown } | null)?.gift_menu
+      if (menu && typeof menu === 'object' && !Array.isArray(menu)) {
+        setHostGiftMenu(menu as Record<string, string>)
+      }
 
       // One-screen rule: if this account is already watching this
       // live on another screen, stop here and show the notice.
@@ -710,16 +725,18 @@ export default function StreamRoomPage() {
       setPhase('live')
 
       // 4. Gift catalog + coin balance (independent of the room).
+      // The full catalog loads (retired gifts included) so realtime
+      // events for historical gifts still resolve; the panel and the
+      // gift bar only ever see active rows.
       const [{ data: gifts }, { data: bal }] = await Promise.all([
         supabase
           .from('gift_catalog')
-          .select('id, name, emoji, coin_cost, tier')
-          .eq('is_active', true)
+          .select('id, name, emoji, coin_cost, tier, anim_tier, is_active')
           .order('sort_order', { ascending: true }),
         supabase.from('coin_balances').select('balance').eq('user_id', user.id).maybeSingle(),
       ])
       if (!cancelled) {
-        setCatalog((gifts ?? []) as GiftItem[])
+        setCatalog(((gifts ?? []) as GiftItem[]).filter((g) => g.is_active !== false))
         setBalance(bal?.balance ?? 0)
       }
 
@@ -759,21 +776,27 @@ export default function StreamRoomPage() {
             }
             const evt: GiftEvent = {
               id: row.id,
+              giftId: gift.id,
               emoji: gift.emoji,
               name: gift.name,
+              animTier: gift.anim_tier ?? 'float',
+              coinCost: gift.coin_cost,
+              senderId: row.sender_id,
               senderName,
-              tier: gift.tier,
             }
-            if (gift.tier === 'luxury' || gift.tier === 'mega') {
-              setMegaGift(evt)
-              window.setTimeout(() => {
-                setMegaGift((cur) => (cur?.id === evt.id ? null : cur))
-              }, 3000)
-            } else {
-              setMiniGifts((prev) => [...prev.slice(-5), evt])
-              window.setTimeout(() => {
-                setMiniGifts((prev) => prev.filter((g) => g.id !== evt.id))
-              }, 3200)
+            fxRef.current?.push(evt)
+            // Witness line for the big tiers: rendered locally on
+            // every client from this same realtime row, so a stage
+            // or takeover send stays witnessed in chat after its
+            // animation ends, with no extra packets on the wire.
+            if (evt.animTier === 'stage' || evt.animTier === 'takeover') {
+              pushMessage({
+                id: `gift-${row.id}`,
+                name: senderName,
+                body: `sent ${gift.name} ${gift.emoji} · ${gift.coin_cost.toLocaleString()} coins (${ngnForCoins(gift.coin_cost)})`,
+                mine: row.sender_id === user.id,
+                senderId: row.sender_id,
+              })
             }
           }
         )
@@ -1077,11 +1100,12 @@ export default function StreamRoomPage() {
     lastTapRef.current = now
   }, [tapLike])
 
-  const sendGift = useCallback(
-    async (gift: GiftItem) => {
-      if (sendingGift) return
+  const sendingGiftRef = useRef<string | null>(null)
+  const sendGiftTracked = useCallback(
+    async (gift: GiftItem): Promise<GiftSendResult> => {
+      if (sendingGiftRef.current) return 'fail'
+      sendingGiftRef.current = gift.id
       setSendingGift(gift.id)
-      setNeedTopup(false)
       try {
         const res = await fetch('/api/live/gift', {
           method: 'POST',
@@ -1089,17 +1113,76 @@ export default function StreamRoomPage() {
           body: JSON.stringify({ sessionId: id, giftId: gift.id }),
         })
         if (res.status === 402) {
-          setNeedTopup(true)
-          return
+          return 'topup'
         }
-        if (!res.ok) return
+        if (!res.ok) return 'fail'
         setBalance((b) => (b === null ? b : Math.max(0, b - gift.coin_cost)))
         // The realtime feed echoes our own gift back as the animation.
+        return 'ok'
+      } catch {
+        return 'fail'
       } finally {
+        sendingGiftRef.current = null
         setSendingGift(null)
       }
     },
-    [id, sendingGift]
+    [id]
+  )
+
+  const sendGift = useCallback(
+    async (gift: GiftItem) => {
+      await sendGiftTracked(gift)
+    },
+    [sendGiftTracked]
+  )
+
+  // System chat line published on the sender's client only (combo
+  // summaries): passes the same server gate as a typed message,
+  // then rides the chat topic like one.
+  const postChatLine = useCallback(
+    async (body: string) => {
+      const room = roomRef.current
+      if (!room || room.state !== 'connected') return
+      const messageId = uid()
+      try {
+        const gate = await fetch('/api/live/chat/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: id, body: body.slice(0, 200), messageId }),
+        })
+        if (!gate.ok) return
+      } catch {
+        return
+      }
+      const payload = new TextEncoder().encode(
+        JSON.stringify({ topic: CHAT_TOPIC, id: messageId, name: myName, body: body.slice(0, 200) })
+      )
+      try {
+        await room.localParticipant.publishData(payload, { reliable: true })
+        pushMessage({ id: messageId, name: myName, body: body.slice(0, 200), mine: true, senderId: myId ?? undefined })
+      } catch {
+        /* offline; the summary is a witness line, not critical */
+      }
+    },
+    [id, myName, myId, pushMessage]
+  )
+
+  const handleComboSummary = useCallback(
+    (gift: GiftItem, count: number) => {
+      void postChatLine(`sent ${gift.name} ×${count}`)
+    },
+    [postChatLine]
+  )
+
+  const stashGiftReturn = useCallback(
+    (giftId: string | null) => {
+      try {
+        sessionStorage.setItem('intima_gift_return', JSON.stringify({ sessionId: id, giftId }))
+      } catch {
+        /* storage unavailable */
+      }
+    },
+    [id]
   )
 
   const share = useCallback(async () => {
@@ -1192,7 +1275,7 @@ export default function StreamRoomPage() {
           <p className="mt-2 text-sm text-white/60">This live session has ended.</p>
           <Link
             href="/live"
-            className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
+            className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
           >
             Back to live
           </Link>
@@ -1399,12 +1482,12 @@ export default function StreamRoomPage() {
           )}
           <span className="max-w-[110px] truncate text-xs font-semibold text-white">{hostName}</span>
         </div>
-        <span className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[10px] font-bold tracking-wide text-white">
+        <span className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold tracking-wide text-white">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
         </span>
-        <button className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
-          <Eye className="h-3 w-3" /> {formatCompactCount(viewerCount)}
-        </button>
+        <span className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+          <Eye className="h-3 w-3" aria-hidden /> {formatCompactCount(viewerCount)}
+        </span>
       </div>
 
       {/* PK score bar + pinned message, stacked under the top bar */}
@@ -1415,7 +1498,7 @@ export default function StreamRoomPage() {
               <span className="text-xs font-bold text-white">
                 PK · You <span className="text-gold">{pkMine.toLocaleString()}</span>
               </span>
-              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white">
                 {pkTimeLeft}
               </span>
               {pkBattle.opponent ? (
@@ -1450,54 +1533,64 @@ export default function StreamRoomPage() {
 
       {/* Top-right: PiP + share + close */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
-        <button
-          onClick={() => setPanelOpen(true)}
-          aria-label="Stream controls"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
-        {!isHostMe && (
+        <Tooltip label="Stream controls" side="bottom">
           <button
-            onClick={() => {
-              dock.showLive({
-                sessionId: id,
-                title: stream?.title ?? 'Live stream',
-                hostName,
-              })
-              router.push('/live')
-            }}
-            aria-label="Minimize player"
+            onClick={() => setPanelOpen(true)}
+            aria-label="Stream controls"
             className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
           >
-            <PictureInPicture2 className="h-4 w-4" />
+            <Settings className="h-4 w-4" />
           </button>
+        </Tooltip>
+        {!isHostMe && (
+          <Tooltip label="Minimize player" side="bottom">
+            <button
+              onClick={() => {
+                dock.showLive({
+                  sessionId: id,
+                  title: stream?.title ?? 'Live stream',
+                  hostName,
+                })
+                router.push('/live')
+              }}
+              aria-label="Minimize player"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+            >
+              <PictureInPicture2 className="h-4 w-4" />
+            </button>
+          </Tooltip>
         )}
         {isHostMe && pipSupported && (
-          <button
-            onClick={togglePip}
-            aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
-            className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
-              pipActive ? 'bg-primary text-white' : 'bg-black/50 text-white'
-            }`}
-          >
-            <PictureInPicture2 className="h-4 w-4" />
-          </button>
+          <Tooltip label={pipActive ? 'Exit picture in picture' : 'Picture in picture'} side="bottom">
+            <button
+              onClick={togglePip}
+              aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
+              className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
+                pipActive ? 'bg-primary text-white' : 'bg-black/50 text-white'
+              }`}
+            >
+              <PictureInPicture2 className="h-4 w-4" />
+            </button>
+          </Tooltip>
         )}
-        <button
-          onClick={share}
-          aria-label="Share stream"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
-        >
-          <Share2 className="h-4 w-4" />
-        </button>
-        <Link
-          href="/live"
-          aria-label="Close stream"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
-        >
-          <X className="h-4 w-4" />
-        </Link>
+        <Tooltip label="Share stream" side="bottom">
+          <button
+            onClick={share}
+            aria-label="Share stream"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
+        </Tooltip>
+        <Tooltip label="Close stream" side="bottom" align="end">
+          <Link
+            href="/live"
+            aria-label="Close stream"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          >
+            <X className="h-4 w-4" />
+          </Link>
+        </Tooltip>
       </div>
 
       {/* Host moderation sheet */}
@@ -1521,7 +1614,7 @@ export default function StreamRoomPage() {
                   setDeletedIds(next)
                   setModTarget(null)
                 }}
-                className="w-full rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
+                className="w-full min-h-[44px] rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
               >
                 Delete this message
               </button>
@@ -1541,7 +1634,7 @@ export default function StreamRoomPage() {
                     setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
                     setModTarget(null)
                   }}
-                  className="w-full rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
+                  className="w-full min-h-[44px] rounded-2xl bg-cream py-3 text-sm font-semibold text-charcoal"
                 >
                   Mute for this stream
                 </button>
@@ -1563,12 +1656,12 @@ export default function StreamRoomPage() {
                     setMessages((prev) => prev.filter((x) => x.senderId !== modTarget.senderId))
                     setModTarget(null)
                   }}
-                  className="w-full rounded-2xl bg-red-50 py-3 text-sm font-semibold text-red-600"
+                  className="w-full min-h-[44px] rounded-2xl bg-red-50 py-3 text-sm font-semibold text-red-600"
                 >
                   Block from this stream
                 </button>
               )}
-              <button onClick={() => setModTarget(null)} className="w-full py-2 text-sm text-neutral-500">
+              <button onClick={() => setModTarget(null)} className="w-full min-h-[44px] py-2 text-sm text-neutral-500">
                 Cancel
               </button>
             </div>
@@ -1586,7 +1679,7 @@ export default function StreamRoomPage() {
           >
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-charcoal">Stream controls</p>
-              <button onClick={() => setPanelOpen(false)} aria-label="Close controls" className="text-neutral-400">
+              <button onClick={() => setPanelOpen(false)} aria-label="Close controls" className="flex h-11 w-11 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 -mr-2">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -1605,8 +1698,8 @@ export default function StreamRoomPage() {
                     onClick={() => chooseQuality(o.value)}
                     className={
                       qualityChoice === o.value
-                        ? 'rounded-xl bg-primary px-2 py-2 text-sm font-bold text-white'
-                        : 'rounded-xl bg-cream px-2 py-2 text-sm font-semibold text-charcoal'
+                        ? 'min-h-[44px] rounded-xl bg-primary px-2 py-2 text-sm font-bold text-white'
+                        : 'min-h-[44px] rounded-xl bg-cream px-2 py-2 text-sm font-semibold text-charcoal'
                     }
                   >
                     {o.label}
@@ -1630,7 +1723,7 @@ export default function StreamRoomPage() {
                         onChange={(e) => setPinDraft(e.target.value)}
                         maxLength={200}
                         placeholder="Pin a message for viewers"
-                        className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                        className="min-w-0 min-h-[44px] flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-base md:text-sm outline-none focus:border-primary"
                       />
                       <button
                         onClick={async () => {
@@ -1643,7 +1736,7 @@ export default function StreamRoomPage() {
                             setPanelMsg(e instanceof Error ? e.message : 'Could not set pin')
                           }
                         }}
-                        className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                        className="shrink-0 min-h-[44px] rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
                       >
                         Save
                       </button>
@@ -1658,7 +1751,7 @@ export default function StreamRoomPage() {
                           setPinDraft(pinnedText ?? '')
                           setPinEditing(true)
                         }}
-                        className="shrink-0 rounded-xl bg-cream px-3 py-2 text-xs font-semibold text-charcoal"
+                        className="shrink-0 min-h-[44px] rounded-xl bg-cream px-3 py-2 text-xs font-semibold text-charcoal"
                       >
                         {pinnedText ? 'Edit pin' : 'Add pin'}
                       </button>
@@ -1674,7 +1767,7 @@ export default function StreamRoomPage() {
                               setPanelMsg(e instanceof Error ? e.message : 'Could not clear pin')
                             }
                           }}
-                          className="shrink-0 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600"
+                          className="shrink-0 min-h-[44px] rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600"
                         >
                           Clear
                         </button>
@@ -1698,7 +1791,7 @@ export default function StreamRoomPage() {
                         setPanelMsg(err instanceof Error ? err.message : 'Could not set slow mode')
                       }
                     }}
-                    className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                    className="mt-2 min-h-[44px] w-full rounded-xl border border-neutral-200 px-3 py-2 text-base md:text-sm outline-none focus:border-primary"
                   >
                     <option value={0}>Off</option>
                     <option value={5}>5 seconds between messages</option>
@@ -1715,7 +1808,7 @@ export default function StreamRoomPage() {
                       value={blockedDraft}
                       onChange={(e) => setBlockedDraft(e.target.value)}
                       placeholder="Comma separated words"
-                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                      className="min-w-0 min-h-[44px] flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-base md:text-sm outline-none focus:border-primary"
                     />
                     <button
                       onClick={async () => {
@@ -1729,7 +1822,7 @@ export default function StreamRoomPage() {
                           setPanelMsg(e instanceof Error ? e.message : 'Could not save words')
                         }
                       }}
-                      className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                      className="shrink-0 min-h-[44px] rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
                     >
                       Save
                     </button>
@@ -1744,7 +1837,7 @@ export default function StreamRoomPage() {
                       value={modUsername}
                       onChange={(e) => setModUsername(e.target.value)}
                       placeholder="Username"
-                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                      className="min-w-0 min-h-[44px] flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-base md:text-sm outline-none focus:border-primary"
                     />
                     <button
                       onClick={async () => {
@@ -1757,7 +1850,7 @@ export default function StreamRoomPage() {
                           setPanelMsg(e instanceof Error ? e.message : 'Could not appoint')
                         }
                       }}
-                      className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                      className="shrink-0 min-h-[44px] rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
                     >
                       Appoint
                     </button>
@@ -1772,7 +1865,7 @@ export default function StreamRoomPage() {
                           setPanelMsg(e instanceof Error ? e.message : 'Could not remove')
                         }
                       }}
-                      className="shrink-0 rounded-xl bg-cream px-3 py-2 text-sm font-semibold text-charcoal"
+                      className="shrink-0 min-h-[44px] rounded-xl bg-cream px-3 py-2 text-sm font-semibold text-charcoal"
                     >
                       Remove
                     </button>
@@ -1781,13 +1874,16 @@ export default function StreamRoomPage() {
 
                 {/* Co-host */}
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">Co-host</p>
+                  <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-neutral-400">
+                    Co-host
+                    <HelpTip text="Invite another companion by username and, once they accept, they join this stream live on camera beside you." />
+                  </p>
                   <div className="mt-2 flex gap-2">
                     <input
                       value={cohostUsername}
                       onChange={(e) => setCohostUsername(e.target.value)}
                       placeholder="Username to invite"
-                      className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                      className="min-w-0 min-h-[44px] flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-base md:text-sm outline-none focus:border-primary"
                     />
                     <button
                       onClick={async () => {
@@ -1810,7 +1906,7 @@ export default function StreamRoomPage() {
                           setPanelMsg(e instanceof Error ? e.message : 'Invite failed')
                         }
                       }}
-                      className="shrink-0 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
+                      className="shrink-0 min-h-[44px] rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white"
                     >
                       Invite
                     </button>
@@ -1819,7 +1915,10 @@ export default function StreamRoomPage() {
 
                 {/* PK battle */}
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-neutral-400">PK battle</p>
+                  <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-neutral-400">
+                    PK battle
+                    <HelpTip text="A PK is a 10 minute gift contest against another live host. Viewers on both sides send gifts, the host with the most gift coins wins, and every gift still pays out as normal earnings." />
+                  </p>
                   {pkBattle && pkBattle.status === 'active' ? (
                     <p className="mt-2 text-sm text-charcoal">
                       Battle running against {pkBattle.opponent?.hostName ?? 'your opponent'}. Ends in{' '}
@@ -1832,7 +1931,7 @@ export default function StreamRoomPage() {
                       <select
                         value={pkOpponent}
                         onChange={(e) => setPkOpponent(e.target.value)}
-                        className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                        className="min-w-0 min-h-[44px] flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-base md:text-sm outline-none focus:border-primary"
                       >
                         <option value="">Pick an opponent stream</option>
                         {pkOptions.map((o) => (
@@ -1862,7 +1961,7 @@ export default function StreamRoomPage() {
                             setPanelMsg(e instanceof Error ? e.message : 'Could not start PK')
                           }
                         }}
-                        className="shrink-0 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                        className="shrink-0 min-h-[44px] rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
                       >
                         Start PK
                       </button>
@@ -1876,33 +1975,8 @@ export default function StreamRoomPage() {
         </div>
       )}
 
-      {/* Mini gift toasts (basic / premium) */}
-      <div className="pointer-events-none absolute left-3 top-20 flex flex-col gap-2">
-        {miniGifts.map((g) => (
-          <div
-            key={g.id}
-            className="gift-toast flex items-center gap-2 rounded-full bg-black/55 py-1.5 pl-2 pr-3 backdrop-blur-sm"
-          >
-            <GiftGlyph name={g.name} tier={g.tier} size="sm" />
-            <div className="leading-tight">
-              <p className="text-[11px] font-semibold text-white">{g.senderName}</p>
-              <p className="text-[10px] text-white/70">sent {g.name}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Mega gift takeover (luxury / mega) */}
-      {megaGift && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-          <div className="mega-gift text-center">
-            <div className="flex justify-center drop-shadow-2xl"><GiftGlyph name={megaGift.name} tier={megaGift.tier} size="mega" /></div>
-            <p className="mt-3 rounded-full bg-black/60 px-5 py-2 text-sm font-bold text-gold backdrop-blur-sm">
-              {megaGift.senderName} sent {megaGift.name}!
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Gift FX: float lane, bursts, stage, takeovers (GiftFx.tsx) */}
+      <GiftFxLayer ref={fxRef} myId={myId} />
 
       {/* Floating hearts */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -1947,7 +2021,7 @@ export default function StreamRoomPage() {
       {/* Like count */}
       {likes > 0 && (
         <div className="absolute bottom-24 right-3 flex flex-col items-center gap-1 lg:hidden">
-          <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+          <span className="rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
             {formatCompactCount(likes)}
           </span>
         </div>
@@ -1972,13 +2046,13 @@ export default function StreamRoomPage() {
             <button
               onClick={acceptCohost}
               disabled={cohostBusy}
-              className="flex-1 rounded-full bg-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              className="flex-1 min-h-[44px] rounded-full bg-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
             >
               {cohostBusy ? 'Connecting…' : 'Accept and go live'}
             </button>
             <button
               onClick={declineCohost}
-              className="rounded-full bg-cream px-5 py-2.5 text-sm font-semibold text-charcoal"
+              className="min-h-[44px] rounded-full bg-cream px-5 py-2.5 text-sm font-semibold text-charcoal"
             >
               Decline
             </button>
@@ -1995,86 +2069,53 @@ export default function StreamRoomPage() {
             onKeyDown={(e) => e.key === 'Enter' && sendChat()}
             placeholder="Say something nice…"
             maxLength={200}
-            className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/50"
+            className="min-w-0 min-h-[44px] flex-1 bg-transparent px-4 py-2.5 text-base md:text-sm text-white outline-none placeholder:text-white/50"
           />
-          <button
-            onClick={sendChat}
-            disabled={!draft.trim()}
-            aria-label="Send comment"
-            className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+          <Tooltip label="Send comment">
+            <button
+              onClick={sendChat}
+              disabled={!draft.trim()}
+              aria-label="Send comment"
+              className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </Tooltip>
         </div>
-        <button
-          onClick={() => setGiftOpen(true)}
-          aria-label="Send a gift"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
-        >
-          <Gift className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => tapLike(4)}
-          aria-label="Like"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
-        >
-          <Heart className="h-5 w-5" />
-        </button>
+        <Tooltip label="Send a gift">
+          <button
+            onClick={() => setGiftOpen(true)}
+            aria-label="Send a gift"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
+          >
+            <Gift className="h-5 w-5" />
+          </button>
+        </Tooltip>
+        <Tooltip label="Like">
+          <button
+            onClick={() => tapLike(4)}
+            aria-label="Like"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+          >
+            <Heart className="h-5 w-5" />
+          </button>
+        </Tooltip>
       </div>
 
-      {/* Gift sheet */}
+      {/* Gift store sheet (components/live/GiftPanel.tsx) */}
       {giftOpen && (
-        <div className="absolute inset-0 z-30 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setGiftOpen(false)} />
-          <div className="gift-sheet relative animate-sheet-up rounded-t-[28px] bg-[#141419] px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 shadow-sheet">
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/20" />
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-bold text-white">Send a gift</p>
-              <span className="flex items-center gap-1 rounded-full bg-gold/15 px-3 py-1 text-xs font-bold text-gold">
-                <span className="inline-block h-3 w-3 rounded-full bg-gold" />
-                {balance === null ? '…' : balance.toLocaleString()} coins
-              </span>
-            </div>
-
-            {needTopup && (
-              <div className="mb-3 rounded-2xl border border-gold/40 bg-gold/10 p-3 text-center">
-                <p className="text-sm font-semibold text-gold">Not enough coins</p>
-                <p className="mt-0.5 text-xs text-white/60">
-                  Top up your coins to keep gifting. (Top-ups coming soon.)
-                </p>
-              </div>
-            )}
-
-            <div className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto">
-              {catalog.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => sendGift(g)}
-                  disabled={sendingGift !== null}
-                  className={`flex flex-col items-center rounded-2xl border p-3 transition-all active:scale-95 disabled:opacity-50 ${
-                    g.tier === 'mega'
-                      ? 'border-gold/60 bg-gold/10'
-                      : g.tier === 'luxury'
-                        ? 'border-primary/50 bg-primary/10'
-                        : 'border-white/10 bg-white/5'
-                  }`}
-                >
-                  <GiftGlyph name={g.name} tier={g.tier} size="md" />
-                  <span className="mt-1 text-[11px] font-medium text-white">{g.name}</span>
-                  <span className="text-[10px] font-bold text-gold">
-                    {sendingGift === g.id ? '…' : `${g.coin_cost.toLocaleString()}`}
-                  </span>
-                </button>
-              ))}
-            </div>
-            {catalog.length === 0 && (
-              <p className="py-6 text-center text-sm text-white/50">Gift catalog unavailable.</p>
-            )}
-            <p className="mt-3 text-center text-[11px] text-white/40">
-              1 coin = ₦10 · Gifts support {hostName}
-            </p>
-          </div>
-        </div>
+        <GiftPanel
+          catalog={catalog}
+          balance={balance}
+          hostName={hostName}
+          giftMenu={hostGiftMenu}
+          sendingId={sendingGift}
+          initialGiftId={giftReturnId}
+          onSend={sendGiftTracked}
+          onComboSummary={handleComboSummary}
+          onBuyCoinsStart={stashGiftReturn}
+          onClose={() => setGiftOpen(false)}
+        />
       )}
 
       {/* Local keyframe styles */}
@@ -2095,55 +2136,6 @@ export default function StreamRoomPage() {
             opacity: 0;
           }
         }
-        .gift-toast {
-          animation: toastIn 0.3s ease-out, toastOut 0.4s ease-in 2.8s forwards;
-        }
-        @keyframes toastIn {
-          from {
-            transform: translateX(-16px);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-        @keyframes toastOut {
-          to {
-            transform: translateY(-8px);
-            opacity: 0;
-          }
-        }
-        .mega-gift {
-          animation: megaPop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), megaFade 0.5s ease-in 2.5s forwards;
-        }
-        @keyframes megaPop {
-          0% {
-            transform: scale(0.4);
-            opacity: 0;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        @keyframes megaFade {
-          to {
-            opacity: 0;
-            transform: scale(1.1);
-          }
-        }
-        .gift-sheet {
-          animation: sheetUp 0.28s ease-out;
-        }
-        @keyframes sheetUp {
-          from {
-            transform: translateY(60%);
-          }
-          to {
-            transform: translateY(0);
-          }
-        }
       `}</style>
 
         </div>
@@ -2156,7 +2148,7 @@ export default function StreamRoomPage() {
                 key={g.id}
                 onClick={() => sendGift(g)}
                 disabled={sendingGift !== null}
-                className={`flex shrink-0 flex-col items-center rounded-2xl border px-3 py-1 transition-all hover:border-primary/60 active:scale-95 disabled:opacity-50 ${
+                className={`flex min-h-[44px] shrink-0 flex-col items-center rounded-2xl border px-3 py-1 transition-all hover:border-primary/60 active:scale-95 disabled:opacity-50 ${
                   g.tier === 'mega'
                     ? 'border-gold/60 bg-gold/10'
                     : g.tier === 'luxury'
@@ -2164,10 +2156,11 @@ export default function StreamRoomPage() {
                       : 'border-white/10 bg-white/5'
                 }`}
               >
-                <GiftGlyph name={g.name} tier={g.tier} size="sm" />
-                <span className="text-[10px] font-medium leading-tight text-white">{g.name}</span>
-                <span className="text-[10px] font-bold leading-tight text-gold">
+                <span className="text-[22px] leading-none">{g.emoji}</span>
+                <span className="text-[11px] font-medium leading-tight text-white">{g.name}</span>
+                <span className="text-[11px] font-bold leading-tight text-gold">
                   {sendingGift === g.id ? '...' : g.coin_cost.toLocaleString()}
+                  <span className="ml-1 font-normal text-white/45">≈ {ngnForCoins(g.coin_cost)}</span>
                 </span>
               </button>
             ))}
@@ -2181,17 +2174,19 @@ export default function StreamRoomPage() {
           </span>
           <button
             onClick={() => setGiftOpen(true)}
-            className="shrink-0 rounded-full bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/15"
+            className="shrink-0 min-h-[44px] rounded-full bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/15"
           >
             All gifts
           </button>
-          <button
-            onClick={() => tapLike(1)}
-            aria-label="Like"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
-          >
-            <Heart className="h-5 w-5" />
-          </button>
+          <Tooltip label="Like">
+            <button
+              onClick={() => tapLike(1)}
+              aria-label="Like"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
+            >
+              <Heart className="h-5 w-5" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -2215,16 +2210,16 @@ export default function StreamRoomPage() {
               <p className="truncate text-sm font-bold text-white">{hostName}</p>
               <p className="truncate text-xs text-white/50">{stream?.title ?? 'Live stream'}</p>
             </div>
-            <span className="flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[10px] font-bold tracking-wide text-white">
+            <span className="flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold tracking-wide text-white">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
             </span>
           </div>
           <div className="mt-3 flex items-center gap-2">
             <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white">
-              <Eye className="h-3.5 w-3.5" /> {formatCompactCount(viewerCount)} watching
+              <Eye className="h-3.5 w-3.5" aria-hidden /> {formatCompactCount(viewerCount)} watching
             </span>
             <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white">
-              <Heart className="h-3.5 w-3.5" /> {formatCompactCount(likes)} likes
+              <Heart className="h-3.5 w-3.5" aria-hidden /> {formatCompactCount(likes)} likes
             </span>
           </div>
           {pinnedText && (
@@ -2285,31 +2280,37 @@ export default function StreamRoomPage() {
               onKeyDown={(e) => e.key === 'Enter' && sendChat()}
               placeholder="Say something nice..."
               maxLength={200}
-              className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm text-white outline-none placeholder:text-white/40"
+              className="min-w-0 min-h-[44px] flex-1 bg-transparent px-4 py-2.5 text-base md:text-sm text-white outline-none placeholder:text-white/40"
             />
-            <button
-              onClick={sendChat}
-              disabled={!draft.trim()}
-              aria-label="Send comment"
-              className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+            <Tooltip label="Send comment">
+              <button
+                onClick={sendChat}
+                disabled={!draft.trim()}
+                aria-label="Send comment"
+                className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </div>
-          <button
-            onClick={() => setGiftOpen(true)}
-            aria-label="Send a gift"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
-          >
-            <Gift className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => tapLike(1)}
-            aria-label="Like"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white active:scale-95"
-          >
-            <Heart className="h-5 w-5" />
-          </button>
+          <Tooltip label="Send a gift">
+            <button
+              onClick={() => setGiftOpen(true)}
+              aria-label="Send a gift"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
+            >
+              <Gift className="h-5 w-5" />
+            </button>
+          </Tooltip>
+          <Tooltip label="Like">
+            <button
+              onClick={() => tapLike(1)}
+              aria-label="Like"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white active:scale-95"
+            >
+              <Heart className="h-5 w-5" />
+            </button>
+          </Tooltip>
         </div>
       </aside>
     </div>
