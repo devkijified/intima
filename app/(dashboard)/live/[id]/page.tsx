@@ -12,7 +12,7 @@ import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, V
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
-  PictureInPicture2,} from '@/lib/icons'
+  PictureInPicture2, Smartphone } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 /* ---------------------------------- types --------------------------------- */
@@ -113,7 +113,7 @@ export default function StreamRoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid' | 'fansonly'>('loading')
+  const [phase, setPhase] = useState<'loading' | 'live' | 'ended' | 'unauthorized' | 'paid' | 'fansonly' | 'elsewhere'>('loading')
   const [stream, setStream] = useState<Stream | null>(null)
   const [paidPrice, setPaidPrice] = useState(0)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -145,6 +145,41 @@ export default function StreamRoomPage() {
   const blockedRef = useRef<Set<string>>(new Set())
   const [modTarget, setModTarget] = useState<ChatMsg | null>(null)
   const [myId, setMyId] = useState<string | null>(null)
+
+  // One watching screen per account: if this account is already
+  // watching this live on another device or tab, this screen shows
+  // a notice instead of a second stream, with a takeover button.
+  // Presence on a per-room channel arbitrates. The client id is per
+  // tab (sessionStorage), so the floating dock in the same tab
+  // never fights this page.
+  const [viewGate, setViewGate] = useState<'checking' | 'ok' | 'blocked' | 'displaced'>('checking')
+  const viewGateRef = useRef<'checking' | 'ok' | 'blocked' | 'displaced'>('checking')
+  const [bootNonce, setBootNonce] = useState(0)
+  const viewChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const watchingNowRef = useRef(false)
+  const clientIdRef = useRef('')
+  if (!clientIdRef.current) {
+    try {
+      clientIdRef.current = sessionStorage.getItem('intima_view_client') ?? ''
+    } catch {
+      /* storage unavailable */
+    }
+    if (!clientIdRef.current) {
+      clientIdRef.current = Math.random().toString(36).slice(2) + Date.now().toString(36)
+      try {
+        sessionStorage.setItem('intima_view_client', clientIdRef.current)
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  }
+  const gateResolveRef = useRef<((v: 'ok' | 'blocked') => void) | null>(null)
+  const gatePromiseRef = useRef<Promise<'ok' | 'blocked'> | null>(null)
+  if (!gatePromiseRef.current) {
+    gatePromiseRef.current = new Promise<'ok' | 'blocked'>((res) => {
+      gateResolveRef.current = res
+    })
+  }
   const [hostId, setHostId] = useState<string | null>(null)
   const [fanIds, setFanIds] = useState<Set<string>>(new Set())
   const hostIdRef = useRef<string | null>(null)
@@ -418,6 +453,80 @@ export default function StreamRoomPage() {
     if (el && railStickRef.current) el.scrollTop = el.scrollHeight
   }, [messages])
 
+  // Presence arbitration for the one-screen rule. Declared before
+  // the connect effect so it runs first; it resolves the gate
+  // promise the connect boot waits on.
+  useEffect(() => {
+    let alive = true
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    const decide = (v: 'ok' | 'blocked') => {
+      viewGateRef.current = v
+      setViewGate(v)
+      gateResolveRef.current?.(v)
+    }
+    ;(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!alive || !user) {
+        decide('ok')
+        return
+      }
+      const ch = supabase.channel(`viewing:${id}`, { config: { presence: { key: user.id } } })
+      channel = ch
+      viewChannelRef.current = ch
+      let decided = false
+      const decideOnce = () => {
+        if (decided) return
+        decided = true
+        const metas = (ch.presenceState()[user.id] ?? []) as unknown as {
+          client_id?: string
+          watching?: boolean
+        }[]
+        const otherWatching = metas.some((m) => m.client_id !== clientIdRef.current && m.watching)
+        if (otherWatching) {
+          decide('blocked')
+        } else {
+          void ch.track({ client_id: clientIdRef.current, watching: true })
+          decide('ok')
+        }
+      }
+      ch.on('presence', { event: 'sync' }, decideOnce)
+      ch.on('broadcast', { event: 'takeover' }, ({ payload }) => {
+        const from = (payload as { from?: string } | null)?.from
+        if (from && from !== clientIdRef.current && watchingNowRef.current) {
+          watchingNowRef.current = false
+          roomRef.current?.disconnect()
+          roomRef.current = null
+          void ch.track({ client_id: clientIdRef.current, watching: false })
+          viewGateRef.current = 'displaced'
+          setViewGate('displaced')
+          setPhase('elsewhere')
+        }
+      })
+      ch.subscribe()
+      // Fail open: a Realtime hiccup must never lock a viewer out.
+      window.setTimeout(decideOnce, 6000)
+    })()
+    return () => {
+      alive = false
+      if (channel) void supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  const takeOverViewing = useCallback(() => {
+    const ch = viewChannelRef.current
+    if (ch) {
+      void ch.track({ client_id: clientIdRef.current, watching: true })
+      void ch.send({ type: 'broadcast', event: 'takeover', payload: { from: clientIdRef.current } })
+    }
+    viewGateRef.current = 'ok'
+    setViewGate('ok')
+    setPhase('loading')
+    setBootNonce((n) => n + 1)
+  }, [])
+
   /* ------------------------------ connect --------------------------------- */
 
   useEffect(() => {
@@ -493,6 +602,17 @@ export default function StreamRoomPage() {
         .maybeSingle()
       if (cancelled) return
       setStream({ ...session, provider: prof })
+
+      // One-screen rule: if this account is already watching this
+      // live on another screen, stop here and show the notice.
+      if (viewGateRef.current === 'checking') {
+        await gatePromiseRef.current
+        if (cancelled) return
+      }
+      if (viewGateRef.current === 'blocked') {
+        setPhase('elsewhere')
+        return
+      }
 
       // 2. Mint the viewer token.
       let tokenRes: Response
@@ -586,6 +706,7 @@ export default function StreamRoomPage() {
         })
       })
       updateViewers()
+      watchingNowRef.current = true
       setPhase('live')
 
       // 4. Gift catalog + coin balance (independent of the room).
@@ -709,7 +830,7 @@ export default function StreamRoomPage() {
       roomRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [id, bootNonce])
 
   // Fan club members of this host, fetched once when the host is
   // known. Chat sender identity is the LiveKit participant identity,
@@ -1073,6 +1194,33 @@ export default function StreamRoomPage() {
             href="/live"
             className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
           >
+            Back to live
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'elsewhere') {
+    return (
+      <div className="flex h-[calc(100dvh-4rem)] items-center justify-center bg-charcoal px-6">
+        <div className="w-full max-w-sm text-center">
+          <Smartphone className="mx-auto h-12 w-12 text-white/25" />
+          <h1 className="mt-4 font-display text-2xl font-semibold text-white">
+            {viewGate === 'displaced' ? 'This live moved to another screen' : 'You are already watching this live'}
+          </h1>
+          <p className="mt-2 text-sm text-white/60">
+            {viewGate === 'displaced'
+              ? 'You opened this live somewhere else, so playback stopped here. You can bring it back to this screen.'
+              : 'It is playing on another device or tab signed in with your account. Watching here will stop it there.'}
+          </p>
+          <button
+            onClick={takeOverViewing}
+            className="mt-6 w-full rounded-full bg-primary px-6 py-3 text-sm font-bold text-white active:scale-95"
+          >
+            Watch here instead
+          </button>
+          <Link href="/live" className="mt-4 inline-block text-sm font-medium text-white/60">
             Back to live
           </Link>
         </div>
@@ -1997,6 +2145,7 @@ export default function StreamRoomPage() {
           }
         }
       `}</style>
+
         </div>
 
         {/* Gift bar: always visible under the stage (desktop) */}
