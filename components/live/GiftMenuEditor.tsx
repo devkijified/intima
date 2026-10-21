@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { Gift } from '@/lib/icons'
+import GiftObjectIcon from './GiftObjectIcon'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 interface MenuGift {
@@ -106,7 +107,7 @@ export function GiftMenuEditor() {
           <div className="mt-4 space-y-2.5">
             {gifts.map((g) => (
               <div key={g.id} className="flex items-center gap-3">
-                <span className="w-8 shrink-0 text-center text-2xl leading-none">{g.emoji}</span>
+                <span className="flex w-8 shrink-0 justify-center"><GiftObjectIcon giftId={g.id} size={28} /></span>
                 <span className="hidden w-28 shrink-0 sm:block">
                   <span className="block truncate text-sm font-medium text-charcoal">{g.name}</span>
                   <span className="block text-xs text-neutral-400">{g.coin_cost.toLocaleString()} coins</span>

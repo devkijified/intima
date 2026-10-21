@@ -5,6 +5,7 @@ import { COIN_PACKAGES } from '@/lib/coins/packages'
 import { ngnForCoins } from '@/lib/utils/helpers'
 import { ChevronLeft, Star, X } from '@/lib/icons'
 import type { GiftCatalogItem } from './giftTypes'
+import GiftObjectIcon from './GiftObjectIcon'
 
 export type GiftSendResult = 'ok' | 'topup' | 'fail'
 
@@ -281,7 +282,7 @@ export function GiftPanel({
                         selectedId === g.id ? 'border-gold/70 bg-gold/10' : 'border-white/10 bg-white/5'
                       }`}
                     >
-                      <span className="text-lg leading-none">{g.emoji}</span>
+                      <GiftObjectIcon giftId={g.id} size={24} />
                       <span className="max-w-[180px] truncate">
                         <span className="font-semibold">{g.name}</span>
                         <span className="text-white/60"> · {giftMenu[g.id]}</span>
@@ -346,7 +347,7 @@ export function GiftPanel({
                             : 'border-white/10 bg-white/5'
                       } ${selectedId === g.id ? 'ring-2 ring-gold' : ''} ${unaffordable ? 'opacity-60' : ''}`}
                     >
-                      <span className="text-[34px] leading-none">{g.emoji}</span>
+                      <GiftObjectIcon giftId={g.id} size={46} />
                       <span className="mt-1 text-[11px] font-medium text-white">{g.name}</span>
                       <span className="text-[11px] font-bold text-gold">
                         {sendingId === g.id ? '…' : `${g.coin_cost.toLocaleString()} coins`}
@@ -401,7 +402,7 @@ export function GiftPanel({
                       style={{ animation: `giftfx-combo-drain ${COMBO_WINDOW_MS}ms linear forwards` }}
                     />
                   </svg>
-                  <span className="text-base leading-none">{comboGift.emoji}</span>
+                  <GiftObjectIcon giftId={comboGift.id} size={20} />
                 </span>
                 <span>
                   Combo ×{combo.count}
