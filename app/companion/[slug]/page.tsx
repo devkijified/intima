@@ -830,7 +830,13 @@ export default function ModelDetailPage() {
             </button>
           ) : (
             <button
-              onClick={() => setShowConnectModal(true)}
+              onClick={() => {
+                if (!loggedIn) {
+                  router.push(`/login?next=${encodeURIComponent(`/companion/${params.slug}`)}`)
+                  return
+                }
+                setShowConnectModal(true)
+              }}
               className="btn-luxe h-12 min-w-[218px] flex-1 gap-1.5 whitespace-nowrap px-4 text-[15px]"
             >
               Request connection

@@ -20,6 +20,8 @@ import { formatCompactPrice, getInitials } from '@/lib/utils/helpers'
 import { useCall } from '@/components/calls/CallProvider'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { requireAuth } from '@/lib/auth/requireAuth'
 import { Tooltip } from '@/components/ui/Tooltip'
 
 interface ModelCardProps {
@@ -54,6 +56,7 @@ interface ModelCardProps {
 }
 
 export function ModelCard({ model, layout = 'grid' }: ModelCardProps) {
+  const router = useRouter()
   const [isLiked, setIsLiked] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -124,10 +127,12 @@ export function ModelCard({ model, layout = 'grid' }: ModelCardProps) {
       <button
         title={canCall ? 'Request a connection' : callsDisabledCopy}
         aria-label={canCall ? `Request connection with ${model.display_name}` : callsDisabledCopy}
-        onClick={(e) => {
+        onClick={async (e) => {
           e.preventDefault()
           e.stopPropagation()
-          if (model.userId) setShowConnectModal(true)
+          if (model.userId) {
+            if (await requireAuth(router, window.location.pathname)) setShowConnectModal(true)
+          }
           else flashNote('Preview profile. Connections open at launch.')
         }}
         className={actionBtnCls}
