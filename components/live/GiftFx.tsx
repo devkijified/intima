@@ -598,7 +598,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
           </div>
           <div className="absolute left-3 top-[13%] flex max-w-[86%]">
             <p
-              className="giftfx-banner truncate rounded-full border border-gold/30 bg-black/60 px-4 py-2 font-display text-sm font-bold text-gold backdrop-blur-sm"
+              className="giftfx-banner rounded-2xl border border-gold/30 bg-black/60 px-4 py-2 font-display text-sm font-bold leading-snug text-gold backdrop-blur-sm"
               style={{
                 animation: `giftfx-banner-down 0.4s ease-out 0.25s both, giftfx-fadeout 0.4s ease-in ${takeoverMs(take.evt, take.compressed) - 400}ms forwards`,
               }}
