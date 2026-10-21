@@ -1,5 +1,6 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -71,14 +72,14 @@ export default function SavedPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <PullToRefresh onRefresh={load} className="mx-auto max-w-3xl">
       <h1 className="font-display text-2xl font-semibold text-charcoal">Saved companions</h1>
       {saved.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-neutral-200/80 bg-white p-12 text-center">
           <Heart className="mx-auto h-10 w-10 text-neutral-300" />
           <p className="mt-3 font-medium text-charcoal">No saved companions yet</p>
           <p className="mt-1 text-sm text-neutral-500">Tap the heart on any profile to save her here.</p>
-          <Link href="/" className="mt-4 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white">
+          <Link href="/" className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white">
             Browse companions
           </Link>
         </div>
@@ -98,15 +99,15 @@ export default function SavedPage() {
               <div className="flex items-center justify-between p-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-charcoal">{p.display_name ?? 'Companion'}</p>
-                  {p.city && <p className="flex items-center gap-1 text-xs text-neutral-500"><MapPin className="h-3 w-3" />{p.city}</p>}
+                  {p.city && <p className="flex items-center gap-1 text-xs text-neutral-500"><MapPin aria-hidden className="h-3 w-3" />{p.city}</p>}
                   {p.rating !== null && (
                     <p className="flex items-center gap-1 text-xs font-medium text-charcoal">
-                      <Star className="h-3 w-3 text-gold" />{p.rating.toFixed(1)}
+                      <Star aria-hidden className="h-3 w-3 text-gold" />{p.rating.toFixed(1)}
                     </p>
                   )}
                 </div>
                 <button onClick={() => remove(p.provider_id)} aria-label="Remove"
-                  className="rounded-full p-2 text-neutral-400 hover:bg-red-50 hover:text-red-500">
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -114,6 +115,6 @@ export default function SavedPage() {
           ))}
         </div>
       )}
-    </div>
+    </PullToRefresh>
   )
 }

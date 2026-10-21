@@ -3,13 +3,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { SERVICE_CATALOG } from '@/lib/services'
+import {
+  SERVICE_CATALOG,
+  MAX_CUSTOM_SERVICES,
+  customServiceProblem,
+  customServiceText,
+  isCustomService,
+  makeCustomServiceId,
+} from '@/lib/services'
 import { NIGERIA_CITIES, cityCoords } from '@/lib/cities'
 import { computeSetupSteps, isLiveOnMap, type SetupProfile } from '@/lib/setup/completeness'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { AvatarUploader, GalleryUploader } from '@/components/uploads/PhotoUploader'
 import {
-  ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, Clock, MapPin, Plane, ShieldCheck,
+  ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, Clock, MapPin, Plane, ShieldCheck, X,
 } from '@/lib/icons'
 
 const STEP_TITLES = [
@@ -47,6 +54,8 @@ export default function SetupWizardPage() {
   const [rateWeekend, setRateWeekend] = useState('')
   const [negotiable, setNegotiable] = useState(true)
   const [services, setServices] = useState<string[]>([])
+  const [customServiceInput, setCustomServiceInput] = useState('')
+  const [customServiceMsg, setCustomServiceMsg] = useState('')
   const [travelMode, setTravelMode] = useState<'none' | 'selected' | 'nationwide'>('none')
   const [travelCities, setTravelCities] = useState<string[]>([])
   const [reqVerified, setReqVerified] = useState(false)
@@ -112,6 +121,24 @@ export default function SetupWizardPage() {
   const num = (s: string) => {
     const n = parseInt(s.replace(/[^0-9]/g, ''), 10)
     return Number.isFinite(n) && n > 0 ? n : null
+  }
+
+  // Custom services: her own words, stored in the same services array
+  // as "custom:<text>". The leak scan runs first (the fence), then the
+  // shared house rules in lib/services.
+  const customEntries = services.filter(isCustomService)
+
+  function addCustomService() {
+    const text = customServiceInput.trim()
+    if (text) {
+      const scan = scanForLeaks(text)
+      if (!scan.clean) { setCustomServiceMsg(leakWarning(scan.leaks)); return }
+    }
+    const problem = customServiceProblem(text, services)
+    if (problem) { setCustomServiceMsg(problem); return }
+    setServices([...services, makeCustomServiceId(text)])
+    setCustomServiceInput('')
+    setCustomServiceMsg('')
   }
 
   async function saveStep(): Promise<boolean> {
@@ -224,7 +251,7 @@ export default function SetupWizardPage() {
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Display name</label>
               <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="The name clients will see"
-                className="mt-1.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-[15px] outline-none focus:border-primary" />
+                className="mt-1.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-base outline-none md:text-[15px] focus:border-primary" />
               <p className="mt-1.5 text-xs text-neutral-400">No phone numbers or social handles. Clients reach you through Intima.</p>
             </div>
             <div>
@@ -232,7 +259,7 @@ export default function SetupWizardPage() {
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {NIGERIA_CITIES.map((c) => (
                   <button key={c} onClick={() => setCity(c)}
-                    className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${city === c ? 'bg-primary text-white shadow-cta' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                    className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${city === c ? 'bg-primary text-white shadow-cta' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                     {c}
                   </button>
                 ))}
@@ -276,7 +303,7 @@ export default function SetupWizardPage() {
               <div key={label}>
                 <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">{label}</label>
                 <input value={val} onChange={(e) => set(e.target.value)} inputMode="numeric" placeholder="e.g. 150000"
-                  className="mt-1.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-[15px] outline-none focus:border-primary" />
+                  className="mt-1.5 w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-base outline-none md:text-[15px] focus:border-primary" />
               </div>
             ))}
             <label className="flex items-center justify-between gap-3 rounded-2xl bg-cream px-4 py-3">
@@ -290,12 +317,42 @@ export default function SetupWizardPage() {
                   const on = services.includes(s.id)
                   return (
                     <button key={s.id} onClick={() => setServices(on ? services.filter((x) => x !== s.id) : [...services, s.id])}
-                      className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                      className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                       {s.label}
                     </button>
                   )
                 })}
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Your own services</label>
+              <p className="mt-1 text-[13px] text-neutral-500">Offer something that is not on the list? Add it in your own words. It shows on your profile exactly as typed.</p>
+              {customEntries.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {customEntries.map((entry) => (
+                    <button key={entry} onClick={() => setServices(services.filter((x) => x !== entry))}
+                      aria-label={`Remove ${customServiceText(entry)}`}
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#C9A84C] bg-[#C9A84C]/10 px-3 py-1.5 text-[13px] font-medium text-neutral-800 transition-all active:scale-95">
+                      {customServiceText(entry)}
+                      <X className="h-3.5 w-3.5 text-neutral-500" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-2 flex gap-2">
+                <input value={customServiceInput} onChange={(e) => setCustomServiceInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService() } }}
+                  placeholder="e.g. Piano serenade" aria-label="Add your own service"
+                  className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-base outline-none md:text-[15px] focus:border-primary" />
+                <button onClick={addCustomService}
+                  className="inline-flex min-h-[44px] shrink-0 items-center rounded-full bg-primary px-4 text-sm font-semibold text-white transition-all active:scale-95">
+                  Add
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-neutral-400">{customEntries.length} of {MAX_CUSTOM_SERVICES} added. Never add phone numbers or social handles.</p>
+              {customServiceMsg && (
+                <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{customServiceMsg}</p>
+              )}
             </div>
           </div>
         </div>
@@ -329,7 +386,7 @@ export default function SetupWizardPage() {
                   const on = travelCities.includes(c)
                   return (
                     <button key={c} onClick={() => setTravelCities(on ? travelCities.filter((x) => x !== c) : [...travelCities, c])}
-                      className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                      className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                       {c}
                     </button>
                   )
@@ -358,7 +415,7 @@ export default function SetupWizardPage() {
               <div className="mt-2 flex gap-2">
                 {[0, 1, 3, 5, 10].map((n) => (
                   <button key={n} onClick={() => setReqConnections(n)}
-                    className={`rounded-full px-3.5 py-2 text-[13px] font-medium ${reqConnections === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                    className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium ${reqConnections === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                     {n === 0 ? 'Any' : `${n}+`}
                   </button>
                 ))}
@@ -370,7 +427,7 @@ export default function SetupWizardPage() {
               <div className="mt-2 flex gap-2">
                 {[0, 7, 30, 90].map((n) => (
                   <button key={n} onClick={() => setReqDays(n)}
-                    className={`rounded-full px-3.5 py-2 text-[13px] font-medium ${reqDays === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                    className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium ${reqDays === n ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                     {n === 0 ? 'Any' : `${n} days`}
                   </button>
                 ))}
@@ -398,7 +455,7 @@ export default function SetupWizardPage() {
               </p>
               <p className="mt-1 text-sm text-neutral-500">Reviews usually take 1 to 2 days.</p>
               {vStatus !== 'verified' && vStatus !== 'pending' && (
-                <Link href="/verification" className="btn-luxe mt-3 inline-flex px-5 py-2.5 text-sm">Start verification</Link>
+                <Link href="/verification" className="btn-luxe mt-3 inline-flex min-h-[44px] items-center justify-center px-5 py-2.5 text-sm">Start verification</Link>
               )}
             </div>
           </div>
@@ -426,15 +483,15 @@ export default function SetupWizardPage() {
                   <span className="text-sm font-medium text-charcoal">{s.label}</span>
                 </span>
                 {!s.done && (
-                  <button onClick={() => setStep([1, 2, 3][i] ?? 1)} className="text-[13px] font-semibold text-primary">Fix</button>
+                  <button onClick={() => setStep([1, 2, 3][i] ?? 1)} className="inline-flex min-h-[44px] items-center px-3 text-[13px] font-semibold text-primary">Fix</button>
                 )}
               </div>
             ))}
           </div>
           {live_ && (
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <Link href={username ? `/companion/${username}` : '/profile'} className="btn-luxe py-3 text-center text-sm">View my page</Link>
-              <Link href="/" className="btn-soft py-3 text-center text-sm">See the map</Link>
+              <Link href={username ? `/companion/${username}` : '/profile'} className="btn-luxe inline-flex min-h-[44px] items-center justify-center py-3 text-center text-sm">View my page</Link>
+              <Link href="/" className="btn-soft inline-flex min-h-[44px] items-center justify-center py-3 text-center text-sm">See the map</Link>
             </div>
           )}
         </div>
@@ -446,16 +503,16 @@ export default function SetupWizardPage() {
       <div className="fixed inset-x-0 bottom-[calc(61px+env(safe-area-inset-bottom))] z-30 border-t border-black/[0.05] bg-cream/90 backdrop-blur-xl md:bottom-0">
         <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
           {step > 0 ? (
-            <button onClick={() => setStep((s) => Math.max(0, s - 1))} className="btn-soft flex items-center gap-1 px-4 py-3 text-sm">
+            <button onClick={() => setStep((s) => Math.max(0, s - 1))} className="btn-soft flex min-h-[44px] items-center gap-1 px-4 py-3 text-sm">
               <ArrowLeft className="h-4 w-4" /> Back
             </button>
           ) : <span className="flex-1" />}
           {step < STEP_TITLES.length - 1 ? (
-            <button onClick={next} disabled={saving} className="btn-luxe flex flex-1 items-center justify-center gap-1.5 py-3 text-[15px] disabled:opacity-50">
+            <button onClick={next} disabled={saving} className="btn-luxe flex min-h-[44px] flex-1 items-center justify-center gap-1.5 py-3 text-[15px] disabled:opacity-50">
               {saving ? 'Saving…' : step === 0 ? 'Start setup' : 'Save and continue'} <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
-            <Link href="/dashboard" className="btn-luxe flex-1 py-3 text-center text-[15px]">Go to my dashboard</Link>
+            <Link href="/dashboard" className="btn-luxe inline-flex min-h-[44px] flex-1 items-center justify-center py-3 text-center text-[15px]">Go to my dashboard</Link>
           )}
         </div>
       </div>

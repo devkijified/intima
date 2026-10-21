@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Check,
   Phone,
+  Plus,
   X,
   Loader2,
   MapPin,
@@ -22,10 +23,30 @@ import {
   EyeOff,
   Zap,
 } from '@/lib/icons'
-import { SERVICE_CATALOG, SERVICE_CATEGORIES } from '@/lib/services'
+import {
+  SERVICE_CATALOG,
+  SERVICE_CATEGORIES,
+  MAX_CUSTOM_SERVICES,
+  customServiceProblem,
+  customServiceText,
+  isCustomService,
+  makeCustomServiceId,
+} from '@/lib/services'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
+import { ngnForCoins } from '@/lib/utils/helpers'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 const CITIES = ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Kano', 'Enugu'] as const
+
+/** Screening questions companions ask again and again. One tap adds one to her list. */
+const COMMON_QUESTIONS = [
+  'What name should I call you?',
+  'Hotel or apartment?',
+  'When are you looking to meet?',
+  'How long do you want to book for?',
+  'Is this your first time booking?',
+  'Anything you want me to know before we meet?',
+] as const
 
 /** Approximate city centers for area-level pins. [lat, lng]. */
 const CITY_COORDS: Record<string, [number, number]> = {
@@ -88,6 +109,9 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [bioWarning, setBioWarning] = useState('')
+  const [intakeNote, setIntakeNote] = useState('')
+  const [customServiceInput, setCustomServiceInput] = useState('')
+  const [customServiceMsg, setCustomServiceMsg] = useState('')
   const [savedTick, setSavedTick] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [role, setRole] = useState<string>('client')
@@ -183,6 +207,55 @@ export default function ProfilePage() {
         ? f.services.filter((s) => s !== id)
         : [...f.services, id],
     }))
+
+  // ---- Common screening questions: one tap fills the first free slot ----
+  const questionAlreadyAdded = (q: string) =>
+    form.intakeQuestions.some((x) => x.trim().toLowerCase() === q.toLowerCase())
+
+  const addCommonQuestion = (q: string) => {
+    if (questionAlreadyAdded(q)) {
+      setIntakeNote('That question is already in your list.')
+      return
+    }
+    const slot = form.intakeQuestions.findIndex((x) => !x.trim())
+    if (slot === -1) {
+      setIntakeNote('You already have 3 questions. Clear one above to add this instead.')
+      return
+    }
+    setForm((f) => {
+      const next = [...f.intakeQuestions]
+      next[slot] = q
+      return { ...f, intakeQuestions: next }
+    })
+    setIntakeNote('')
+  }
+
+  // ---- Custom services: her own words, stored as "custom:<text>" ----
+  const customEntries = form.services.filter(isCustomService)
+
+  const addCustomService = () => {
+    const text = customServiceInput.trim()
+    // Fence first: a custom service is companion free text shown on
+    // public surfaces, so contact details never get in.
+    if (text) {
+      const scan = scanForLeaks(text)
+      if (!scan.clean) {
+        setCustomServiceMsg(leakWarning(scan.leaks))
+        return
+      }
+    }
+    const problem = customServiceProblem(text, form.services)
+    if (problem) {
+      setCustomServiceMsg(problem)
+      return
+    }
+    setForm((f) => ({ ...f, services: [...f.services, makeCustomServiceId(text)] }))
+    setCustomServiceInput('')
+    setCustomServiceMsg('')
+  }
+
+  const removeCustomService = (entry: string) =>
+    setForm((f) => ({ ...f, services: f.services.filter((s) => s !== entry) }))
 
   const saveProvider = async () => {
     if (!userId) return
@@ -293,7 +366,7 @@ export default function ProfilePage() {
   }
 
   const inputCls =
-    'w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#AC244D] focus:outline-none focus:ring-2 focus:ring-[#AC244D]/15'
+    'w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-base text-neutral-900 placeholder:text-neutral-400 focus:border-[#AC244D] focus:outline-none focus:ring-2 focus:ring-[#AC244D]/15 md:text-sm'
   const labelCls = 'mb-1.5 block text-sm font-medium text-neutral-700'
 
   return (
@@ -303,7 +376,7 @@ export default function ProfilePage() {
         <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-[#AC244D]">
           {role === 'model' ? 'Companion Listing' : 'Account'}
         </p>
-        <h1 className="font-serif text-3xl font-normal tracking-tight text-neutral-900">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-neutral-900">
           {role === 'model' ? 'My Public Profile' : 'My Profile'}
         </h1>
         <p className="mt-1 text-sm text-neutral-500">
@@ -492,7 +565,7 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            <label className="mt-4 flex cursor-pointer items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
               <span className="text-sm font-medium text-neutral-700">
                 My rates are negotiable
                 <span className="block text-xs font-normal text-neutral-500">
@@ -502,6 +575,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 role="switch"
+                aria-label="My rates are negotiable"
                 aria-checked={form.ratesNegotiable}
                 onClick={() => setForm({ ...form, ratesNegotiable: !form.ratesNegotiable })}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
@@ -514,7 +588,7 @@ export default function ProfilePage() {
                   }`}
                 />
               </button>
-            </label>
+            </div>
           </div>
 
           {/* ---- Fan club ---- */}
@@ -533,6 +607,10 @@ export default function ProfilePage() {
               />
               <p className="mt-1.5 text-xs text-neutral-500">
                 Fans pay this many coins per month. You receive your share after the platform cut.
+                Leave it blank or 0 to turn your fan club off.
+                {Number(form.subPriceCoins) > 0 && (
+                  <span className="block">That is {ngnForCoins(Number(form.subPriceCoins))} a month in naira.</span>
+                )}
               </p>
             </div>
           </div>
@@ -558,7 +636,7 @@ export default function ProfilePage() {
                         key={s.id}
                         type="button"
                         onClick={() => toggleService(s.id)}
-                        className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                        className={`inline-flex min-h-[44px] items-center rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
                           active
                             ? 'border-[#AC244D] bg-[#AC244D] text-white'
                             : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
@@ -571,12 +649,71 @@ export default function ProfilePage() {
                 </div>
               </div>
             ))}
+            <div className="mt-5 border-t border-neutral-100 pt-4">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                Your own services
+              </p>
+              <p className="mb-3 text-xs text-neutral-500">
+                Offer something that is not on the list? Add it here in your own words. It shows
+                on your profile exactly as typed.
+              </p>
+              {customEntries.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {customEntries.map((entry) => (
+                    <button
+                      key={entry}
+                      type="button"
+                      onClick={() => removeCustomService(entry)}
+                      aria-label={`Remove ${customServiceText(entry)}`}
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#C9A84C] bg-[#C9A84C]/10 px-3.5 py-1.5 text-sm font-medium text-neutral-800 transition-all active:scale-95"
+                    >
+                      {customServiceText(entry)}
+                      <X className="h-3.5 w-3.5 text-neutral-500" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <input
+                    className={inputCls}
+                    value={customServiceInput}
+                    onChange={(e) => setCustomServiceInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addCustomService()
+                      }
+                    }}
+                    placeholder="e.g. Piano serenade"
+                    aria-label="Add your own service"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addCustomService}
+                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[#AC244D] px-4 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-95"
+                >
+                  <Plus className="h-4 w-4" /> Add
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-neutral-400">
+                {customEntries.length} of {MAX_CUSTOM_SERVICES} added. Never add phone numbers or
+                social handles. Clients reach you through Intima.
+              </p>
+              {customServiceMsg && (
+                <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {customServiceMsg}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* ---- Screening questions ---- */}
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
             <h2 className="mb-1 flex items-center gap-2 font-serif text-lg text-neutral-900">
               <ShieldCheck className="h-4 w-4 text-[#AC244D]" /> Questions for new clients
+              <HelpTip text="Clients answer these questions before your chat opens, so you can screen who reaches you. You can set up to 3 questions. Keep them simple and never ask for contact details." />
             </h2>
             <p className="mb-4 text-xs text-neutral-500">
               Ask up to 3 short questions. Clients answer when they request a connection.
@@ -607,6 +744,40 @@ export default function ProfilePage() {
                 </div>
               ))}
             </div>
+            <div className="mt-5">
+              <p className={labelCls}>Common questions</p>
+              <p className="mb-2.5 text-xs text-neutral-500">
+                The questions companions ask most. Tap one to add it to your list. You can still
+                edit the wording above.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {COMMON_QUESTIONS.map((q) => {
+                  const added = questionAlreadyAdded(q)
+                  return (
+                    <button
+                      key={q}
+                      type="button"
+                      disabled={added}
+                      onClick={() => addCommonQuestion(q)}
+                      aria-pressed={added}
+                      className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all ${
+                        added
+                          ? 'border-[#AC244D]/30 bg-[#AC244D]/[0.07] text-[#8F1D40]'
+                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 active:scale-95'
+                      }`}
+                    >
+                      {added && <Check className="h-3.5 w-3.5" />}
+                      {q}
+                    </button>
+                  )
+                })}
+              </div>
+              {intakeNote && (
+                <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                  {intakeNote}
+                </p>
+              )}
+            </div>
             <p className="mt-3 text-xs text-neutral-400">
               Screening only. Answers stay inside Intima and are checked for contact details before they reach you.
             </p>
@@ -633,12 +804,12 @@ export default function ProfilePage() {
               <Zap className="h-4 w-4 text-[#AC244D]" /> Visibility
             </h2>
             <div className="space-y-3">
-              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
+              <div className="flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
                 <span className="flex items-center gap-2 text-sm font-medium text-neutral-700">
                   {form.showOnMap ? (
-                    <Eye className="h-4 w-4 text-emerald-600" />
+                    <Eye aria-hidden className="h-4 w-4 text-emerald-600" />
                   ) : (
-                    <EyeOff className="h-4 w-4 text-neutral-400" />
+                    <EyeOff aria-hidden className="h-4 w-4 text-neutral-400" />
                   )}
                   Show me on the map
                   <span className="block text-xs font-normal text-neutral-500">
@@ -648,6 +819,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   role="switch"
+                  aria-label="Show me on the map"
                   aria-checked={form.showOnMap}
                   onClick={() => setForm({ ...form, showOnMap: !form.showOnMap })}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
@@ -660,8 +832,8 @@ export default function ProfilePage() {
                     }`}
                   />
                 </button>
-              </label>
-              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
                 <span className="text-sm font-medium text-neutral-700">
                   Available now
                   <span className="block text-xs font-normal text-neutral-500">
@@ -671,6 +843,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   role="switch"
+                  aria-label="Available now"
                   aria-checked={form.isAvailable}
                   onClick={() => setForm({ ...form, isAvailable: !form.isAvailable })}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
@@ -683,7 +856,7 @@ export default function ProfilePage() {
                     }`}
                   />
                 </button>
-              </label>
+              </div>
             </div>
           </div>
 
@@ -697,7 +870,7 @@ export default function ProfilePage() {
           <button
             onClick={saveProvider}
             disabled={saving}
-            className="w-full rounded-full bg-[#AC244D] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-[0.99] disabled:opacity-60"
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#AC244D] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-[0.99] disabled:opacity-60"
           >
             {saving ? (
               <span className="inline-flex items-center gap-2">
@@ -734,7 +907,7 @@ export default function ProfilePage() {
             <button
               onClick={saveClient}
               disabled={saving}
-              className="w-full rounded-full bg-[#AC244D] py-3 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-[0.99] disabled:opacity-60"
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#AC244D] py-3 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-[0.99] disabled:opacity-60"
             >
               {saving ? (
                 <span className="inline-flex items-center gap-2">

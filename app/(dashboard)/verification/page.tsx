@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { reencodeImage } from '@/lib/uploads/reencode'
 import { BadgeCheck, Clock, ShieldCheck, XCircle, Camera, IdCard, PenLine } from '@/lib/icons'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 type VStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
 
@@ -138,7 +139,7 @@ export default function VerificationPage() {
       <div className="mx-auto max-w-xl px-4 py-16 text-center">
         <ShieldCheck className="mx-auto h-10 w-10 text-neutral-300" />
         <p className="mt-3 font-display text-2xl font-semibold text-charcoal">Sign in to verify</p>
-        <Link href="/login?next=/verification" className="btn-luxe mt-6 inline-flex px-6 py-2.5 text-sm">Sign in</Link>
+        <Link href="/login?next=/verification" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-2.5 text-sm">Sign in</Link>
       </div>
     )
   }
@@ -152,7 +153,10 @@ export default function VerificationPage() {
           <ShieldCheck className="h-5 w-5 text-primary" />
         </span>
         <div>
+          <div className="flex items-center gap-2">
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Verification</h1>
+          <HelpTip text="We ask for a government ID and a selfie holding it to confirm you are a real adult and the photos are yours. Our team checks that the faces match. Once approved, your profile gets the verified badge and you can receive connections and go live." />
+          </div>
           <p className="text-sm text-neutral-500">
             {role === 'model' ? 'Verified companions get the badge and clients trust.' : 'Verified clients unlock companions who only meet verified clients.'}
           </p>
@@ -207,7 +211,7 @@ export default function VerificationPage() {
             <div className="mt-2 flex flex-wrap gap-2">
               {ID_TYPES.map((t) => (
                 <button key={t} onClick={() => setIdType(t)}
-                  className={`rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${idType === t ? 'bg-primary text-white shadow-cta' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                  className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${idType === t ? 'bg-primary text-white shadow-cta' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                   {t}
                 </button>
               ))}
@@ -273,7 +277,7 @@ function UploadCard({
         <img src={preview} alt="" className="mt-3 max-h-44 w-full rounded-2xl object-cover" />
       )}
       <input ref={ref} type="file" accept="image/*" className="hidden" onChange={onPick} />
-      <button onClick={() => ref.current?.click()} className="btn-soft mt-3 w-full py-2.5 text-sm">
+      <button onClick={() => ref.current?.click()} className="btn-soft mt-3 inline-flex min-h-[44px] w-full items-center justify-center py-2.5 text-sm">
         {preview ? 'Retake photo' : 'Choose photo'}
       </button>
     </div>
