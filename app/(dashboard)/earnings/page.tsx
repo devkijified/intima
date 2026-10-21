@@ -49,12 +49,23 @@ export default function EarningsPage() {
       .select('balance').eq('user_id', user.id).maybeSingle()
     const { data: txs } = await supabase.from('gift_transactions')
       .select('host_earnings_coins').eq('host_id', user.id)
+    // Lifetime earnings are every way a companion earns, not gifts
+    // alone: gifts come from gift_transactions (full history), and
+    // fan club earnings, PPV earnings and contest prizes come from
+    // the coin ledger. gift_receive stays out of the ledger sum
+    // because gift_transactions already counts those same coins.
+    const { data: ledger } = await supabase.from('coin_ledger')
+      .select('delta').eq('user_id', user.id)
+      .in('kind', ['ppv_receive', 'subscription_earning', 'contest_prize'])
     const { data: setting } = await supabase.from('platform_settings')
       .select('value').eq('key', 'cashout_min_coins').maybeSingle()
     const res = await fetch('/api/cashout/request')
     const hist = res.ok ? await res.json() : { requests: [] }
     setBalance(bal?.balance ?? 0)
-    setLifetime((txs ?? []).reduce((s, t) => s + (t.host_earnings_coins ?? 0), 0))
+    setLifetime(
+      (txs ?? []).reduce((s, t) => s + (t.host_earnings_coins ?? 0), 0) +
+        (ledger ?? []).reduce((s, r) => s + (r.delta ?? 0), 0)
+    )
     setMinCoins(Number(setting?.value ?? 500))
     setRequests(hist.requests ?? [])
   }
@@ -95,7 +106,7 @@ export default function EarningsPage() {
         <Banknote className="h-6 w-6 text-gold" /> Earnings
       </h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Gifts you receive convert to coins. Cash out to your bank anytime.
+        Everything you earn lands here as coins: gifts, fan club subscriptions, paid posts and contest prizes. Cash out to your bank anytime.
       </p>
 
       {/* Balance hero */}
