@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { attemptRefund, type BoardRequestRow } from '@/lib/board/board';
+import { attemptRefundDetailed, type BoardRequestRow } from '@/lib/board/board';
 
 function service() {
   return createServiceClient(
@@ -61,6 +61,6 @@ export async function POST(
       { status: 422 }
     );
   }
-  const state = await attemptRefund(svc, row);
-  return NextResponse.json({ ok: true, refund_state: state });
+  const { state, error } = await attemptRefundDetailed(svc, row);
+  return NextResponse.json({ ok: true, refund_state: state, ...(error ? { error } : {}) });
 }

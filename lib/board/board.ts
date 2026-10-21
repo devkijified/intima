@@ -197,8 +197,21 @@ export async function attemptRefund(
   svc: SupabaseClient,
   request: BoardRequestRow
 ): Promise<string> {
+  const { state } = await attemptRefundDetailed(svc, request);
+  return state;
+}
+
+/**
+ * Same refund attempt, but the gateway's refusal reason travels
+ * back with the state: a bare "failed" gives an admin nothing to
+ * act on, so the admin retry endpoint uses this variant.
+ */
+export async function attemptRefundDetailed(
+  svc: SupabaseClient,
+  request: BoardRequestRow
+): Promise<{ state: string; error: string | null }> {
   if (!request.payment_ref || request.refund_state === 'refunded') {
-    return request.refund_state ?? 'pending';
+    return { state: request.refund_state ?? 'pending', error: null };
   }
   // Crypto refunds are manual through the gateway dashboard.
   if (request.payment_rail !== 'card') {
@@ -206,7 +219,7 @@ export async function attemptRefund(
       .from('board_requests')
       .update({ refund_state: 'pending', updated_at: new Date().toISOString() })
       .eq('id', request.id);
-    return 'pending';
+    return { state: 'pending', error: null };
   }
   try {
     // Board refunds return 85% of the fee; the platform keeps
@@ -219,13 +232,18 @@ export async function attemptRefund(
       .from('board_requests')
       .update({ refund_state: state, updated_at: new Date().toISOString() })
       .eq('id', request.id);
-    return state;
-  } catch {
+    return {
+      state,
+      error: state === 'failed' ? 'Paystack reported the refund as failed' : null,
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Refund request failed';
+    console.error(`board refund failed for request ${request.id}: ${message}`);
     await svc
       .from('board_requests')
       .update({ refund_state: 'failed', updated_at: new Date().toISOString() })
       .eq('id', request.id);
-    return 'failed';
+    return { state: 'failed', error: message };
   }
 }
 
