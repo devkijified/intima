@@ -72,6 +72,7 @@ export function RequestConnectionModal({
   const [eligibility, setEligibility] = useState<{ eligible: boolean; checks: { key: string; label: string; ok: boolean; have: string }[] } | null>(null)
   const [cardEnabled, setCardEnabled] = useState(false)
   const [transferEnabled, setTransferEnabled] = useState(false)
+  const [paystackTest, setPaystackTest] = useState(true)
   const [intakeQuestions, setIntakeQuestions] = useState<string[]>([])
   const [intakeAnswers, setIntakeAnswers] = useState<string[]>([])
   /** False until her profile (questions, rates, services) has loaded. */
@@ -105,6 +106,7 @@ export function RequestConnectionModal({
       .then((d) => {
         setCardEnabled(!!d.card)
         setTransferEnabled(!!d.transfer)
+        setPaystackTest(d.testMode !== false)
       })
       .catch(() => setCardEnabled(false))
   }, [])
@@ -599,12 +601,14 @@ export function RequestConnectionModal({
               </div>
             )}
 
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <p className="text-xs text-amber-800">
-                Test mode: no real money moves. The live payment rail plugs in here after legal review.
-              </p>
-            </div>
+            {paystackTest && (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <p className="text-xs text-amber-800">
+                  Test mode: no real money moves. Real payments start when the live payment key is switched on.
+                </p>
+              </div>
+            )}
 
             {ratesNegotiable ? (
               <div className="mb-5">
@@ -816,7 +820,7 @@ export function RequestConnectionModal({
         {step === 'processing' && (
           <div className="py-10 flex flex-col items-center gap-4">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-gray-600">Processing your connection (test mode)...</p>
+            <p className="text-gray-600">{paystackTest ? 'Processing your connection (test mode)...' : 'Processing your connection...'}</p>
           </div>
         )}
 
