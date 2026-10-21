@@ -303,7 +303,7 @@ export default function LiveFeedPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div data-page-loader className="flex min-h-[60vh] items-center justify-center">
         <IntimaLoader size="lg" />
       </div>
     )

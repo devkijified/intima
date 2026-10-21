@@ -160,7 +160,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div data-page-loader className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <IntimaLoader size="lg" />
           <p className="mt-3 text-sm font-medium text-neutral-500 tracking-wide font-sans">Loading your dashboard...</p>
