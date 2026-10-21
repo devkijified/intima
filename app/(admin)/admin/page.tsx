@@ -72,7 +72,7 @@ export default function AdminPage() {
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard icon={<Users aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
-        <StatCard icon={<UserCheck aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Models" value={stats.totalModels} />
+        <StatCard icon={<UserCheck aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Companions" value={stats.totalModels} />
         <StatCard icon={<UserX aria-hidden className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
         <StatCard icon={<Star aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
       </div>
@@ -85,7 +85,7 @@ export default function AdminPage() {
           <CardContent className="space-y-4">
             <Link href="/admin/verifications" className="flex min-h-[44px] w-full items-center justify-start rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white">
               <UserCheck aria-hidden className="mr-2 h-4 w-4" />
-              Verify Models
+              Verify Companions
             </Link>
             <Link href="/admin/users" className="flex min-h-[44px] w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
               <Users aria-hidden className="mr-2 h-4 w-4" />

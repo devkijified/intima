@@ -17,7 +17,7 @@ const ADMIN_NAV = [
   { href: '/admin/verifications', label: 'Verifications', Icon: UserCheck },
   { href: '/admin/reports', label: 'Reports', Icon: Flag },
   { href: '/admin/errors', label: 'Errors', Icon: AlertTriangle },
-  { href: '/admin/models', label: 'Models', Icon: Video },
+  { href: '/admin/models', label: 'Companions', Icon: Video },
   { href: '/admin/live', label: 'Live streams', Icon: Radio },
   { href: '/admin/comics', label: 'Comics', Icon: BookOpen },
   { href: '/admin/snaps', label: 'Fans Only review', Icon: Lock },

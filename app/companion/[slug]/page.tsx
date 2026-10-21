@@ -1002,7 +1002,7 @@ export default function ModelDetailPage() {
             onClick={() => setActiveTab(value)}
             aria-label={label}
             className={`relative flex flex-1 items-center justify-center py-3.5 transition-colors ${
-              activeTab === value ? 'text-charcoal' : 'text-neutral-300'
+              activeTab === value ? 'text-charcoal' : 'text-neutral-500 hover:text-charcoal'
             }`}
           >
             <Icon className="h-5 w-5" />
