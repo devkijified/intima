@@ -28,15 +28,34 @@ export default function AdminReportsPage() {
   const supabase = createClient()
 
   async function load() {
+    // No FKs from reports to profiles exist for PostgREST to embed
+    // (PGRST200: the embed 400s and the queue renders empty), so
+    // fetch rows plainly and resolve both names with a second query.
     const { data } = await supabase
       .from('reports')
-      .select(
-        `id, reporter_id, reported_provider_id, reason, details, status, created_at,
-         reporter:reporter_id (display_name, full_name),
-         reported:reported_provider_id (display_name, full_name)`
-      )
+      .select('id, reporter_id, reported_provider_id, reason, details, status, created_at')
       .order('created_at', { ascending: false })
-    if (data) setRows(data as unknown as ReportRow[])
+    if (data) {
+      const list = data as unknown as ReportRow[]
+      const ids = Array.from(
+        new Set(list.flatMap((r) => [r.reporter_id, r.reported_provider_id]).filter(Boolean))
+      )
+      if (ids.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, display_name, full_name')
+          .in('id', ids)
+        const nameBy: Record<string, { display_name: string | null; full_name: string | null }> = {}
+        for (const p of (profs ?? []) as { id: string; display_name: string | null; full_name: string | null }[]) {
+          nameBy[p.id] = { display_name: p.display_name, full_name: p.full_name }
+        }
+        for (const r of list) {
+          r.reporter = nameBy[r.reporter_id] ?? null
+          r.reported = nameBy[r.reported_provider_id] ?? null
+        }
+      }
+      setRows(list)
+    }
   }
 
   useEffect(() => {

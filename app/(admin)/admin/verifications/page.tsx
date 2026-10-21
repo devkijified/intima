@@ -30,14 +30,30 @@ export default function AdminVerificationsPage() {
   const supabase = createClient()
 
   async function load() {
+    // No FK from verifications.provider_id to profiles exists for
+    // PostgREST to embed (PGRST200: the embed 400s and the queue
+    // renders empty), so fetch rows plainly and resolve provider
+    // names with a second query, the bookings/wallet pattern.
     const { data } = await supabase
       .from('verifications')
       .select(
-        'id, provider_id, status, id_document_url, selfie_url, sign_selfie_url, id_type, submitted_at, review_notes, profiles:provider_id (display_name, full_name)'
+        'id, provider_id, status, id_document_url, selfie_url, sign_selfie_url, id_type, submitted_at, review_notes'
       )
       .order('submitted_at', { ascending: true })
     if (data) {
       const list = data as unknown as VerificationRow[]
+      const providerIds = Array.from(new Set(list.map((r) => r.provider_id).filter(Boolean)))
+      if (providerIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, display_name, full_name')
+          .in('id', providerIds)
+        const nameBy: Record<string, { display_name: string | null; full_name: string | null }> = {}
+        for (const p of (profs ?? []) as { id: string; display_name: string | null; full_name: string | null }[]) {
+          nameBy[p.id] = { display_name: p.display_name, full_name: p.full_name }
+        }
+        for (const r of list) r.profiles = nameBy[r.provider_id] ?? null
+      }
       // New submissions store private storage paths, not public URLs:
       // sign them so the review team can open the documents.
       await Promise.all(list.map(async (r) => {
