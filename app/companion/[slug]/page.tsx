@@ -8,6 +8,7 @@ import {
   Lock, MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
+import { showToast as globalShowToast } from '@/lib/toast'
 import { RateCard } from '@/components/rates/RateCard'
 import { ServiceChips } from '@/components/services/ServiceChips'
 import { formatRecency } from '@/lib/utils/recency'
@@ -218,15 +219,14 @@ export default function ModelDetailPage() {
   const [connectionFee, setConnectionFee] = useState<number | null>(null)
   const [showConnectModal, setShowConnectModal] = useState(false)
   const [connected, setConnected] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [loggedIn, setLoggedIn] = useState(false)
   const [viewerId, setViewerId] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
   const [eligibility, setEligibility] = useState<Eligibility | null>(null)
-  const showToast = (msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3200)
-  }
+  // Global toast: renders from the root layout host, so a message
+  // raised just before a redirect to login or signup is still
+  // visible when that page lands.
+  const showToast = (msg: string) => globalShowToast(msg)
 
   // Favorites.
   const [isFav, setIsFav] = useState(false)
@@ -502,7 +502,7 @@ export default function ModelDetailPage() {
   const toggleFollow = async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { window.location.href = '/login?next=/companion/' + encodeURIComponent(params.slug); return }
+    if (!user) { showToast('Log in to follow'); window.location.href = '/login?next=/companion/' + encodeURIComponent(params.slug); return }
     setFollowBusy(true)
     if (following) {
       await supabase.from('broadcast_follows').delete().eq('provider_id', provider?.id).eq('follower_id', user.id)
@@ -510,7 +510,7 @@ export default function ModelDetailPage() {
     } else {
       await supabase.from('broadcast_follows').insert({ provider_id: provider?.id, follower_id: user.id })
       setFollowing(true)
-      setToast('Following. Her updates land in your Channel')
+      showToast('Following. Her updates land in your Channel')
     }
     setFollowBusy(false)
   }
@@ -521,6 +521,7 @@ export default function ModelDetailPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
+        showToast('Log in to save')
         router.push('/signup?next=/companion/' + (provider.username ?? provider.id))
         return
       }
@@ -899,14 +900,6 @@ export default function ModelDetailPage() {
           <SubscribeCard providerId={provider.id} providerName={provider.displayName} />
         )}
       </div>
-
-      {toast && (
-        <div className="fixed inset-x-0 bottom-24 z-[70] flex justify-center px-4">
-          <div className="rounded-full bg-charcoal/95 px-5 py-2.5 text-sm text-white shadow-2xl backdrop-blur-md">
-            {toast}
-          </div>
-        </div>
-      )}
 
       {/* Report sheet: files POST /api/reports. Text is leak-scanned
           server-side, so the copy warns against contact details. */}

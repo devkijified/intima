@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { showToast } from '@/lib/toast';
 
 interface SubState {
   status: string;
@@ -85,6 +86,7 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
       });
       const j = await res.json().catch(() => ({}));
       if (res.status === 401) {
+        showToast('Log in to join the fan club');
         window.location.href = '/login';
         return;
       }

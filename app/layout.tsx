@@ -10,6 +10,7 @@ import { DockProvider } from '@/components/dock/FloatingDock'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { UpdatePrompt } from '@/components/pwa/UpdatePrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
+import { ToastHost } from '@/components/shared/ToastHost'
 import ErrorReporter from '@/components/observability/ErrorReporter'
 
 // One pairing for the whole product: Aeonik Pro Bold for display
@@ -82,6 +83,7 @@ export default function RootLayout({
           <InstallPrompt />
           <UpdatePrompt />
           <ConnectionMonitor />
+          <ToastHost />
         </AgeGate>
         <script
           dangerouslySetInnerHTML={{
