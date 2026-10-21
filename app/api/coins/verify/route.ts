@@ -41,6 +41,14 @@ export async function GET(req: NextRequest) {
     );
     const data = await res.json();
     if (!data.status || data.data.status !== 'success') {
+      // Bank transfers settle minutes after the buyer returns, so a
+      // not-yet-final transaction is a pending state, not a failure:
+      // the callback polls on pending, and the charge.success
+      // webhook settles the credit even if the buyer never returns.
+      const st = typeof data?.data?.status === 'string' ? data.data.status : '';
+      if (['pending', 'processing', 'ongoing', 'queued'].includes(st)) {
+        return NextResponse.json({ success: false, pending: true });
+      }
       return NextResponse.json({ error: 'Payment not successful' }, { status: 402 });
     }
 

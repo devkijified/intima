@@ -8,6 +8,8 @@ import {
 } from '@/lib/connections/eligibility';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 import { notifyUsers } from '@/lib/push-server';
+import { verifyConnectionFeePayment } from '@/lib/payments/connectionFee';
+import { isServiceType } from '@/lib/connections/serviceType';
 
 function service() {
   return createServiceClient(
@@ -179,6 +181,14 @@ async function maybeGrantReferralReward(
       });
       if (creditErr) {
         console.error('referral credit_coins failed', creditErr.message);
+      } else {
+        await notifyUsers({
+          userIds: [referrer.id],
+          type: 'referral_reward',
+          title: 'Referral reward',
+          body: `You earned ${coins} coins because someone you referred made their first connection. The coins are in your wallet.`,
+          link: '/wallet',
+        }).catch(() => {});
       }
     } catch (e) {
       console.error('referral credit_coins failed', e);
@@ -219,8 +229,10 @@ export async function GET(req: NextRequest) {
  * POST /api/connections
  * The authoritative create. The fee comes from platform_settings on
  * the server, eligibility is re-checked here (never trusted from the
- * client), and the row is inserted with the service role.
- * Body: { provider_id, payment_ref, proposed_rate_ngn?, intakeAnswers? }
+ * client), the payment_ref is proven against the settled gateway row
+ * (a reference alone is a claim, not a payment), and the row is
+ * inserted with the service role.
+ * Body: { provider_id, payment_ref, proposed_rate_ngn?, service_type?, intakeAnswers? }
  * intakeAnswers are the client's answers to the companion's screening
  * questions: shape-checked and leak-scanned here before storage.
  */
@@ -235,6 +247,7 @@ export async function POST(req: NextRequest) {
     provider_id?: string;
     payment_ref?: string;
     proposed_rate_ngn?: number | null;
+    service_type?: string | null;
     intakeAnswers?: unknown;
   } | null;
   if (!body?.provider_id || !body?.payment_ref) {
@@ -248,6 +261,13 @@ export async function POST(req: NextRequest) {
       { error: 'You cannot connect with yourself' },
       { status: 400 }
     );
+  }
+
+  // What the request is for: a known key or nothing. Anything else
+  // is a malformed client, refused before any money logic runs.
+  const serviceType = body.service_type ?? null;
+  if (serviceType !== null && !isServiceType(serviceType)) {
+    return NextResponse.json({ error: 'Unknown service type' }, { status: 400 });
   }
 
   // Intake answers: validate shape and scan for contact leaks first,
@@ -293,6 +313,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, alreadyConnected: true, id: existing.id });
   }
 
+  // Payment proof, before anything is created: the reference must
+  // resolve to a settled card_payments or crypto_payments row for
+  // this caller, this companion, and the current fee, and must not
+  // already have opened a connection. Without this, any invented
+  // reference would bypass the fee entirely.
+  const proof = await verifyConnectionFeePayment(svc, {
+    userId: user.id,
+    providerId: body.provider_id,
+    paymentRef: body.payment_ref,
+    feeNgn: fee,
+  });
+  if (!proof.ok) {
+    return NextResponse.json({ error: proof.error }, { status: proof.status });
+  }
+
   // If she asks screening questions, answers are required to connect.
   const questions = await intakeQuestionsFor(svc, body.provider_id);
   let intakeAnswers: IntakeAnswer[] | null = null;
@@ -327,6 +362,7 @@ export async function POST(req: NextRequest) {
         typeof body.proposed_rate_ngn === 'number' && body.proposed_rate_ngn > 0
           ? body.proposed_rate_ngn
           : null,
+      service_type: serviceType,
       intake_answers: intakeAnswers,
     })
     .select('id')

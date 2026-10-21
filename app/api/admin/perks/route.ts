@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { prizeForPlace } from '@/lib/perks/rules';
+import { notifyUsers } from '@/lib/push-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
     if (!contestId) return NextResponse.json({ error: 'contestId required' }, { status: 400 });
     const { data: contest } = await db
       .from('contests')
-      .select('id, prize_coins, prize_split, status')
+      .select('id, title, prize_coins, prize_split, status')
       .eq('id', contestId)
       .maybeSingle();
     if (!contest) return NextResponse.json({ error: 'Contest not found' }, { status: 404 });
@@ -217,6 +218,19 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
+
+    // Tell each winner (bell row plus push, and email for this
+    // money type). Best effort: the prizes already landed.
+    for (const w of winners) {
+      await notifyUsers({
+        userIds: [w.providerId],
+        type: 'contest_won',
+        title: 'You won a contest',
+        body: `You placed #${w.place} in "${contest.title}" and won ${w.coins} coins. The prize is in your wallet.`,
+        link: `/perks/${contestId}`,
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ ok: true, winners });
   }
 

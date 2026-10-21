@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 import { COIN_PACKAGES } from '@/lib/coins/packages';
+import {
+  isPaymentChannel,
+  type PaymentChannel,
+} from '@/lib/payments/paystack';
 
 /**
  * POST /api/coins/buy
  * Initializes a Paystack transaction for a coin package.
- * Body: { packageId }. Returns { authorizationUrl, reference }.
+ * Body: { packageId, channel? } where channel is "card" or
+ * "bank_transfer". Transfer shows the buyer a dedicated account
+ * number on the checkout; coins settle through the same webhook
+ * when Paystack confirms the transfer.
+ * Returns { authorizationUrl, reference }.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -16,11 +24,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
 
-    const { packageId } = await req.json();
+    const { packageId, channel: rawChannel } = await req.json();
     const pkg = COIN_PACKAGES.find((p) => p.id === packageId);
     if (!pkg) {
       return NextResponse.json({ error: 'Invalid package' }, { status: 400 });
     }
+    if (rawChannel !== undefined && !isPaymentChannel(rawChannel)) {
+      return NextResponse.json(
+        { error: 'channel must be "card" or "bank_transfer"' },
+        { status: 400 }
+      );
+    }
+    const channel: PaymentChannel | undefined = isPaymentChannel(rawChannel)
+      ? rawChannel
+      : undefined;
 
     const secret = process.env.PAYSTACK_SECRET_KEY;
     if (!secret) {
@@ -46,6 +63,9 @@ export async function POST(req: NextRequest) {
         email: user.email ?? `${user.id}@intima.user`,
         amount: pkg.priceNgn * 100, // kobo
         reference,
+        // Explicit choice pins the checkout to that one channel; no
+        // choice sends no channels field, the long-standing default.
+        ...(channel ? { channels: [channel] } : {}),
         callback_url: `${appUrl}/coins/callback`,
         metadata: {
           user_id: user.id,

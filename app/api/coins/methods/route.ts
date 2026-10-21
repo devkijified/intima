@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
+import { paystackConfigured } from '@/lib/payments/paystack';
 
-/** GET /api/coins/methods: which top-up rails are live. */
+/**
+ * GET /api/coins/methods: which top-up rails are live.
+ * Card and bank transfer are both channels on the same Paystack
+ * account, so they switch on and off together with
+ * PAYSTACK_SECRET_KEY. (transfer previously reported the old custom
+ * bank-alert flow; it now means the Paystack transfer channel.)
+ */
 export async function GET() {
+  const paystack = paystackConfigured();
   return NextResponse.json({
-    card: !!process.env.PAYSTACK_SECRET_KEY,
-    transfer: true,
+    card: paystack,
+    transfer: paystack,
   });
 }
