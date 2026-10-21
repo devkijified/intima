@@ -22,12 +22,14 @@ export interface GiftFxHandle {
  * BURST: lower-third spring pop with a particle spray. Strictly one
  *   at a time, queue at most 2 deep; a third waiting burst degrades
  *   to a float so a busy room never falls behind its own chat.
- * STAGE: 25% scrim, centre performance (~3s) with a signature loop
- *   per gift and a full sender banner. One at a time, and a stage
- *   gift waits while a takeover owns the screen; when the stage
- *   lane and its one waiting slot are both full, the gift plays as
- *   a burst with the full banner preserved, so credit is never lost.
- * TAKEOVER: full screen, strict FIFO, never interruptible. Toy
+ * STAGE: transparent overlay performance (~3s), object low over
+ *   the video with a signature loop per gift and a compact sender
+ *   banner at the top left. The companion is never dimmed or
+ *   covered. One at a time, and a stage gift waits while a takeover
+ *   plays; when the stage lane and its one waiting slot are both
+ *   full, the gift plays as a burst with the banner preserved, so
+ *   credit is never lost.
+ * TAKEOVER: transparent overlay, strict FIFO, never interruptible. Toy
  *   Chest ~4s, Golden Rose ~5s hard cap; once three or more are in
  *   line, the later ones play a compressed 2.5s cut. A sender whose
  *   takeover is queued gets a "yours is next" toast.
@@ -430,33 +432,32 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
         </div>
       )}
 
-      {/* Stage: scrim, banner, signature loop */}
+      {/* Stage: transparent overlay, compact banner, signature loop.
+          TikTok pattern: the animation plays OVER the video, the
+          companion stays visible, nothing dims or covers the screen. */}
       {stage && (
         <div key={stage.evt.id} className="absolute inset-0">
-          <div
-            className="giftfx-scrim absolute inset-0 bg-black/25"
-            style={{ animation: 'fade-in 0.3s ease-out both, giftfx-fadeout 0.3s ease-in 2.9s forwards' }}
-          />
-          <div className="absolute inset-x-0 top-[14%] flex justify-center px-4">
+          <div className="absolute left-3 top-[13%] flex max-w-[86%]">
             <div
-              className="giftfx-banner flex items-center gap-2 rounded-full border border-gold/30 bg-black/65 py-2 pl-2 pr-5 backdrop-blur-sm"
+              className="giftfx-banner flex min-w-0 items-center gap-2 rounded-full border border-gold/30 bg-black/60 py-1.5 pl-1.5 pr-4 backdrop-blur-sm"
               style={{ animation: 'giftfx-banner-down 0.35s ease-out both, giftfx-fadeout 0.3s ease-in 2.9s forwards' }}
             >
-              <SenderDisc name={stage.evt.senderName} className="h-8 w-8 text-xs" />
-              <p className="font-display text-sm font-semibold text-white">
+              <SenderDisc name={stage.evt.senderName} className="h-7 w-7 text-[11px]" />
+              <p className="truncate font-display text-[13px] font-semibold text-white">
                 {stage.evt.senderName}{' '}
                 <span className="font-normal text-white/75">sent {stage.evt.name} · {coinsWithNgn(stage.evt.coinCost)}</span>
               </p>
             </div>
           </div>
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="absolute bottom-[19%] left-1/2 -translate-x-1/2">
             <span className="relative block" style={{ animation: 'giftfx-stage-in 0.35s ease-out both' }}>
+              <span className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/10 blur-2xl" />
               {stage.evt.giftId === 'egg' && (
                 <>
                   {[0, 0.45, 0.9].map((d) => (
                     <span
                       key={d}
-                      className="giftfx-ring absolute left-1/2 top-1/2 h-40 w-40 rounded-full border-[3px] border-gold/70"
+                      className="giftfx-ring absolute left-1/2 top-1/2 h-32 w-32 rounded-full border-2 border-gold/60"
                       style={{ animation: `giftfx-ring 1.35s ease-out ${d}s infinite` }}
                     />
                   ))}
@@ -471,7 +472,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
                       : 'giftfx-throb 0.9s ease-in-out infinite',
                 }}
               >
-                <GiftObjectIcon giftId={stage.evt.giftId} size={216} />
+                <GiftObjectIcon giftId={stage.evt.giftId} size={148} />
               </span>
               {stage.evt.giftId === 'dildo' &&
                 stage.particles.map((p, i) => (
@@ -495,15 +496,12 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
         </div>
       )}
 
-      {/* Takeover: full screen, FIFO, never interruptible */}
+      {/* Takeover: the premium moment, still a transparent overlay.
+          FIFO, never interruptible, but the video is never dimmed or
+          covered: the object performs low over the stream with sparse
+          falling gold, TikTok style. */}
       {take && (
         <div key={take.evt.id} className="absolute inset-0 z-10">
-          <div
-            className="giftfx-scrim absolute inset-0 bg-black/45 shadow-[inset_0_0_120px_rgba(201,168,76,0.35)]"
-            style={{
-              animation: `fade-in 0.3s ease-out both, giftfx-fadeout 0.4s ease-in ${takeoverMs(take.evt, take.compressed) - 400}ms forwards`,
-            }}
-          />
           {take.fallers.map((p, i) =>
             p.dot ? (
               <span
@@ -536,14 +534,15 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
               </span>
             )
           )}
-          <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2">
+          <div className="absolute bottom-[16%] left-1/2 -translate-x-1/2">
             <span className="relative block">
+              <span className="absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/10 blur-2xl" />
               {take.evt.giftId === 'golden-rose' && (
                 <>
                   {[0, 0.55, 1.1].map((d) => (
                     <span
                       key={d}
-                      className="giftfx-ring absolute left-1/2 top-1/2 h-64 w-64 rounded-full border-4 border-gold/80"
+                      className="giftfx-ring absolute left-1/2 top-1/2 h-48 w-48 rounded-full border-[3px] border-gold/70"
                       style={{ animation: `giftfx-ring 1.65s ease-out ${d}s infinite` }}
                     />
                   ))}
@@ -557,7 +556,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
                   }, giftfx-fadeout 0.45s ease-in ${takeoverMs(take.evt, take.compressed) - 450}ms forwards`,
                 }}
               >
-                <GiftObjectIcon giftId={take.evt.giftId} size={230} />
+                <GiftObjectIcon giftId={take.evt.giftId} size={188} />
               </span>
               {take.evt.giftId === 'chest' &&
                 take.particles.map((p, i) => (
@@ -597,9 +596,9 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
                 ))}
             </span>
           </div>
-          <div className="absolute inset-x-0 bottom-[17%] flex justify-center px-4">
+          <div className="absolute left-3 top-[13%] flex max-w-[86%]">
             <p
-              className="giftfx-banner rounded-full bg-black/60 px-6 py-2.5 text-center font-display text-base font-bold text-gold backdrop-blur-sm"
+              className="giftfx-banner truncate rounded-full border border-gold/30 bg-black/60 px-4 py-2 font-display text-sm font-bold text-gold backdrop-blur-sm"
               style={{
                 animation: `giftfx-banner-down 0.4s ease-out 0.25s both, giftfx-fadeout 0.4s ease-in ${takeoverMs(take.evt, take.compressed) - 400}ms forwards`,
               }}

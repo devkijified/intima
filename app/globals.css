@@ -410,11 +410,13 @@
 }
 
 /* ================= Gift FX engine (components/live/GiftFx.tsx) =====
-   Four tiers, emoji plus CSS only. Float: side lane rise. Burst:
-   lower-third spring pop with particles. Stage: centre performance
-   with scrim and sender banner. Takeover: full-screen, FIFO.
-   Particles take their travel from --tx / --ty custom properties set
-   inline per particle. No sound at any tier. */
+   Four tiers, modeled icons plus CSS only. Float: side lane rise.
+   Burst: lower-third spring pop with particles. Stage: transparent
+   overlay performance low over the video, compact sender banner.
+   Takeover: transparent premium overlay, FIFO. The video is never
+   dimmed or covered at any tier. Particles take their travel from
+   --tx / --ty custom properties set inline per particle. No sound
+   at any tier. */
 @keyframes giftfx-rise {
   0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
   14% { opacity: 1; }
