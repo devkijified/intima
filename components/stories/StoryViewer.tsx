@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Eye } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 
 export interface Story {
   id: string;
@@ -14,6 +15,7 @@ export interface Story {
   created_at: string;
   provider_name: string;
   provider_avatar: string | null;
+  provider_username: string | null;
 }
 
 interface StoryViewerProps {
@@ -148,6 +150,7 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
             className="h-full w-full object-contain"
           />
         )}
+        <PhotoWatermark username={story.provider_username} variant="edge" />
         <button aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 w-1/3" />
         <button aria-label="Next" onClick={next} className="absolute inset-y-0 right-0 w-1/3" />
       </div>

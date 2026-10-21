@@ -75,7 +75,7 @@ export function StoryTray() {
       for (const [pid, list] of byProvider) {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('display_name, avatar_url')
+          .select('display_name, avatar_url, username')
           .eq('id', pid)
           .single();
         let hasUnseen = true;
@@ -99,6 +99,7 @@ export function StoryTray() {
               media_type: s.media_type as 'photo' | 'video',
               provider_name: prof?.display_name ?? 'Member',
               provider_avatar: prof?.avatar_url ?? null,
+              provider_username: prof?.username ?? null,
             })),
           hasUnseen,
         });

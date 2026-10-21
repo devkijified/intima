@@ -6,6 +6,7 @@ import { reencodeImage } from '@/lib/uploads/reencode';
 import { Camera, Loader2, Lock, PictureInPicture2, Play, Trash2, X } from '@/lib/icons';
 import { SubscribeCard } from '@/components/social/SubscribeCard';
 import { HelpTip } from '@/components/ui/Tooltip';
+import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import { useDock } from '@/components/dock/FloatingDock';
 
 const BUCKET = 'private-snaps';
@@ -83,6 +84,8 @@ async function readVideoDuration(file: File): Promise<number | null> {
 interface PrivateSnapsProps {
   providerId: string;
   providerName: string;
+  /** Joined to the site host for the content watermark. */
+  providerUsername?: string | null;
   isOwner: boolean;
   /** Render the tab body only when the private tab is selected. The
    * component stays mounted either way so it can report whether the
@@ -124,6 +127,7 @@ function extForVideo(file: File): string {
 export function PrivateSnaps({
   providerId,
   providerName,
+  providerUsername,
   isOwner,
   active = true,
   onVisibilityChange,
@@ -552,6 +556,7 @@ export function PrivateSnaps({
             <div className="mt-2 grid grid-cols-3 gap-1">
               {g.items.map((snap) => (
                 <div key={snap.id} className="relative">
+                  <PhotoWatermark username={providerUsername} />
                   <button
                     onClick={() => setLightbox(snap)}
                     className="relative block aspect-[3/4] w-full overflow-hidden bg-neutral-100"
@@ -644,9 +649,10 @@ export function PrivateSnaps({
             </button>
           )}
           <div
-            className="max-h-full w-full max-w-lg p-4"
+            className="relative max-h-full w-full max-w-lg p-4"
             onClick={(e) => e.stopPropagation()}
           >
+            <PhotoWatermark username={providerUsername} variant="edge" />
             {lightbox.mediaType === 'image' ? (
               <img
                 src={lightbox.url}
