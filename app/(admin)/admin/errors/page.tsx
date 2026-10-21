@@ -78,8 +78,8 @@ export default function AdminErrorsPage() {
   if (!authorized) {
     return (
       <div className="max-w-md mx-auto text-center py-16">
-        <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h1 className="text-xl font-bold text-gray-900">Not authorized</h1>
+        <ShieldAlert aria-hidden className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h1 className="font-display text-xl font-semibold tracking-tight text-gray-900">Not authorized</h1>
         <p className="text-gray-600 mt-2">This area is restricted to platform administrators.</p>
       </div>
     )
@@ -87,7 +87,7 @@ export default function AdminErrorsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Errors</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900 mb-2">Errors</h1>
       <p className="text-gray-600 mb-6">
         Client, server, and reconcile errors from the last 500 log rows, grouped by message, most
         frequent first.
@@ -103,7 +103,7 @@ export default function AdminErrorsPage() {
           <Card key={group.message}>
             <CardHeader>
               <CardTitle className="text-base flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-primary mt-1 shrink-0" />
+                <AlertTriangle aria-hidden className="w-4 h-4 text-primary mt-1 shrink-0" />
                 <span className="break-words">{group.message}</span>
                 <span className="ml-auto shrink-0 text-xs font-normal text-gray-500">
                   {group.count} x

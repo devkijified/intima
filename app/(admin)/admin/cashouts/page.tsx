@@ -52,7 +52,7 @@ export default function AdminCashoutsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Cash-out requests</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900">Cash-out requests</h1>
       <p className="mt-1 text-sm text-gray-500">
         Companions cash out gift coins at ₦10/coin. You transfer manually from your bank, then mark paid.
       </p>
@@ -62,7 +62,7 @@ export default function AdminCashoutsPage() {
           <button
             key={s}
             onClick={() => setTab(s)}
-            className={`rounded-full px-4 py-2 text-sm font-medium capitalize ${
+            className={`inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-sm font-medium capitalize ${
               tab === s ? 'bg-[#AC244D] text-white' : 'bg-white text-gray-600 border'
             }`}
           >
@@ -72,7 +72,7 @@ export default function AdminCashoutsPage() {
       </div>
 
       {loading ? (
-        <p className="mt-6 text-gray-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Loading…</p>
+        <p className="mt-6 text-gray-500"><Loader2 aria-hidden className="inline h-4 w-4 animate-spin" /> Loading…</p>
       ) : requests.length === 0 ? (
         <p className="mt-6 text-gray-500">No {tab} requests.</p>
       ) : (
@@ -100,16 +100,16 @@ export default function AdminCashoutsPage() {
                       <button
                         onClick={() => act(r.id, 'approve')}
                         disabled={acting === r.id}
-                        className="flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                       >
-                        <CheckCircle2 className="h-4 w-4" /> Approve
+                        <CheckCircle2 aria-hidden className="h-4 w-4" /> Approve
                       </button>
                       <button
                         onClick={() => act(r.id, 'reject')}
                         disabled={acting === r.id}
-                        className="flex items-center gap-1.5 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-60"
+                        className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-60"
                       >
-                        <XCircle className="h-4 w-4" /> Reject
+                        <XCircle aria-hidden className="h-4 w-4" /> Reject
                       </button>
                     </>
                   )}
@@ -117,9 +117,9 @@ export default function AdminCashoutsPage() {
                     <button
                       onClick={() => act(r.id, 'pay')}
                       disabled={acting === r.id}
-                      className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                      className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
                     >
-                      <Banknote className="h-4 w-4" /> Mark paid
+                      <Banknote aria-hidden className="h-4 w-4" /> Mark paid
                     </button>
                   )}
                 </div>

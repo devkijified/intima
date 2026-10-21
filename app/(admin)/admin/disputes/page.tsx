@@ -124,7 +124,7 @@ export default function AdminDisputesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 text-neutral-400">
-        <Loader2 className="h-6 w-6 animate-spin" />
+        <Loader2 aria-hidden className="h-6 w-6 animate-spin" />
       </div>
     )
   }
@@ -133,10 +133,10 @@ export default function AdminDisputesPage() {
     <div className="mx-auto max-w-3xl px-4 py-6">
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
-          <ShieldAlert className="h-5 w-5 text-primary" />
+          <ShieldAlert aria-hidden className="h-5 w-5 text-primary" />
         </span>
         <div>
-          <h1 className="font-display text-2xl font-semibold text-charcoal">Fee disputes</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-charcoal">Fee disputes</h1>
           <p className="text-sm text-neutral-500">Connection fees disputed inside their 24 hour protection window.</p>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function AdminDisputesPage() {
       <h2 className="mt-8 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Open ({open.length})</h2>
       {open.length === 0 ? (
         <div className="card-luxe mt-3 flex items-center gap-3 p-5">
-          <ShieldCheck className="h-6 w-6 text-emerald-500" />
+          <ShieldCheck aria-hidden className="h-6 w-6 text-emerald-500" />
           <p className="text-sm text-neutral-500">No open disputes. Every fee is either inside its window or settled.</p>
         </div>
       ) : (
@@ -168,14 +168,14 @@ export default function AdminDisputesPage() {
                 <button
                   onClick={() => resolve(d.id, 'refunded')}
                   disabled={busyId === d.id}
-                  className="btn-luxe px-4 py-2 text-xs disabled:opacity-50"
+                  className="btn-luxe min-h-[44px] px-4 py-2 text-xs disabled:opacity-50"
                 >
                   {busyId === d.id ? 'Working…' : 'Refund the client'}
                 </button>
                 <button
                   onClick={() => resolve(d.id, 'released')}
                   disabled={busyId === d.id}
-                  className="btn-soft px-4 py-2 text-xs disabled:opacity-50"
+                  className="btn-soft min-h-[44px] px-4 py-2 text-xs disabled:opacity-50"
                 >
                   Release the fee
                 </button>

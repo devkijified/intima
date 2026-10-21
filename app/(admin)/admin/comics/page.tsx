@@ -138,12 +138,12 @@ export default function AdminComicsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16 pt-6">
-      <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
-        <ArrowLeft className="h-4 w-4" /> Admin
+      <Link href="/admin" className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
+        <ArrowLeft aria-hidden className="h-4 w-4" /> Admin
       </Link>
       <div className="mt-2 flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
-          <BookOpen className="h-5 w-5 text-primary" />
+          <BookOpen aria-hidden className="h-5 w-5 text-primary" />
         </span>
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Comics</h1>
@@ -170,13 +170,13 @@ export default function AdminComicsPage() {
         <h2 className="font-display text-xl font-semibold text-charcoal">New episode</h2>
         <div className="mt-4 space-y-3">
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Episode title"
-            className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-primary" />
+            className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base md:text-sm outline-none focus:border-primary" />
           <textarea value={synopsis} onChange={(e) => setSynopsis(e.target.value)} placeholder="Synopsis (optional)"
-            rows={2} className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-primary" />
+            rows={2} className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base md:text-sm outline-none focus:border-primary" />
           <textarea value={panels} onChange={(e) => setPanels(e.target.value)} placeholder={'Panel image URLs, one per line, in reading order'}
-            rows={5} className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 font-mono text-xs outline-none focus:border-primary" />
-          <button onClick={create} disabled={busy || !title.trim()} className="btn-luxe px-5 py-2.5 text-sm disabled:opacity-50">
-            <Plus className="h-4 w-4" /> {busy ? 'Creating…' : 'Create draft'}
+            rows={5} className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 font-mono text-base md:text-sm outline-none focus:border-primary" />
+          <button onClick={create} disabled={busy || !title.trim()} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+            <Plus aria-hidden className="h-4 w-4" /> {busy ? 'Creating…' : 'Create draft'}
           </button>
           {msg && <p className="text-xs text-neutral-600">{msg}</p>}
         </div>
@@ -191,16 +191,16 @@ export default function AdminComicsPage() {
         </p>
         <div className="mt-3 flex gap-2">
           <input value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} placeholder="https://example.com/feed.xml"
-            className="min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-primary" />
-          <button onClick={previewFeed} disabled={busy || !feedUrl.trim()} className="btn-soft px-4 py-2.5 text-sm disabled:opacity-50">Preview</button>
-          <button onClick={addFeed} disabled={busy || !feedUrl.trim()} className="btn-luxe px-4 py-2.5 text-sm disabled:opacity-50">Add feed</button>
+            className="min-h-[44px] min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base md:text-sm outline-none focus:border-primary" />
+          <button onClick={previewFeed} disabled={busy || !feedUrl.trim()} className="btn-soft min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">Preview</button>
+          <button onClick={addFeed} disabled={busy || !feedUrl.trim()} className="btn-luxe min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">Add feed</button>
         </div>
         {feeds.length > 0 && (
           <div className="mt-3 space-y-1.5">
             {feeds.map((f) => (
               <div key={f.id} className="flex items-center justify-between rounded-xl bg-cream px-3 py-2 text-xs">
                 <span className="min-w-0 truncate"><span className="font-semibold text-charcoal">{f.name}</span> · <span className="text-neutral-500">{f.url}</span></span>
-                <button onClick={() => removeFeed(f.id)} className="ml-2 shrink-0 font-semibold text-red-500">Remove</button>
+                <button onClick={() => removeFeed(f.id)} className="ml-2 inline-flex min-h-[44px] shrink-0 items-center px-2 font-semibold text-red-500">Remove</button>
               </div>
             ))}
           </div>
@@ -212,7 +212,7 @@ export default function AdminComicsPage() {
               <div key={i.guid} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-100 px-3 py-2">
                 <span className="min-w-0 truncate text-sm text-charcoal">{i.title}</span>
                 <span className="shrink-0 text-[11px] text-neutral-400">{i.images.length} panels</span>
-                <button onClick={() => importItem(i.guid)} disabled={busy || i.images.length === 0} className="btn-luxe shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">Import</button>
+                <button onClick={() => importItem(i.guid)} disabled={busy || i.images.length === 0} className="btn-luxe min-h-[44px] shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">Import</button>
               </div>
             ))}
           </div>
@@ -229,29 +229,29 @@ export default function AdminComicsPage() {
           <div key={e.id} className="card-luxe flex items-center gap-3 p-4">
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2 text-sm font-semibold text-charcoal">
-                <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[10px] font-bold text-primary">Ep {e.episode_no}</span>
+                <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-primary">Ep {e.episode_no}</span>
                 <span className="truncate">{e.title}</span>
                 {e.status === 'published'
-                  ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600"><CheckCircle2 className="h-3 w-3" /> Published</span>
+                  ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600"><CheckCircle2 aria-hidden className="h-3 w-3" /> Published</span>
                   : <span className="text-[11px] font-medium text-neutral-400">Draft</span>}
               </p>
               <p className="mt-1 flex items-center gap-3 text-xs text-neutral-500">
-                <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" /> {e.view_count.toLocaleString()} reads</span>
+                <span className="inline-flex items-center gap-1"><Eye aria-hidden className="h-3 w-3" /> {e.view_count.toLocaleString()} reads</span>
                 <span>{(stats[e.id]?.readers ?? 0).toLocaleString()} unique</span>
                 <span>{(stats[e.id]?.completed ?? 0).toLocaleString()} finished</span>
               </p>
             </div>
             {e.status === 'draft' ? (
               <>
-                <button onClick={() => patch(e.id, 'publish')} className="btn-luxe px-4 py-2 text-xs">
-                  <Send className="h-3 w-3" /> Publish
+                <button onClick={() => patch(e.id, 'publish')} className="btn-luxe min-h-[44px] px-4 py-2 text-xs">
+                  <Send aria-hidden className="h-3 w-3" /> Publish
                 </button>
-                <button onClick={() => remove(e.id)} aria-label="Delete draft" className="rounded-full p-2 text-neutral-400 hover:bg-red-50 hover:text-red-500">
-                  <Trash2 className="h-4 w-4" />
+                <button onClick={() => remove(e.id)} aria-label="Delete draft" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500">
+                  <Trash2 aria-hidden className="h-4 w-4" />
                 </button>
               </>
             ) : (
-              <button onClick={() => patch(e.id, 'unpublish')} className="rounded-full px-4 py-2 text-xs font-semibold text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50">
+              <button onClick={() => patch(e.id, 'unpublish')} className="inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-xs font-semibold text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50">
                 Unpublish
               </button>
             )}

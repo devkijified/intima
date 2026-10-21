@@ -26,7 +26,7 @@ export default function EmailSetupPage() {
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-2xl font-bold text-gray-900">Transfer email setup</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900">Transfer email setup</h1>
       <p className="mt-1 text-sm text-gray-500">
         Connect the Gmail inbox that receives UBA credit alerts. The app checks it
         every 5 minutes and credits coins automatically when a transfer matches.
@@ -34,10 +34,10 @@ export default function EmailSetupPage() {
 
       <div className="mt-6 rounded-2xl border bg-white p-6">
         {connected === null ? (
-          <p className="text-gray-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Checking…</p>
+          <p className="text-gray-500"><Loader2 aria-hidden className="inline h-4 w-4 animate-spin" /> Checking…</p>
         ) : connected ? (
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+            <CheckCircle2 aria-hidden className="h-8 w-8 text-emerald-500" />
             <div>
               <p className="font-semibold text-gray-900">Gmail connected</p>
               <p className="text-sm text-gray-500">Transfer auto-confirm is live. Reconnect anytime to switch inboxes.</p>
@@ -45,7 +45,7 @@ export default function EmailSetupPage() {
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <XCircle className="h-8 w-8 text-gray-300" />
+            <XCircle aria-hidden className="h-8 w-8 text-gray-300" />
             <div>
               <p className="font-semibold text-gray-900">Not connected</p>
               <p className="text-sm text-gray-500">Transfers will need manual confirmation until you connect.</p>
@@ -55,9 +55,9 @@ export default function EmailSetupPage() {
 
         <a
           href="/api/auth/gmail/connect"
-          className="mt-5 flex items-center justify-center gap-2 rounded-full bg-[#AC244D] py-3 text-sm font-bold text-white"
+          className="mt-5 flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-[#AC244D] py-3 text-sm font-bold text-white"
         >
-          <Mail className="h-4 w-4" />
+          <Mail aria-hidden className="h-4 w-4" />
           {connected ? 'Reconnect Gmail' : 'Connect Gmail'}
         </a>
 
