@@ -137,7 +137,7 @@ export default async function CityPage({ params }: { params: { slug: string } })
           </p>
           <Link
             href="/"
-            className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white"
+            className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white"
           >
             Back to map
           </Link>
@@ -162,7 +162,7 @@ export default async function CityPage({ params }: { params: { slug: string } })
                       {(name[0] ?? '?').toUpperCase()}
                     </span>
                   )}
-                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white">
+                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${p.is_available ? 'bg-green-400' : 'bg-neutral-400'}`}
                     />
@@ -172,10 +172,10 @@ export default async function CityPage({ params }: { params: { slug: string } })
                 <div className="p-3">
                   <p className="flex items-center gap-1 truncate text-sm font-semibold text-charcoal">
                     {name}
-                    <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <BadgeCheck aria-hidden className="h-3.5 w-3.5 shrink-0 text-primary" />
                   </p>
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
-                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    <Star aria-hidden className="h-3 w-3 fill-amber-400 text-amber-400" />
                     {p.avg_rating !== null ? p.avg_rating.toFixed(1) : 'New'}
                     <span>({p.review_count ?? 0} reviews)</span>
                   </p>
@@ -184,7 +184,7 @@ export default async function CityPage({ params }: { params: { slug: string } })
                   </p>
                   <p className="mt-1.5">
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                         basedIn ? 'bg-primary-muted text-primary' : 'bg-secondary-muted text-charcoal'
                       }`}
                     >

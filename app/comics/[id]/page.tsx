@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, ChevronRight } from '@/lib/icons'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 interface Episode {
   id: string
@@ -92,7 +93,7 @@ export default function ComicReaderPage() {
     return (
       <div className="mx-auto max-w-xl px-4 pb-20 pt-16 text-center">
         <p className="font-display text-2xl font-semibold text-charcoal">Episode not found</p>
-        <Link href="/comics" className="btn-luxe mt-6 px-6 py-2.5 text-sm">All episodes</Link>
+        <Link href="/comics" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-2.5 text-sm">All episodes</Link>
       </div>
     )
   }
@@ -102,12 +103,14 @@ export default function ComicReaderPage() {
       {/* Reader top bar */}
       <div className="sticky top-0 z-20 border-b border-black/[0.04] bg-cream/85 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-3 px-4 py-2.5">
+          <Tooltip label="Back to episodes" side="bottom" align="start">
           <Link href="/comics" aria-label="Back to episodes"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] active:scale-95">
-            <ArrowLeft className="h-5 w-5 text-charcoal" />
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] active:scale-95">
+            <ArrowLeft aria-hidden className="h-5 w-5 text-charcoal" />
           </Link>
+          </Tooltip>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">Episode {ep?.episode_no ?? '…'}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">Episode {ep?.episode_no ?? '…'}</p>
             <h1 className="truncate font-display text-lg font-semibold tracking-tight text-charcoal">{ep?.title ?? 'Loading…'}</h1>
           </div>
         </div>
@@ -130,11 +133,11 @@ export default function ComicReaderPage() {
       <div ref={endRef} className="px-6 pt-10 text-center">
         <p className="font-display text-xl italic text-neutral-500">End of episode</p>
         {next ? (
-          <Link href={`/comics/${next.id}`} className="btn-luxe mt-6 inline-flex items-center gap-1 px-6 py-3 text-sm">
-            Next: Episode {next.episode_no} <ChevronRight className="h-4 w-4" />
+          <Link href={`/comics/${next.id}`} className="btn-luxe mt-6 inline-flex min-h-[44px] items-center gap-1 px-6 py-3 text-sm">
+            Next: Episode {next.episode_no} <ChevronRight aria-hidden className="h-4 w-4" />
           </Link>
         ) : (
-          <Link href="/comics" className="btn-soft mt-6 inline-flex px-6 py-3 text-sm">All episodes</Link>
+          <Link href="/comics" className="btn-soft mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">All episodes</Link>
         )}
         <p className="mt-6 text-xs text-neutral-400">New episodes drop regularly. Follow Intima and you will never miss one.</p>
         {ep?.source_name && (

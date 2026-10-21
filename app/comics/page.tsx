@@ -1,5 +1,6 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -24,21 +25,23 @@ export default function ComicsPage() {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  useEffect(() => {
-    let live = true
-    supabase.from('comic_episodes')
+  const loadEpisodes = async () => {
+    const { data } = await supabase.from('comic_episodes')
       .select('id, episode_no, title, synopsis, cover_url, published_at, view_count')
       .eq('status', 'published')
       .order('episode_no', { ascending: false })
       .limit(60)
-      .then(({ data }) => {
-        if (live) { setEpisodes((data ?? []) as Episode[]); setLoading(false) }
-      })
-    return () => { live = false }
+    setEpisodes((data ?? []) as Episode[])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadEpisodes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-28 pt-[max(1.5rem,env(safe-area-inset-top))] md:pb-10 animate-rise-in">
+    <PullToRefresh onRefresh={loadEpisodes} className="mx-auto max-w-3xl px-4 pb-28 pt-[max(1.5rem,env(safe-area-inset-top))] md:pb-10 animate-rise-in">
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
           <BookOpen className="h-5 w-5 text-primary" />
@@ -72,7 +75,7 @@ export default function ComicsPage() {
                   </div>
                 )}
                 <div className="photo-veil-top pointer-events-none absolute inset-x-0 top-0 h-16" />
-                <span className="glass-dark absolute left-2 top-2 rounded-full px-2.5 py-1 text-[10px] font-bold text-white">
+                <span className="glass-dark absolute left-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-bold text-white">
                   Ep {ep.episode_no}
                 </span>
                 {isNew(ep.published_at) && (
@@ -82,13 +85,13 @@ export default function ComicsPage() {
               <div className="p-3.5">
                 <p className="truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">{ep.title}</p>
                 <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
-                  <Eye className="h-3 w-3" /> {ep.view_count.toLocaleString()} reads
+                  <Eye aria-hidden className="h-3 w-3" /> {ep.view_count.toLocaleString()} reads
                 </p>
               </div>
             </Link>
           ))}
         </div>
       )}
-    </div>
+    </PullToRefresh>
   )
 }

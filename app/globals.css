@@ -27,6 +27,14 @@
     font-family: var(--font-figtree), system-ui, sans-serif;
   }
 
+  /* One stray wide child must never make the whole page scroll
+     sideways on a phone. clip (not hidden) keeps position: sticky
+     working, and unsupported browsers simply ignore it. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   /* iOS Safari auto-zooms the page when a focused field renders under
      16px. Hold every form field at 16px on phone widths (below the
      Tailwind md breakpoint at 768px); the designed sizes apply from
@@ -293,6 +301,33 @@
     box-shadow: 0 4px 12px rgba(201, 168, 76, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
+  /* Type scale: one ladder for the whole product. Headings use the
+     display face (Aeonik via --font-inter); body stays Figtree.
+     Pages reach for these classes instead of ad-hoc sizes so titles,
+     sections, cards and meta text match from screen to screen.
+     Floors: body copy never under 14px, meta never under 11px. */
+  .t-display {
+    @apply font-display text-[32px] font-semibold leading-[1.08] tracking-tight sm:text-4xl;
+  }
+  .t-page-title {
+    @apply font-display text-2xl font-semibold leading-tight tracking-tight;
+  }
+  .t-sheet-title {
+    @apply font-display text-xl font-semibold leading-snug tracking-tight;
+  }
+  .t-section-title {
+    @apply font-display text-lg font-semibold leading-snug tracking-tight;
+  }
+  .t-card-title {
+    @apply font-display text-base font-semibold leading-snug;
+  }
+  .t-body {
+    @apply text-sm leading-6;
+  }
+  .t-meta {
+    @apply text-[11px] leading-4;
+  }
+
   /* Photo legibility veil: bottom gradient on card photos. */
   .photo-veil {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.12) 45%, transparent 70%);
@@ -356,5 +391,166 @@
 
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+/* TikTok-style two-dot loader (components/shared/TikTokLoader.tsx).
+   Two dots chase and swap places; reduced motion falls back to a
+   gentle pulse so nothing spins for users who opt out. */
+@keyframes tt-swap-a {
+  0% { transform: translateX(0) scale(1); }
+  50% { transform: translateX(var(--tt-travel)) scale(0.72); }
+  100% { transform: translateX(0) scale(1); }
+}
+@keyframes tt-swap-b {
+  0% { transform: translateX(0) scale(0.72); }
+  50% { transform: translateX(calc(var(--tt-travel) * -1)) scale(1); }
+  100% { transform: translateX(0) scale(0.72); }
+}
+@keyframes tt-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.tt-dot-a { animation: tt-swap-a 0.64s ease-in-out infinite; }
+.tt-dot-b { animation: tt-swap-b 0.64s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tt-dot-a, .tt-dot-b { animation: tt-pulse 1.4s ease-in-out infinite; }
+  .animate-rise-in, .animate-pop-in, .stagger > * { animation: none; }
+}
+
+/* ================= Gift FX engine (components/live/GiftFx.tsx) =====
+   Four tiers, emoji plus CSS only. Float: side lane rise. Burst:
+   lower-third spring pop with particles. Stage: centre performance
+   with scrim and sender banner. Takeover: full-screen, FIFO.
+   Particles take their travel from --tx / --ty custom properties set
+   inline per particle. No sound at any tier. */
+@keyframes giftfx-rise {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  14% { opacity: 1; }
+  38% { transform: translate(9px, -16vh) scale(1); opacity: 1; }
+  68% { transform: translate(-9px, -30vh) scale(0.97); opacity: 1; }
+  100% { transform: translate(3px, -42vh) scale(0.9); opacity: 0; }
+}
+@keyframes giftfx-chip-life {
+  0% { transform: translateX(-16px); opacity: 0; }
+  8% { transform: translateX(0); opacity: 1; }
+  88% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateY(-8px); opacity: 0; }
+}
+@keyframes giftfx-ring {
+  0% { transform: translate(-50%, -50%) scale(0.45); opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(2.1); opacity: 0; }
+}
+@keyframes giftfx-heartbeat {
+  0%, 100% { transform: scale(1); }
+  18% { transform: scale(1.2); }
+  36% { transform: scale(1); }
+  54% { transform: scale(1.13); }
+  72% { transform: scale(1); }
+}
+@keyframes giftfx-pop {
+  0% { transform: scale(0); }
+  62% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+@keyframes giftfx-fadeout {
+  to { opacity: 0; }
+}
+@keyframes giftfx-particle {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px))) scale(0.35); opacity: 0; }
+}
+@keyframes giftfx-banner-down {
+  from { transform: translateY(-130%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes giftfx-stage-in {
+  from { transform: scale(0.55); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes giftfx-throb {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+@keyframes giftfx-bounce-arc {
+  0%, 100% { transform: translateY(0) rotate(-7deg); }
+  30% { transform: translateY(-52px) rotate(6deg); }
+  55% { transform: translateY(0) rotate(-4deg); }
+  78% { transform: translateY(-30px) rotate(5deg); }
+}
+@keyframes giftfx-takeover-in {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes giftfx-roar {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(6px); }
+  40% { transform: translateX(-6px); }
+  60% { transform: translateX(5px); }
+  80% { transform: translateX(-5px); }
+}
+@keyframes giftfx-pop-open {
+  0% { transform: scale(1) rotate(0deg); }
+  35% { transform: scale(1.16) rotate(-3deg); }
+  62% { transform: scale(0.94) rotate(2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+@keyframes giftfx-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes giftfx-orbit-rev {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+@keyframes giftfx-fall {
+  0% { transform: translateY(-6vh) translateX(0); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: translateY(58vh) translateX(var(--sway, 14px)); opacity: 0; }
+}
+@keyframes giftfx-next-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes giftfx-shake-tile {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes giftfx-pulse-once {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+@keyframes giftfx-combo-drain {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 100; }
+}
+@keyframes giftfx-fade-pulse {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.giftfx-shake-tile { animation: giftfx-shake-tile 0.4s ease-in-out; }
+.giftfx-pulse-once { animation: giftfx-pulse-once 0.5s ease-in-out; }
+
+/* Reduced motion: every tier collapses to a gentle fade pulse, no
+   travel, no particles, no shake. The credit still shows; the show
+   just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  .giftfx-root .giftfx-emoji {
+    animation: giftfx-fade-pulse 1.6s ease-in-out both !important;
+  }
+  .giftfx-root .giftfx-particle,
+  .giftfx-root .giftfx-ring {
+    display: none !important;
+  }
+  .giftfx-root .giftfx-scrim,
+  .giftfx-root .giftfx-banner,
+  .giftfx-root .giftfx-chip {
+    animation: giftfx-fade-pulse 1.6s ease-in-out both !important;
   }
 }

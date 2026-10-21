@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, BadgeCheck, CheckCircle2, ChevronUp, Flag, Heart, LayoutGrid, ListChecks,
+  ArrowLeft, BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Flag, Heart, LayoutGrid, ListChecks,
   Lock, MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
@@ -22,6 +22,7 @@ import { StoryViewer, type Story } from '@/components/stories/StoryViewer'
 import { SubscribeCard } from '@/components/social/SubscribeCard'
 import { PrivateSnaps } from '@/components/social/PrivateSnaps'
 import { ProfileViewTracker } from '@/components/analytics/ProfileViewTracker'
+import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import type { MockReview } from '@/lib/map/mockReviews'
 
 type PageTab = 'posts' | 'services' | 'rates' | 'reviews' | 'private'
@@ -184,7 +185,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
           )}
           <div className="absolute inset-0 flex items-center justify-center bg-black/25">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-xl active:scale-95">
-              <Play className="ml-0.5 h-5 w-5 fill-charcoal text-charcoal" />
+              <Play aria-hidden className="ml-0.5 h-5 w-5 fill-charcoal text-charcoal" />
             </span>
           </div>
         </div>
@@ -510,7 +511,7 @@ export default function ModelDetailPage() {
     } else {
       await supabase.from('broadcast_follows').insert({ provider_id: provider?.id, follower_id: user.id })
       setFollowing(true)
-      showToast('Following. Her updates land in your Channel')
+      showToast('Following. You will be notified when she goes live')
     }
     setFollowBusy(false)
   }
@@ -561,7 +562,7 @@ export default function ModelDetailPage() {
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <h1 className="font-display text-2xl font-semibold text-charcoal">Profile not found</h1>
         <p className="mt-2 text-sm text-neutral-500">This companion may have removed her listing.</p>
-        <Link href="/" className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white">
+        <Link href="/" className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white">
           Back to map
         </Link>
       </div>
@@ -576,7 +577,7 @@ export default function ModelDetailPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <h1 className="font-display text-2xl font-semibold text-charcoal">This profile is not available right now.</h1>
-        <Link href="/" className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white">
+        <Link href="/" className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white">
           Back to map
         </Link>
       </div>
@@ -621,9 +622,9 @@ export default function ModelDetailPage() {
         <button
           onClick={() => router.back()}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-cream active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-cream active:scale-95"
         >
-          <ArrowLeft className="h-5 w-5 text-charcoal" />
+          <ArrowLeft aria-hidden className="h-5 w-5 text-charcoal" />
         </button>
         <span className="text-sm font-semibold text-charcoal">{provider.displayName}</span>
       </div>
@@ -657,7 +658,7 @@ export default function ModelDetailPage() {
               <Link
                 href={`/live/${liveSessionId}`}
                 onClick={(e) => e.stopPropagation()}
-                className="absolute -bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-[10px] font-bold text-white shadow"
+                className="absolute -bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow"
               >
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                 LIVE
@@ -687,9 +688,12 @@ export default function ModelDetailPage() {
         <div className="mt-2 flex items-center gap-1.5">
           <h1 className="font-display text-[22px] font-semibold tracking-tight text-charcoal">{provider.displayName}</h1>
           {provider.verified && <BadgeCheck className="h-4 w-4 text-primary" />}
+          {provider.verified && (
+            <HelpTip text="This badge means Intima checked the companion's government ID against a live selfie, so the person in the photos is the person you meet. A gold ring on the photo marks an Elite companion with a strong booking record." />
+          )}
         </div>
         <p className="flex items-center gap-1 text-sm text-neutral-500">
-          <MapPin className="h-3.5 w-3.5" />
+          <MapPin aria-hidden className="h-3.5 w-3.5" />
           {provider.area}{provider.city ? `, ${provider.city}` : ''}
         </p>
         {provider.bio && (
@@ -699,7 +703,7 @@ export default function ModelDetailPage() {
           <div className="mt-3 flex flex-wrap gap-2">
             {tours.map((t: { city: string; start_date: string; end_date: string }, i: number) => (
               <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-3 py-1 text-xs font-semibold text-charcoal">
-                <MapPin className="h-3 w-3 text-primary" />
+                <MapPin aria-hidden className="h-3 w-3 text-primary" />
                 In {t.city} · {new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })} – {new Date(t.end_date + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })}
               </span>
             ))}
@@ -727,6 +731,13 @@ export default function ModelDetailPage() {
           )}
           {recency && <span className="text-neutral-500">{recency}</span>}
           <span className="text-neutral-500">{provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}</span>
+          <HelpTip
+            text={
+              provider.ratesNegotiable
+                ? 'Negotiable means you can propose your own rate when you request a connection. The companion can accept your offer or keep the listed rate.'
+                : 'Fixed rates means the listed rate is final, so there is no propose a rate box for this companion.'
+            }
+          />
         </div>
 
         {/* Trust: how she shows up once a connection starts */}
@@ -734,6 +745,7 @@ export default function ModelDetailPage() {
           <div className="card-luxe mt-4 p-4">
             <p className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.1em] text-neutral-400">
               <ShieldCheck className="h-4 w-4 text-primary" /> Trust
+              <HelpTip text="These numbers come from this companion's real connections on Intima: how often they reply, how fast, how rarely they cancel, and how many clients book again." />
             </p>
             <div className="mt-2.5 space-y-1.5 text-sm text-charcoal">
               {showResponseRate && provider.responseRate !== null && (
@@ -757,6 +769,7 @@ export default function ModelDetailPage() {
           <div id="book-requirements" className="card-luxe mt-4 scroll-mt-24 p-4">
             <p className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.1em] text-neutral-400">
               <ShieldCheck className="h-4 w-4 text-primary" /> Who she accepts
+              <HelpTip text="These are requirements this companion set for new clients. Meet every one and the Request connection button opens for you." />
             </p>
             <div className="mt-2.5 space-y-2">
               {provider.reqVerified && (
@@ -784,7 +797,7 @@ export default function ModelDetailPage() {
             {eligibility && !eligibility.eligible && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {eligibility.checks.find((c) => c.key === 'verified' && !c.ok) && (
-                  <Link href="/verification" className="btn-luxe px-4 py-2 text-[13px]">Get verified</Link>
+                  <Link href="/verification" className="btn-luxe inline-flex min-h-[44px] items-center px-4 py-2 text-[13px]">Get verified</Link>
                 )}
                 <p className="w-full text-xs text-neutral-400">Once you meet these, the booking button opens.</p>
               </div>
@@ -826,6 +839,11 @@ export default function ModelDetailPage() {
               )}
             </button>
           )}
+          <HelpTip
+            className="shrink-0 self-center"
+            text={`The connection fee opens your private chat with ${provider.displayName}, plus voice and video calls. It is the only charge Intima takes on the booking; the companion keeps all of their own rate. If anything goes wrong, you can open a dispute within 24 hours and the fee can be refunded.`}
+          />
+          <Tooltip label={offersVoice ? 'Start a voice call' : 'She doesn\u2019t offer voice calls'}>
           <button
             onClick={() => {
               if (!offersVoice) { showToast('She does not offer voice calls'); return }
@@ -833,10 +851,13 @@ export default function ModelDetailPage() {
               void startCall(provider.id, provider.displayName, 'voice', provider.avatar ?? undefined)
             }}
             title={offersVoice ? 'Start a voice call' : 'She doesn\u2019t offer voice calls'}
+            aria-label={offersVoice ? 'Start a voice call' : 'She doesn\u2019t offer voice calls'}
             className={`flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 ${!offersVoice ? 'opacity-40 shadow-none' : ''}`}
           >
-            <Phone className="h-4 w-4 text-charcoal" />
+            <Phone aria-hidden className="h-4 w-4 text-charcoal" />
           </button>
+          </Tooltip>
+          <Tooltip label={offersVideo ? 'Start a video call' : 'She doesn\u2019t offer video calls'}>
           <button
             onClick={() => {
               if (!offersVideo) { showToast('She does not offer video calls'); return }
@@ -844,27 +865,35 @@ export default function ModelDetailPage() {
               void startCall(provider.id, provider.displayName, 'video', provider.avatar ?? undefined)
             }}
             title={offersVideo ? 'Start a video call' : 'She doesn\u2019t offer video calls'}
+            aria-label={offersVideo ? 'Start a video call' : 'She doesn\u2019t offer video calls'}
             className={`flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90 ${!offersVideo ? 'opacity-40 shadow-none' : ''}`}
           >
-            <Video className="h-4 w-4 text-charcoal" />
+            <Video aria-hidden className="h-4 w-4 text-charcoal" />
           </button>
+          </Tooltip>
+          <Tooltip label={isFav ? 'Remove from favorites' : 'Save to favorites'}>
           <button
             onClick={toggleFav}
             disabled={favBusy}
             aria-label={isFav ? 'Remove from favorites' : 'Save to favorites'}
             className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] active:scale-90"
           >
-            <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
+            <Heart aria-hidden className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
           </button>
+          </Tooltip>
           {viewerId !== provider.id && (
             <button
               onClick={toggleFollow}
               disabled={followBusy}
-              className={'rounded-full px-4 py-2 text-xs font-semibold transition-all ' + (following ? 'bg-cream text-charcoal' : 'bg-gold text-charcoal')}
+              className={'inline-flex min-h-[44px] items-center rounded-full px-4 py-2 text-xs font-semibold transition-all ' + (following ? 'bg-cream text-charcoal' : 'bg-gold text-charcoal')}
             >
               {following ? 'Following' : 'Follow'}
             </button>
           )}
+          {viewerId !== provider.id && (
+            <HelpTip text="Following is free. It only sends you a notification when this companion goes live, and it is separate from the paid fan club." />
+          )}
+          <Tooltip label="Share her page">
           <button
             onClick={async () => {
               if (!provider.username) { showToast('Link not ready yet'); return }
@@ -878,9 +907,11 @@ export default function ModelDetailPage() {
             aria-label="Share her page"
             className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90"
           >
-            <Share className="h-4 w-4 text-charcoal" />
+            <Share aria-hidden className="h-4 w-4 text-charcoal" />
           </button>
+          </Tooltip>
           {viewerId !== provider.id && (
+            <Tooltip label="Report this profile">
             <button
               onClick={() => {
                 if (!loggedIn) { showToast('Log in to file a report'); router.push('/signup?next=/companion/' + (provider.username ?? provider.id)); return }
@@ -889,8 +920,9 @@ export default function ModelDetailPage() {
               aria-label="Report this profile"
               className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-soft ring-1 ring-black/[0.06] transition-all active:scale-90"
             >
-              <Flag className="h-4 w-4 text-neutral-400" />
+              <Flag aria-hidden className="h-4 w-4 text-neutral-400" />
             </button>
+            </Tooltip>
           )}
         </div>
 
@@ -922,9 +954,9 @@ export default function ModelDetailPage() {
               <button
                 onClick={() => setShowReport(false)}
                 aria-label="Close report"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream ring-1 ring-black/[0.06]"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-cream ring-1 ring-black/[0.06]"
               >
-                <X className="h-4 w-4 text-charcoal" />
+                <X aria-hidden className="h-4 w-4 text-charcoal" />
               </button>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -933,7 +965,7 @@ export default function ModelDetailPage() {
                   key={r}
                   onClick={() => setReportReason(r)}
                   className={
-                    'rounded-full px-3.5 py-2 text-xs font-semibold ring-1 transition-all ' +
+                    'inline-flex min-h-[44px] items-center rounded-full px-4 py-2 text-xs font-semibold ring-1 transition-all ' +
                     (reportReason === r
                       ? 'bg-primary text-white ring-primary'
                       : 'bg-cream text-charcoal ring-black/[0.06]')
@@ -949,7 +981,7 @@ export default function ModelDetailPage() {
               rows={4}
               maxLength={1000}
               placeholder="Tell us what happened (optional, but it helps)"
-              className="mt-4 w-full rounded-2xl bg-cream px-4 py-3 text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40"
+              className="mt-4 w-full rounded-2xl bg-cream px-4 py-3 text-base text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40 md:text-sm"
             />
             <button
               onClick={submitReport}
@@ -965,11 +997,11 @@ export default function ModelDetailPage() {
       {/* Icon tab bar */}
       <div className="mt-3 flex border-b border-neutral-100">
         {tabs.map(({ value, icon: Icon, label }) => (
+          <Tooltip key={value} label={label} wrapperClassName="flex flex-1">
           <button
-            key={value}
             onClick={() => setActiveTab(value)}
             aria-label={label}
-            className={`relative flex flex-1 items-center justify-center py-2.5 transition-colors ${
+            className={`relative flex flex-1 items-center justify-center py-3.5 transition-colors ${
               activeTab === value ? 'text-charcoal' : 'text-neutral-300'
             }`}
           >
@@ -978,6 +1010,7 @@ export default function ModelDetailPage() {
               <span className="absolute inset-x-10 bottom-0 h-0.5 rounded-full bg-charcoal" />
             )}
           </button>
+          </Tooltip>
         ))}
       </div>
 
@@ -999,8 +1032,8 @@ export default function ModelDetailPage() {
                   ) : (
                     <VideoSlide src={slide.src} active={false} />
                   )}
-                  <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-semibold text-white drop-shadow">
-                    <Play className="h-2.5 w-2.5 fill-white" />
+                  <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[11px] font-semibold text-white drop-shadow">
+                    <Play aria-hidden className="h-2.5 w-2.5 fill-white" />
                     {formatCompactCount(Math.max(1, Math.round(provider.viewCount / Math.max(1, totalSlides))))}
                   </span>
                   {slide.kind === 'video' && (
@@ -1034,10 +1067,11 @@ export default function ModelDetailPage() {
                 <div key={r.id} className="rounded-2xl bg-cream p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-charcoal">{r.author}</span>
-                    <span className="flex items-center gap-0.5">
+                    <span className="flex items-center gap-0.5" role="img" aria-label={`Rated ${r.rating} out of 5`}>
                       {[1, 2, 3, 4, 5].map((s) => (
                         <Star
                           key={s}
+                          aria-hidden
                           className={`h-3 w-3 ${s <= r.rating ? 'fill-amber-400 text-amber-400' : 'text-neutral-300'}`}
                         />
                       ))}
@@ -1072,12 +1106,15 @@ export default function ModelDetailPage() {
       {/* Lightbox */}
       {lightbox !== null && slides[lightbox] && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/95" onClick={() => setLightbox(null)}>
+          <Tooltip label="Close" wrapperClassName="absolute right-4 top-4">
           <button
+            onClick={(e) => { e.stopPropagation(); setLightbox(null) }}
             aria-label="Close"
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
           >
-            <X className="h-5 w-5" />
+            <X aria-hidden className="h-5 w-5" />
           </button>
+          </Tooltip>
           <div className="max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
             {slides[lightbox].kind === 'photo' ? (
               <img src={slides[lightbox].src} alt="" className="max-h-[80vh] w-full rounded-2xl object-contain" draggable={false} />
@@ -1087,20 +1124,24 @@ export default function ModelDetailPage() {
           </div>
           {totalSlides > 1 && (
             <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-2">
+              <Tooltip label="Previous">
               <button
                 onClick={(e) => { e.stopPropagation(); setLightbox((lightbox - 1 + totalSlides) % totalSlides) }}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
                 aria-label="Previous"
               >
-                <ChevronUp className="h-5 w-5 -rotate-90" />
+                <ChevronLeft aria-hidden className="h-5 w-5" />
               </button>
+              </Tooltip>
+              <Tooltip label="Next">
               <button
                 onClick={(e) => { e.stopPropagation(); setLightbox((lightbox + 1) % totalSlides) }}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
                 aria-label="Next"
               >
-                <ChevronUp className="h-5 w-5 rotate-90" />
+                <ChevronRight aria-hidden className="h-5 w-5" />
               </button>
+              </Tooltip>
             </div>
           )}
         </div>
