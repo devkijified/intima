@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { reencodeImage } from '@/lib/uploads/reencode'
 import { ShieldCheck, ShieldAlert, Star, Clock, Camera, Loader2 } from '@/lib/icons'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 interface DisputeEvent {
   id: string
@@ -41,7 +42,7 @@ function fmtDateTime(iso: string): string {
 
 function Stars({ value, onPick }: { value: number; onPick?: (n: number) => void }) {
   return (
-    <div className="flex gap-1">
+    <div className="flex">
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
@@ -49,7 +50,8 @@ function Stars({ value, onPick }: { value: number; onPick?: (n: number) => void 
           disabled={!onPick}
           onClick={() => onPick?.(n)}
           aria-label={`${n} star${n > 1 ? 's' : ''}`}
-          className={onPick ? 'transition-transform active:scale-90' : ''}
+          aria-pressed={onPick ? n <= value : undefined}
+          className={`flex h-11 w-10 items-center justify-center ${onPick ? 'transition-transform active:scale-90' : ''}`}
         >
           <Star className={`h-6 w-6 ${n <= value ? 'text-gold' : 'text-neutral-300'}`} />
         </button>
@@ -254,14 +256,17 @@ export default function ConnectionCare({
           <div className="flex items-start gap-2.5">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-semibold text-charcoal">
-                {viewerIsClient ? 'Your' : 'The'} {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
+              <p className="flex items-center gap-1 text-[13px] font-semibold text-charcoal">
+                <span>
+                  {viewerIsClient ? 'Your' : 'The'} {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
+                </span>
+                <HelpTip text="You have 24 hours from payment to open a dispute. Our team reviews both sides and decides on the connection fee only: it is either refunded to the client or released. The companion's own rate is never part of the dispute." />
               </p>
               <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
                 If anything goes wrong, open a dispute and our team will review it. The fee stays frozen until they decide.
               </p>
               {!showDispute ? (
-                <button onClick={() => setShowDispute(true)} className="mt-2 text-xs font-semibold text-primary">
+                <button onClick={() => setShowDispute(true)} className="mt-1 inline-flex min-h-[44px] items-center text-xs font-semibold text-primary">
                   Open a dispute
                 </button>
               ) : (
@@ -271,14 +276,14 @@ export default function ConnectionCare({
                     onChange={(e) => setReason(e.target.value)}
                     rows={3}
                     placeholder="Tell us what happened…"
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
                   />
                   {disputeError && <p className="mt-1.5 text-xs text-red-600">{disputeError}</p>}
                   <div className="mt-2 flex gap-2">
-                    <button onClick={openDispute} disabled={disputeBusy} className="btn-luxe px-4 py-2 text-xs disabled:opacity-50">
+                    <button onClick={openDispute} disabled={disputeBusy} className="btn-luxe min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
                       {disputeBusy ? 'Sending…' : 'Send dispute'}
                     </button>
-                    <button onClick={() => setShowDispute(false)} className="btn-soft px-4 py-2 text-xs">Cancel</button>
+                    <button onClick={() => setShowDispute(false)} className="btn-soft min-h-[44px] px-5 py-2 text-xs">Cancel</button>
                   </div>
                 </div>
               )}
@@ -337,7 +342,7 @@ export default function ConnectionCare({
                 onChange={(e) => setEvidenceCaption(e.target.value)}
                 placeholder="Caption (optional)"
                 maxLength={1000}
-                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
               />
               {evidenceError && <p className="mt-1.5 text-xs text-red-600">{evidenceError}</p>}
               <input ref={evidenceRef} type="file" accept="image/*" className="hidden" onChange={pickEvidence} />
@@ -371,10 +376,10 @@ export default function ConnectionCare({
                 onChange={(e) => setComment(e.target.value)}
                 rows={2}
                 placeholder="Say it plainly. No phone numbers or social handles; reviews go public."
-                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
               />
               {reviewError && <p className="mt-1.5 text-xs text-red-600">{reviewError}</p>}
-              <button onClick={submitReview} disabled={reviewBusy} className="btn-luxe mt-2 px-4 py-2 text-xs disabled:opacity-50">
+              <button onClick={submitReview} disabled={reviewBusy} className="btn-luxe mt-2 min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
                 {reviewBusy ? 'Saving…' : 'Submit review'}
               </button>
             </div>
@@ -409,10 +414,10 @@ export default function ConnectionCare({
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     rows={2}
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
                   />
                   {reviewError && <p className="mt-1.5 text-xs text-red-600">{reviewError}</p>}
-                  <button onClick={submitReview} disabled={reviewBusy} className="btn-soft mt-1.5 px-4 py-2 text-xs disabled:opacity-50">
+                  <button onClick={submitReview} disabled={reviewBusy} className="btn-soft mt-1.5 min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
                     {reviewBusy ? 'Saving…' : 'Update review'}
                   </button>
                 </div>

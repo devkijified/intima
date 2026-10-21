@@ -1,11 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, ShieldCheck, Phone, Video, MessageCircle, Loader2, CheckCircle2, AlertTriangle } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings'
 import { getPaymentProvider, newPaymentReference } from '@/lib/payments/provider'
-import { formatPrice, getInitials } from '@/lib/utils/helpers'
+import { formatPrice, formatCompactPrice, getInitials } from '@/lib/utils/helpers'
+import { isCustomService, resolveServices } from '@/lib/services'
+import {
+  RATE_SERVICE_TYPES,
+  serviceTypeForSlug,
+  type ServiceType,
+} from '@/lib/connections/serviceType'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 interface RequestConnectionModalProps {
   providerId: string
@@ -20,6 +27,19 @@ interface RequestConnectionModalProps {
 }
 
 type Step = 'summary' | 'processing' | 'success' | 'error' | 'unavailable'
+
+/**
+ * One selectable "what do you want?" chip, derived from her data
+ * only: a priced rate she set, or a service she offers. `key` is
+ * unique per chip (two services can share the stored 'other' key);
+ * `serviceType` is what gets stored on the connection.
+ */
+interface WantOption {
+  key: string
+  label: string
+  priceNgn: number | null
+  serviceType: ServiceType
+}
 
 interface SimilarProvider {
   providerId: string
@@ -51,14 +71,41 @@ export function RequestConnectionModal({
   const [activeAvatar, setActiveAvatar] = useState<string | null>(providerAvatarUrl ?? null)
   const [eligibility, setEligibility] = useState<{ eligible: boolean; checks: { key: string; label: string; ok: boolean; have: string }[] } | null>(null)
   const [cardEnabled, setCardEnabled] = useState(false)
+  const [transferEnabled, setTransferEnabled] = useState(false)
   const [intakeQuestions, setIntakeQuestions] = useState<string[]>([])
   const [intakeAnswers, setIntakeAnswers] = useState<string[]>([])
+  /** False until her profile (questions, rates, services) has loaded. */
+  const [profileLoaded, setProfileLoaded] = useState(false)
+  const [wantOptions, setWantOptions] = useState<WantOption[]>([])
+  const [selectedWant, setSelectedWant] = useState<string | null>(null)
+  /** The last value the chip picker itself put in the offer box. */
+  const prefillRef = useRef('')
   const supabase = createClient()
+
+  const selectedOption = wantOptions.find((o) => o.key === selectedWant) ?? null
+
+  /** Pick a "what do you want?" chip; a priced pick anchors the offer box on her rate. */
+  function pickWant(option: WantOption) {
+    setSelectedWant(option.key)
+    if (!ratesNegotiable) return
+    if (option.priceNgn !== null) {
+      const value = String(option.priceNgn)
+      prefillRef.current = value
+      setProposedRate(value)
+    } else {
+      // A priceless pick drops our own prefill, never the client's typing.
+      setProposedRate((cur) => (cur === prefillRef.current ? '' : cur))
+      prefillRef.current = ''
+    }
+  }
 
   useEffect(() => {
     fetch('/api/coins/methods')
       .then((r) => (r.ok ? r.json() : { card: false }))
-      .then((d) => setCardEnabled(!!d.card))
+      .then((d) => {
+        setCardEnabled(!!d.card)
+        setTransferEnabled(!!d.transfer)
+      })
       .catch(() => setCardEnabled(false))
   }, [])
 
@@ -75,24 +122,80 @@ export function RequestConnectionModal({
     return () => { cancelled = true }
   }, [activeId])
 
-  // Her screening questions: clients answer before paying.
+  // Her screening questions: clients answer before paying. The same
+  // fetch brings her rates and services, which build the "what do
+  // you want?" chips: nothing is offered here that she does not sell.
   useEffect(() => {
     let cancelled = false
+    setProfileLoaded(false)
     setIntakeQuestions([])
     setIntakeAnswers([])
+    setWantOptions([])
+    setSelectedWant(null)
+    prefillRef.current = ''
     supabase
       .from('profiles')
-      .select('intake_questions')
+      .select('intake_questions, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services')
       .eq('id', activeId)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled) return
-        const raw = (data as { intake_questions?: unknown } | null)?.intake_questions
+        const d = data as {
+          intake_questions?: unknown
+          rate_short_time_ngn?: number | null
+          rate_overnight_ngn?: number | null
+          rate_weekend_ngn?: number | null
+          services?: string[] | null
+        } | null
+        const raw = d?.intake_questions
         const qs = Array.isArray(raw)
           ? raw.filter((q): q is string => typeof q === 'string' && q.trim().length > 0).slice(0, 3)
           : []
         setIntakeQuestions(qs)
         setIntakeAnswers(qs.map(() => ''))
+        setProfileLoaded(true)
+
+        // Chips: one per priced rate she set, then one per service
+        // she offers that is not itself a rate key. The rate keys are
+        // represented by their priced rate chips alone, so an
+        // overnight never appears twice.
+        const options: WantOption[] = []
+        const rateRows: Array<{ key: ServiceType; label: string; rate: number | null | undefined }> = [
+          { key: 'short_time', label: 'Short time', rate: d?.rate_short_time_ngn },
+          { key: 'overnight', label: 'Overnight', rate: d?.rate_overnight_ngn },
+          { key: 'weekend', label: 'Weekend', rate: d?.rate_weekend_ngn },
+        ]
+        for (const row of rateRows) {
+          if (typeof row.rate === 'number' && row.rate > 0) {
+            options.push({ key: row.key, label: row.label, priceNgn: row.rate, serviceType: row.key })
+          }
+        }
+        for (const def of resolveServices(d?.services)) {
+          if (RATE_SERVICE_TYPES.has(def.id)) continue
+          options.push({
+            key: `svc:${def.id}`,
+            label: def.label,
+            priceNgn: null,
+            // A custom service ("custom:<text>") has no service_type
+            // key of its own: the chip shows her text, but the wire
+            // value is 'other'. The connections route and the
+            // database CHECK accept only the fixed key list, so the
+            // raw custom text must never be sent as service_type.
+            serviceType: isCustomService(def.id) ? 'other' : serviceTypeForSlug(def.id),
+          })
+        }
+        setWantOptions(options)
+
+        // Default: short time when she prices it, else her first option.
+        const fallback = options.find((o) => o.key === 'short_time') ?? options[0] ?? null
+        if (fallback) {
+          setSelectedWant(fallback.key)
+          if (ratesNegotiable && fallback.priceNgn !== null) {
+            const value = String(fallback.priceNgn)
+            prefillRef.current = value
+            setProposedRate((cur) => (cur === '' ? value : cur))
+          }
+        }
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,8 +205,59 @@ export function RequestConnectionModal({
     intakeQuestions.length === 0 ||
     intakeQuestions.every((_, i) => (intakeAnswers[i] ?? '').trim().length > 0)
 
+  // The smart offer box. Everything keys off her rate for the
+  // current pick: what the client typed wins, and an empty or
+  // invalid box falls back to her full rate, which is also the
+  // value that gets sent as the offer.
+  const baseRate = selectedOption?.priceNgn ?? null
+  const typedOffer = parseInt(proposedRate.replace(/[^0-9]/g, ''), 10)
+  const typedOfferValid = Number.isFinite(typedOffer) && typedOffer > 0
+  const effectiveOffer = typedOfferValid ? typedOffer : baseRate
+
+  /** Round an offer DOWN to a clean step, never below ₦1,000. */
+  const roundOfferDown = (n: number): number => {
+    const step = n >= 100000 ? 5000 : 1000
+    return Math.max(1000, Math.floor(n / step) * step)
+  }
+
+  const quickOffers: Array<{ label: string; value: number }> = []
+  if (baseRate !== null) {
+    const seen = new Set<number>()
+    const candidates: Array<{ label: string; value: number }> = [
+      { label: 'Her rate', value: baseRate },
+      { label: '10% off', value: roundOfferDown(baseRate * 0.9) },
+      { label: '20% off', value: roundOfferDown(baseRate * 0.8) },
+      { label: '30% off', value: roundOfferDown(baseRate * 0.7) },
+    ]
+    for (const c of candidates) {
+      if (c.value > baseRate || c.value <= 0 || seen.has(c.value)) continue
+      seen.add(c.value)
+      quickOffers.push(c)
+    }
+  }
+
+  const offerPct =
+    baseRate !== null && effectiveOffer !== null
+      ? (effectiveOffer / baseRate) * 100
+      : null
+  const offerFeedback =
+    offerPct === null
+      ? null
+      : offerPct >= 100
+        ? 'Her full rate'
+        : offerPct >= 85
+          ? 'Strong offer, likely to be accepted'
+          : offerPct >= 70
+            ? 'Fair offer, she may accept or think it over'
+            : offerPct >= 50
+              ? 'Low offer, acceptance is unlikely'
+              : 'Very low, most companions ignore offers this low'
+  const offerDelta =
+    baseRate !== null && effectiveOffer !== null ? effectiveOffer - baseRate : 0
+
   /** Switch the modal to a recommended companion (fee already paid). */
   function onPickSimilar(sp: SimilarProvider) {
+    setProfileLoaded(false)
     setActiveId(sp.providerId)
     setActiveName(sp.name)
     setActiveAvatar(sp.avatar)
@@ -184,6 +338,14 @@ export function RequestConnectionModal({
         return
       }
 
+      // The offer that actually goes out: what the client typed, or
+      // her full rate for the pick when the box was left empty.
+      const offerToSend = !ratesNegotiable
+        ? null
+        : typedOfferValid
+          ? typedOffer
+          : baseRate
+
       // The server re-checks her requirements and the fee, then creates
       // the connection. A 403 here means the client does not qualify.
       const res = await fetch('/api/connections', {
@@ -192,10 +354,8 @@ export function RequestConnectionModal({
         body: JSON.stringify({
           provider_id: activeId,
           payment_ref: paymentRef,
-          proposed_rate_ngn:
-            ratesNegotiable && proposedRate.trim() !== ''
-              ? Math.max(0, parseInt(proposedRate.replace(/[^0-9]/g, ''), 10) || 0)
-              : null,
+          proposed_rate_ngn: offerToSend,
+          service_type: selectedOption?.serviceType ?? undefined,
           intakeAnswers:
             intakeQuestions.length > 0
               ? intakeQuestions.map((q, i) => ({ q, a: (intakeAnswers[i] ?? '').trim() }))
@@ -248,11 +408,13 @@ export function RequestConnectionModal({
    * to the hosted checkout. The /payments/callback page verifies and
    * creates the connection when Paystack returns the client.
    */
-  async function handleCardPay() {
+  async function handleCardPay(channel?: 'bank_transfer') {
     setError('')
     try {
-      // The card rail leaves the page, so stash the screening answers
-      // for the callback page to forward when it creates the connection.
+      // The card rail leaves the page. The answers and the service
+      // pick go to the server with the initialize call and are stored
+      // on the payment row (server-side truth); the sessionStorage
+      // stash below stays as a fallback for the callback.
       try {
         if (intakeQuestions.length > 0) {
           sessionStorage.setItem(
@@ -260,11 +422,26 @@ export function RequestConnectionModal({
             JSON.stringify(intakeQuestions.map((q, i) => ({ q, a: (intakeAnswers[i] ?? '').trim() })))
           )
         }
-      } catch { /* storage unavailable: answers are best-effort on this rail */ }
+        if (selectedOption) {
+          sessionStorage.setItem(`intima_service_${activeId}`, selectedOption.serviceType)
+        }
+      } catch { /* storage unavailable: the server copy still carries them */ }
       const res = await fetch('/api/payments/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider_id: activeId }),
+        body: JSON.stringify({
+          provider_id: activeId,
+          ...(channel ? { channel } : {}),
+          ...(intakeQuestions.length > 0
+            ? {
+                intakeAnswers: intakeQuestions.map((q, i) => ({
+                  q,
+                  a: (intakeAnswers[i] ?? '').trim(),
+                })),
+              }
+            : {}),
+          ...(selectedOption ? { service_type: selectedOption.serviceType } : {}),
+        }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.authorizationUrl) {
@@ -364,8 +541,11 @@ export function RequestConnectionModal({
 
             <div className="bg-cream rounded-2xl p-4 mb-5">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-600">Connection fee</span>
-                <span className="text-2xl font-bold text-primary">
+                <span className="flex items-center gap-1 text-sm text-gray-600">
+                  Connection fee
+                  <HelpTip text={`This one fee opens your private chat with ${activeName}, plus voice and video calls. It is the only charge Intima takes on the booking; the companion keeps all of their own rate. If anything goes wrong, you can open a dispute within 24 hours and the fee can be refunded.`} />
+                </span>
+                <span className="font-display text-2xl font-bold text-primary">
                   {fee === null ? '...' : formatPrice(fee)}
                 </span>
               </div>
@@ -385,6 +565,40 @@ export function RequestConnectionModal({
               </ul>
             </div>
 
+            {wantOptions.length > 0 && (
+              <div className="mb-5">
+                <p className="text-sm font-medium text-charcoal">What do you want?</p>
+                <p className="text-xs text-gray-500 mt-0.5 mb-2">
+                  Pick one. She sees it with your offer, and you settle the details in chat.
+                </p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="What do you want?">
+                  {wantOptions.map((option) => {
+                    const active = option.key === selectedWant
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => pickWant(option)}
+                        aria-pressed={active}
+                        className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors ${
+                          active
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-gray-200 bg-white text-charcoal hover:border-primary/50'
+                        }`}
+                      >
+                        {option.label}
+                        {option.priceNgn !== null && (
+                          <span className={active ? 'text-white/80' : 'text-gray-400'}>
+                            {formatCompactPrice(option.priceNgn)}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-5">
               <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
               <p className="text-xs text-amber-800">
@@ -398,10 +612,52 @@ export function RequestConnectionModal({
                   Propose your rate <span className="font-normal text-gray-500">(optional)</span>
                 </label>
                 <p className="text-xs text-gray-500 mt-0.5 mb-2">
-                  She is open to offers
-                  {anchorRateNgn !== null && `, her listed short time is ${formatPrice(anchorRateNgn)}`}.
-                  Leave blank to accept her rates.
+                  {baseRate !== null ? (
+                    <>
+                      Her rate for this is{' '}
+                      <strong className="text-charcoal">{formatCompactPrice(baseRate)}</strong>.
+                      Keep it to accept her rate, or change it to make your own offer.
+                    </>
+                  ) : selectedOption !== null ? (
+                    'She has not listed a rate for this one. Propose what works for you.'
+                  ) : anchorRateNgn !== null ? (
+                    <>
+                      She is open to offers, her listed short time is {formatPrice(anchorRateNgn)}.
+                      Leave blank to accept her rates.
+                    </>
+                  ) : (
+                    'She is open to offers. Leave blank to accept her rates.'
+                  )}
                 </p>
+                {quickOffers.length > 1 && (
+                  <div className="flex flex-wrap gap-2 mb-2" role="group" aria-label="Quick offers">
+                    {quickOffers.map((chip) => {
+                      const active = effectiveOffer === chip.value
+                      return (
+                        <button
+                          key={chip.label}
+                          type="button"
+                          onClick={() => {
+                            prefillRef.current = String(chip.value)
+                            setProposedRate(String(chip.value))
+                          }}
+                          aria-pressed={active}
+                          aria-label={`Offer ${chip.label === 'Her rate' ? 'her full rate' : chip.label}, ${formatCompactPrice(chip.value)}`}
+                          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors ${
+                            active
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-gray-200 bg-white text-charcoal hover:border-primary/50'
+                          }`}
+                        >
+                          {chip.label}
+                          <span className={active ? 'text-white/80' : 'text-gray-400'}>
+                            {formatCompactPrice(chip.value)}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₦</span>
                   <input
@@ -411,13 +667,35 @@ export function RequestConnectionModal({
                     value={proposedRate}
                     onChange={(e) => setProposedRate(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="e.g. 100000"
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-9 pr-4 text-charcoal outline-none focus:border-primary focus:bg-white transition-colors"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-9 pr-20 text-base text-charcoal outline-none focus:border-primary focus:bg-white transition-colors"
                   />
+                  {typedOfferValid && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-400">
+                      {formatCompactPrice(typedOffer)}
+                    </span>
+                  )}
                 </div>
+                {offerFeedback !== null && (
+                  <p
+                    aria-live="polite"
+                    className={`mt-2 text-xs ${offerPct !== null && offerPct < 50 ? 'font-medium text-amber-700' : 'text-gray-500'}`}
+                  >
+                    <span className="font-medium">{offerFeedback}</span>
+                    {offerDelta !== 0 && (
+                      <>
+                        {' '}· {formatCompactPrice(Math.abs(offerDelta))}{' '}
+                        {offerDelta > 0 ? 'above' : 'below'} her rate
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
             ) : (
               <p className="text-xs text-gray-500 text-center mb-5">
                 Her rates are fixed and not open to offers.
+                {selectedOption?.priceNgn != null && (
+                  <> For this, her rate is {formatPrice(selectedOption.priceNgn)}.</>
+                )}
               </p>
             )}
 
@@ -446,7 +724,7 @@ export function RequestConnectionModal({
                         maxLength={300}
                         required
                         placeholder="Your answer"
-                        className="mt-1.5 w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-charcoal outline-none focus:border-primary transition-colors"
+                        className="mt-1.5 w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2.5 text-base text-charcoal outline-none focus:border-primary transition-colors md:text-sm"
                       />
                       <p className="mt-1 text-right text-[11px] text-gray-400">
                         {(intakeAnswers[i] ?? '').length}/300
@@ -486,27 +764,49 @@ export function RequestConnectionModal({
             )}
 
             <button
-              onClick={cardEnabled ? handleCardPay : handlePay}
-              disabled={fee === null || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
+              onClick={cardEnabled ? () => handleCardPay() : handlePay}
+              disabled={fee === null || !profileLoaded || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
               className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-3.5 rounded-2xl transition-colors disabled:opacity-50"
             >
               {fee === null
                 ? 'Loading fee...'
-                : eligibility && !eligibility.eligible
-                  ? 'Requirements not met yet'
-                  : !intakeComplete
-                    ? 'Answer her questions first'
-                    : cardEnabled
-                      ? `Pay ${formatPrice(fee)} with card`
-                      : `Pay ${formatPrice(fee)} (Test mode)`}
+                : !profileLoaded
+                  ? 'Loading her questions...'
+                  : eligibility && !eligibility.eligible
+                    ? 'Requirements not met yet'
+                    : !intakeComplete
+                      ? 'Answer her questions first'
+                      : cardEnabled
+                        ? `Pay ${formatPrice(fee)} with card`
+                        : `Pay ${formatPrice(fee)} (Test mode)`}
             </button>
+            {transferEnabled && (
+              <>
+                <button
+                  onClick={() => handleCardPay('bank_transfer')}
+                  disabled={fee === null || !profileLoaded || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
+                  className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-2xl border-2 border-charcoal/80 py-3 text-sm font-semibold text-charcoal transition-all hover:bg-charcoal hover:text-white disabled:opacity-40"
+                >
+                  {fee === null ? 'Pay with bank transfer' : `Pay ${formatPrice(fee)} with bank transfer`}
+                </button>
+                <p className="mt-2 text-center text-xs leading-relaxed text-gray-500">
+                  Paystack creates an account number for this payment only. Transfer the exact
+                  amount from any bank app and your connection opens automatically once it
+                  confirms. You can close the page after transferring.
+                </p>
+              </>
+            )}
             <button
               onClick={handleCryptoPay}
-              disabled={(eligibility !== null && !eligibility.eligible) || !intakeComplete}
-              className="mt-3 w-full rounded-2xl border-2 border-charcoal/80 py-3 text-sm font-semibold text-charcoal transition-all hover:bg-charcoal hover:text-white disabled:opacity-40"
+              disabled={!profileLoaded || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
+              className="mt-3 flex min-h-[48px] w-full items-center justify-center rounded-2xl border-2 border-charcoal/80 py-3 text-sm font-semibold text-charcoal transition-all hover:bg-charcoal hover:text-white disabled:opacity-40"
             >
               Or pay with crypto (USDT)
             </button>
+            <p className="mt-2 text-center text-xs leading-relaxed text-gray-500">
+              A secure invoice opens in a new tab. Pay there, and your connection opens here
+              once the payment confirms.
+            </p>
             <p className="text-xs text-gray-400 text-center mt-3">
               One active connection per provider. Refunds follow the published policy.
             </p>
@@ -530,7 +830,7 @@ export function RequestConnectionModal({
             <div className="flex gap-2 w-full mt-2">
               <button
                 onClick={onClose}
-                className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-3 rounded-2xl transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-3 min-h-[48px] rounded-2xl transition-colors flex items-center justify-center gap-2"
               >
                 <Video className="w-4 h-4" />
                 Start a call

@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { Room, RoomEvent, Track } from 'livekit-client';
 import { Pause, Play, X } from '@/lib/icons';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 /**
  * In-app floating player (the TikTok-style dock). Native browser
@@ -133,26 +134,30 @@ function DockShell({
               {content.kind === 'live' ? content.hostName : content.title ?? ''}
             </span>
           </span>
-          <button
-            onClick={onClear}
-            aria-label="Close player"
-            className="pointer-events-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm active:scale-95"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Tooltip label="Close player" side="top">
+            <button
+              onClick={onClear}
+              aria-label="Close player"
+              className="pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm active:scale-95"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </Tooltip>
         </div>
         {/* Bottom row: expand */}
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent p-2">
-          <span className="max-w-[70%] truncate text-[10px] text-white/85">
+          <span className="max-w-[70%] truncate text-[11px] text-white/85">
             {content.kind === 'live' ? content.title : 'Tap to expand'}
           </span>
-          <button
-            onClick={expand}
-            aria-label="Open full player"
-            className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold text-charcoal active:scale-95"
-          >
-            {content.kind === 'live' || big ? 'Open' : 'Expand'}
-          </button>
+          <Tooltip label="Open full player" side="top">
+            <button
+              onClick={expand}
+              aria-label="Open full player"
+              className="inline-flex min-h-[44px] items-center rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-charcoal active:scale-95"
+            >
+              {content.kind === 'live' || big ? 'Open' : 'Expand'}
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>
@@ -317,7 +322,7 @@ function MediaDockVideo({
           className="absolute inset-0 flex items-center justify-center bg-black/35 text-white"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm">
-            <Play className="h-5 w-5" />
+            <Play className="h-5 w-5" aria-hidden />
           </span>
         </button>
       )}
