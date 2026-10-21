@@ -4,6 +4,7 @@
 import webpush from 'web-push'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { sendWhatsAppText } from './notify/whatsapp'
+import { sendEventEmails } from './mail/mailer'
 
 let configured = false
 
@@ -111,6 +112,21 @@ export async function notifyUsers(opts: NotifyOpts): Promise<void> {
     })
   } catch {
     // Push is best effort; the in-app notification is the source of truth.
+  }
+  // Best-effort email pass: only transactional types in the mailer's
+  // EMAIL_TYPES allowlist produce mail (money, disputes, account
+  // standing), never chat, live, or call chatter. No-ops until
+  // BREVO_API_KEY is set, and can never break the flow above.
+  try {
+    await sendEventEmails({
+      userIds: opts.userIds,
+      type: opts.type,
+      title: opts.title,
+      body: opts.body,
+      link: opts.link,
+    })
+  } catch {
+    // Email is best effort only.
   }
   // Best-effort WhatsApp pass for recipients who shared a phone
   // number. Dormant until WHATSAPP_TOKEN and WHATSAPP_PHONE_ID are

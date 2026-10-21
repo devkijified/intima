@@ -23,6 +23,22 @@ export function paystackTestMode(): boolean {
   return (process.env.PAYSTACK_SECRET_KEY ?? '').startsWith('sk_test_');
 }
 
+/**
+ * Checkout channels a client may explicitly choose. Both ride the same
+ * rails: initialize with the channel pinned, and the charge.success
+ * webhook settles identically either way. bank_transfer shows the
+ * buyer a dedicated account number for that one transaction on the
+ * Paystack checkout; the buyer transfers, Paystack confirms, and the
+ * webhook fires minutes later if that is how long the bank takes.
+ */
+export const PAYMENT_CHANNELS = ['card', 'bank_transfer'] as const;
+export type PaymentChannel = (typeof PAYMENT_CHANNELS)[number];
+
+/** Strict guard for a client-supplied channel choice. */
+export function isPaymentChannel(value: unknown): value is PaymentChannel {
+  return value === 'card' || value === 'bank_transfer';
+}
+
 function authHeaders() {
   return {
     Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
@@ -36,17 +52,26 @@ export async function initializeTransaction(opts: {
   reference: string;
   callbackUrl: string;
   metadata: Record<string, unknown>;
+  /**
+   * Optional explicit channel choice. When set, the checkout is pinned
+   * to that one channel. When omitted, no channels field is sent at
+   * all, exactly as before, and Paystack shows the account's enabled
+   * channels (the long-standing default behaviour).
+   */
+  channel?: PaymentChannel;
 }): Promise<{ authorizationUrl: string }> {
+  const payload: Record<string, unknown> = {
+    email: opts.email,
+    amount: Math.round(opts.amountNgn * 100), // kobo
+    reference: opts.reference,
+    callback_url: opts.callbackUrl,
+    metadata: opts.metadata,
+  };
+  if (opts.channel) payload.channels = [opts.channel];
   const res = await fetch(`${API_BASE}/transaction/initialize`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({
-      email: opts.email,
-      amount: Math.round(opts.amountNgn * 100), // kobo
-      reference: opts.reference,
-      callback_url: opts.callbackUrl,
-      metadata: opts.metadata,
-    }),
+    body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok || !data?.status || !data?.data?.authorization_url) {

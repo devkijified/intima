@@ -30,6 +30,22 @@ export function formatCompactPrice(price: number) {
 }
 
 /**
+ * Naira equivalent of a coin amount at the fixed product rate
+ * (1 coin = ₦10), always exact, never compact: 100 coins → "₦1,000",
+ * 5,000 coins → "₦50,000". Every user-facing coin price, cost, prize
+ * or earning carries this beside it so nobody has to guess what
+ * coins mean in real money.
+ */
+export function ngnForCoins(coins: number) {
+  return `₦${(coins * 10).toLocaleString()}`;
+}
+
+/** A coin amount with its naira equivalent attached: "100 coins (₦1,000)". */
+export function coinsWithNgn(coins: number) {
+  return `${coins.toLocaleString()} coins (${ngnForCoins(coins)})`;
+}
+
+/**
  * TikTok-style compact count: 45200 → 45.2K, 1200000 → 1.2M.
  * For view counts and other traction stats.
  */
