@@ -87,7 +87,7 @@ export default function MessagesPage() {
       <p className="mt-1 text-sm text-neutral-500">Chats open when a connection is active.</p>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
+        <div data-page-loader className="flex items-center justify-center py-16">
           <IntimaLoader size="lg" />
         </div>
       ) : threads.length === 0 ? (

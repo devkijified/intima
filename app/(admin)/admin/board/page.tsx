@@ -84,7 +84,7 @@ export default function AdminBoardPage() {
       {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
       {rows === null ? (
-        <div className="mt-10 flex justify-center"><IntimaLoader size="lg" /></div>
+        <div data-page-loader className="mt-10 flex justify-center"><IntimaLoader size="lg" /></div>
       ) : rows.length === 0 ? (
         <p className="mt-10 text-sm text-neutral-500">No requests yet. When a client posts one, it shows here.</p>
       ) : (

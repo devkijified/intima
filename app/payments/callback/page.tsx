@@ -267,7 +267,7 @@ export default function PaymentsCallbackPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-16 text-center">
+    <div data-page-loader className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-16 text-center">
       {state === 'working' && (
         <>
           <IntimaLoader size="lg" />

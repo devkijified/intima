@@ -127,7 +127,7 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
+      <div data-page-loader className="flex min-h-[40vh] items-center justify-center">
         <IntimaLoader size="lg" />
       </div>
     )

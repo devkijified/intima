@@ -90,7 +90,7 @@ export default function AdminGiftsPage() {
       )}
 
       {rows === null ? (
-        <div className="flex justify-center py-16">
+        <div data-page-loader className="flex justify-center py-16">
           <IntimaLoader size="lg" />
         </div>
       ) : rows.length === 0 ? (
