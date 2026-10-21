@@ -5,12 +5,14 @@ import { subscribeQueryLoading } from '@/lib/queryLoading'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
 
 /**
- * Global background-query pill: floats at the top centre of the app
- * (below the header, safe-area aware) while any Supabase request is
- * in flight. Fixed overlay only: it never blocks taps and never
- * shifts layout. Shows after a short delay so fast queries do not
- * flash it, and lingers about 200ms after the last query finishes
- * so back-to-back fetches read as one smooth load.
+ * Global loading pill: the rose loader at the CENTRE of the screen,
+ * where design systems put a screen-level indicator (a centred
+ * indicator says "this screen is working"; an indicator floating at
+ * the top reads as stray chrome and collides with headers and the
+ * live room's host row). Pointer-events stay off and layout never
+ * shifts. It shows only after a sustained wait (350ms) so ordinary
+ * background queries never flash it, and lingers about 200ms after
+ * the last query finishes so back-to-back fetches read as one load.
  */
 export function QueryLoadingWidget() {
   const [visible, setVisible] = useState(false)
@@ -28,7 +30,7 @@ export function QueryLoadingWidget() {
           showTimer = setTimeout(() => {
             showTimer = null
             setVisible(true)
-          }, 120)
+          }, 350)
         }
       } else {
         if (showTimer) {
@@ -55,7 +57,7 @@ export function QueryLoadingWidget() {
   return (
     <div
       aria-hidden
-      className="animate-pop-in pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+4.5rem)] z-[90] -translate-x-1/2"
+      className="animate-pop-in pointer-events-none fixed inset-0 z-[94] flex items-center justify-center"
     >
       <div className="flex items-center gap-2.5 rounded-full bg-charcoal/95 py-2 pl-4 pr-5 shadow-2xl backdrop-blur-md">
         <IntimaLoader size="sm" />
