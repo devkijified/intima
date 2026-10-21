@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Clock, Crown, Eye, Lock, Radio } from '@/lib/icons'
+import { Bell, Calendar, Clock, Crown, Eye, Lock, Radio } from '@/lib/icons'
+import { showToast } from '@/lib/toast'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface LiveStream {
@@ -69,6 +71,10 @@ export default function LiveFeedPage() {
   // from these hosts open for me; everyone else's route to the fan
   // club on her profile.
   const [fanOf, setFanOf] = useState<Set<string>>(new Set())
+  // "Notify me" state per scheduled session: total interested plus
+  // whether I am one of them. Loaded with the scheduled list from
+  // live_interests (plain select, no embeds).
+  const [interests, setInterests] = useState<Record<string, { count: number; mine: boolean }>>({})
   const [schedTitle, setSchedTitle] = useState('')
   const [schedWhen, setSchedWhen] = useState('')
   const [schedBusy, setSchedBusy] = useState(false)
@@ -182,11 +188,57 @@ export default function LiveFeedPage() {
       reportQueryError('scheduled', error)
       // RLS on live_sessions already limits what a caller can read, so
       // every scheduled row returned here is safe to list.
-      setScheduled((data ?? []) as any)
+      const list = (data ?? []) as unknown as ScheduledStream[]
+      setScheduled(list)
+      if (list.length > 0) {
+        const { data: rows } = await supabase
+          .from('live_interests')
+          .select('session_id, user_id')
+          .in('session_id', list.map((x) => x.id))
+        const map: Record<string, { count: number; mine: boolean }> = {}
+        for (const x of list) map[x.id] = { count: 0, mine: false }
+        for (const r of (rows ?? []) as { session_id: string; user_id: string }[]) {
+          const entry = map[r.session_id]
+          if (!entry) continue
+          entry.count += 1
+          if (user && r.user_id === user.id) entry.mine = true
+        }
+        setInterests(map)
+      }
     }
     fetchScheduled()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const toggleInterest = async (s: ScheduledStream) => {
+    if (!myId) {
+      showToast('Log in to get notified')
+      router.push('/login')
+      return
+    }
+    const prev = interests[s.id] ?? { count: 0, mine: false }
+    const optimistic = { count: Math.max(0, prev.count + (prev.mine ? -1 : 1)), mine: !prev.mine }
+    setInterests((m) => ({ ...m, [s.id]: optimistic }))
+    try {
+      const res = await fetch('/api/live/interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: s.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'Could not update')
+      setInterests((m) => ({
+        ...m,
+        [s.id]: { count: typeof j.count === 'number' ? j.count : optimistic.count, mine: !!j.interested },
+      }))
+      if (j.interested) {
+        showToast(`We'll notify you when ${s.provider?.display_name ?? 'the host'} goes live`)
+      }
+    } catch {
+      setInterests((m) => ({ ...m, [s.id]: prev }))
+      showToast('Could not update. Please try again.')
+    }
+  }
 
   const handleScroll = () => {
     const el = feedRef.current
@@ -252,7 +304,7 @@ export default function LiveFeedPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-[#AC244D] border-t-transparent" />
+        <TikTokLoader size="lg" />
       </div>
     )
   }
@@ -268,16 +320,20 @@ export default function LiveFeedPage() {
           {scheduled.length > 0 && (
             <section>
               <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-charcoal">
-                <Calendar className="h-5 w-5 text-primary" /> Upcoming live
+                <Calendar className="h-5 w-5 text-primary" aria-hidden /> Upcoming live
               </h2>
+              <p className="mt-1 text-xs leading-5 text-neutral-500">
+                Tap Notify me and we will ping you the moment a stream starts.
+              </p>
               <div className="mt-3 space-y-2">
                 {scheduled.map((s) => {
                   const mine = myId && s.provider_id === myId
                   return (
                     <div
                       key={s.id}
-                      className="flex items-center gap-3 rounded-2xl border border-neutral-200/80 bg-white p-3"
+                      className="rounded-2xl border border-neutral-200/80 bg-white p-3"
                     >
+                      <div className="flex items-center gap-3">
                       {s.provider?.avatar_url ? (
                         <img
                           src={s.provider.avatar_url}
@@ -307,22 +363,51 @@ export default function LiveFeedPage() {
                         <button
                           onClick={() => goLive(s)}
                           disabled={goingLiveId === s.id}
-                          className="shrink-0 rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                          className="flex min-h-[44px] shrink-0 items-center rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
                           {goingLiveId === s.id ? 'Starting…' : 'Go live'}
                         </button>
                       ) : s.access_mode === 'fans' && !fanOf.has(s.provider_id) ? (
                         <Link
                           href={`/companion/${s.provider?.username ?? s.provider_id}`}
-                          className="flex shrink-0 items-center gap-1 rounded-full bg-gold px-3 py-2 text-xs font-bold text-charcoal"
+                          className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full bg-gold px-3 py-2 text-xs font-bold text-charcoal"
                         >
                           <Crown className="h-3 w-3" /> Join fan club
                         </Link>
                       ) : s.access_mode === 'fans' ? (
-                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-gold/20 px-3 py-2 text-xs font-bold text-charcoal">
-                          <Crown className="h-3 w-3" /> Fan
+                        <span className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full bg-gold/20 px-3 py-2 text-xs font-bold text-charcoal">
+                          <Crown className="h-3 w-3" aria-hidden /> Fan
                         </span>
                       ) : null}
+                      </div>
+                      {mine ? (
+                        (interests[s.id]?.count ?? 0) > 0 ? (
+                          <p className="mt-2 text-[11px] font-medium leading-4 text-neutral-500">
+                            {interests[s.id].count}{' '}
+                            {interests[s.id].count === 1 ? 'person is waiting' : 'people are waiting'}
+                          </p>
+                        ) : null
+                      ) : (
+                        <div className="mt-2 flex items-center gap-3">
+                          <button
+                            onClick={() => toggleInterest(s)}
+                            aria-pressed={interests[s.id]?.mine ?? false}
+                            className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-xs font-bold transition-colors ${
+                              interests[s.id]?.mine
+                                ? 'bg-primary text-white'
+                                : 'border border-primary/30 bg-primary/5 text-primary'
+                            }`}
+                          >
+                            <Bell className="h-4 w-4" aria-hidden />
+                            {interests[s.id]?.mine ? "You'll be notified" : 'Notify me'}
+                          </button>
+                          {(interests[s.id]?.count ?? 0) > 0 && (
+                            <span className="text-[11px] font-medium text-neutral-500">
+                              {interests[s.id].count} interested
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -343,7 +428,7 @@ export default function LiveFeedPage() {
                 onChange={(e) => setSchedTitle(e.target.value)}
                 placeholder="Stream title"
                 maxLength={80}
-                className="mt-3 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-primary"
+                className="mt-3 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-base outline-none focus:border-primary md:text-sm"
               />
               <label className="mt-3 block text-xs font-medium text-neutral-500">
                 Schedule for later
@@ -351,13 +436,13 @@ export default function LiveFeedPage() {
                   type="datetime-local"
                   value={schedWhen}
                   onChange={(e) => setSchedWhen(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm text-charcoal outline-none focus:border-primary"
+                  className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-base text-charcoal outline-none focus:border-primary md:text-sm"
                 />
               </label>
               <button
                 onClick={submitSchedule}
                 disabled={!schedWhen || schedBusy}
-                className="mt-3 w-full rounded-full bg-charcoal py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full bg-charcoal py-2.5 text-sm font-bold text-white disabled:opacity-40"
               >
                 {schedBusy ? 'Scheduling…' : 'Schedule stream'}
               </button>
@@ -381,7 +466,7 @@ export default function LiveFeedPage() {
           </p>
           <Link
             href="/"
-            className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
+            className="mt-6 inline-flex min-h-[44px] items-center rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
           >
             Browse companions
           </Link>

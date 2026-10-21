@@ -7,7 +7,11 @@ import { createClient } from '@/lib/supabase/client'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
 import ConnectionCare from '@/components/connections/ConnectionCare'
 import { FanBadge } from '@/components/social/FanBadge'
-import { ArrowLeft, Loader2, Send, Sparkles, Phone, Lock, Timer, Image as ImageIcon } from '@/lib/icons'
+import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { formatCompactPrice, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
+import { serviceTypeLabel } from '@/lib/connections/serviceType'
+import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, Image as ImageIcon } from '@/lib/icons'
 import { reencodeImage } from '@/lib/uploads/reencode'
 import {
   isPrivateMediaPath,
@@ -84,7 +88,7 @@ export default function ThreadPage() {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [other, setOther] = useState<Counterpart | null>(null)
   const [otherRating, setOtherRating] = useState<{ avg: number; count: number } | null>(null)
-  const [connInfo, setConnInfo] = useState<{ feeNgn: number | null; feeState: string | null; disputeDeadline: string | null } | null>(null)
+  const [connInfo, setConnInfo] = useState<{ feeNgn: number | null; feeState: string | null; disputeDeadline: string | null; serviceType: string | null; offerNgn: number | null } | null>(null)
   const [intakeAnswers, setIntakeAnswers] = useState<{ q: string; a: string }[]>([])
   const [viewerIsProvider, setViewerIsProvider] = useState(false)
   const [otherIsFan, setOtherIsFan] = useState(false)
@@ -180,7 +184,7 @@ export default function ThreadPage() {
 
       const { data: conn } = await supabase
         .from('connections')
-        .select('id, client_id, provider_id, status, fee_ngn, fee_state, dispute_deadline, intake_answers')
+        .select('id, client_id, provider_id, status, fee_ngn, fee_state, dispute_deadline, intake_answers, service_type, proposed_rate_ngn')
         .eq('id', connectionId)
         .single()
       if (!conn || (conn.client_id !== user.id && conn.provider_id !== user.id)) {
@@ -192,6 +196,8 @@ export default function ThreadPage() {
           feeNgn: conn.fee_ngn ?? null,
           feeState: conn.fee_state ?? null,
           disputeDeadline: conn.dispute_deadline ?? null,
+          serviceType: (conn as { service_type?: string | null }).service_type ?? null,
+          offerNgn: (conn as { proposed_rate_ngn?: number | null }).proposed_rate_ngn ?? null,
         })
         setViewerIsProvider(conn.provider_id === user.id)
         const rawAnswers = (conn as { intake_answers?: unknown }).intake_answers
@@ -494,9 +500,11 @@ export default function ThreadPage() {
     <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-2xl flex-col md:h-[calc(100dvh-5rem)]">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3">
-        <button onClick={() => router.back()} aria-label="Back" className="rounded-full p-1 hover:bg-cream">
-          <ArrowLeft className="h-5 w-5 text-charcoal" />
-        </button>
+        <Tooltip label="Back" side="bottom" align="start">
+          <button onClick={() => router.back()} aria-label="Back" className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-cream">
+            <ArrowLeft className="h-5 w-5 text-charcoal" />
+          </button>
+        </Tooltip>
         {other?.avatar_url ? (
           <img src={other.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
         ) : (
@@ -522,7 +530,7 @@ export default function ThreadPage() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Chat on WhatsApp"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366]/15"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#25D366]/15"
           >
             <Phone className="h-5 w-5 text-[#128C4B]" />
           </a>
@@ -541,19 +549,37 @@ export default function ThreadPage() {
         />
       )}
 
-      {/* Screening answers: providers only, so she can screen before chatting */}
-      {viewerIsProvider && intakeAnswers.length > 0 && (
+      {/* What they want, plus screening answers: providers only, so
+          she can see the intent and screen before chatting */}
+      {viewerIsProvider && (intakeAnswers.length > 0 || serviceTypeLabel(connInfo?.serviceType) !== null || connInfo?.offerNgn != null) && (
         <div className="shrink-0 border-b border-black/[0.05] bg-white px-4 py-3">
           <button
             onClick={() => setShowIntake((v) => !v)}
-            className="flex w-full items-center justify-between text-left"
+            className="flex min-h-[44px] w-full items-center justify-between text-left"
             aria-expanded={showIntake}
           >
-            <span className="text-[13px] font-semibold text-charcoal">Client answers</span>
+            <span className="text-[13px] font-semibold text-charcoal">
+              {intakeAnswers.length > 0 ? 'Client answers' : 'Their request'}
+            </span>
             <span className="text-xs font-medium text-primary">{showIntake ? 'Hide' : 'View'}</span>
           </button>
           {showIntake && (
             <div className="mt-2 space-y-2.5">
+              {(serviceTypeLabel(connInfo?.serviceType) !== null || connInfo?.offerNgn != null) && (
+                <div className="rounded-xl bg-primary/5 px-3 py-2.5">
+                  <p className="text-sm text-charcoal">
+                    {serviceTypeLabel(connInfo?.serviceType) !== null && (
+                      <>Wants: <strong>{serviceTypeLabel(connInfo?.serviceType)}</strong></>
+                    )}
+                    {connInfo?.offerNgn != null && (
+                      <>
+                        {serviceTypeLabel(connInfo?.serviceType) !== null ? ' · ' : ''}
+                        Offer: <strong>{formatCompactPrice(connInfo.offerNgn)}</strong>
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
               {intakeAnswers.map((item, i) => (
                 <div key={i} className="rounded-xl bg-cream/70 px-3 py-2.5">
                   <p className="text-xs font-semibold text-neutral-500">{item.q}</p>
@@ -568,8 +594,8 @@ export default function ThreadPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-cream/40 px-4 py-4">
         {loading ? (
-          <div className="flex h-full items-center justify-center text-neutral-400">
-            <Loader2 className="h-6 w-6 animate-spin" />
+          <div className="flex h-full items-center justify-center">
+            <TikTokLoader size="lg" />
           </div>
         ) : msgs.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
@@ -602,11 +628,11 @@ export default function ThreadPage() {
                         signedUrl={signedUrls[m.id]}
                       />
                     )}
-                    <p className={`mt-1 text-right text-[10px] ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
+                    <p className={`mt-1 text-right text-[11px] ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
                       {fmtTime(m.created_at)}
                     </p>
                     {mine && m.media_url && mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me) && (
-                      <p className={`text-right text-[10px] font-medium ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
+                      <p className={`text-right text-[11px] font-medium ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
                         Seen
                       </p>
                     )}
@@ -633,7 +659,7 @@ export default function ThreadPage() {
               <button
                 key={g.id}
                 onClick={() => setTemplateTab(i)}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+                className={`flex min-h-[44px] shrink-0 items-center rounded-full px-4 py-1.5 text-xs font-semibold ${
                   templateTab === i ? 'bg-charcoal text-white' : 'bg-cream text-neutral-600'
                 }`}
               >
@@ -647,7 +673,7 @@ export default function ThreadPage() {
                 key={p}
                 onClick={() => send(p)}
                 disabled={sending}
-                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-charcoal transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+                className="flex min-h-[44px] items-center rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-charcoal transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-50"
               >
                 {p}
               </button>
@@ -662,7 +688,7 @@ export default function ThreadPage() {
                     key={p}
                     onClick={() => send(p)}
                     disabled={sending}
-                    className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-charcoal transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+                    className="flex min-h-[44px] items-center rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-charcoal transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-50"
                   >
                     {p}
                   </button>
@@ -676,7 +702,10 @@ export default function ThreadPage() {
       {/* PPV panel */}
       {showPpv && active && (
         <div className="shrink-0 border-t border-neutral-100 bg-gold/5 px-4 py-3">
-          <p className="text-xs font-semibold text-charcoal">Send locked media (PPV)</p>
+          <p className="flex items-center gap-1 text-xs font-semibold text-charcoal">
+            Send locked media (PPV)
+            <HelpTip text="Locked media stays hidden until the other person pays your price in coins, once. Mark it view once and it can only be opened a single time before it disappears." />
+          </p>
           <div className="mt-2 flex flex-col gap-2">
             {ppvPath ? (
               <div className="flex items-center gap-2">
@@ -688,7 +717,7 @@ export default function ThreadPage() {
                     setPpvPath(null)
                     uploadUrlRef.current = null
                   }}
-                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-500"
+                  className="min-h-[44px] rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-500"
                 >
                   Remove
                 </button>
@@ -700,7 +729,7 @@ export default function ThreadPage() {
                 </span>
                 <button
                   onClick={() => setPpvUrl('')}
-                  className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-500"
+                  className="min-h-[44px] rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-500"
                 >
                   Remove
                 </button>
@@ -709,24 +738,29 @@ export default function ThreadPage() {
               <button
                 onClick={() => ppvFileRef.current?.click()}
                 disabled={uploading}
-                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-charcoal disabled:opacity-50"
+                className="min-h-[44px] rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal disabled:opacity-50"
               >
                 {uploading ? 'Uploading…' : 'Upload a photo or video'}
               </button>
             )}
             {!ppvPath && (
-              <input value={ppvUrl} onChange={(e) => setPpvUrl(e.target.value)} placeholder="Or paste a photo or video URL" className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
+              <input value={ppvUrl} onChange={(e) => setPpvUrl(e.target.value)} placeholder="Or paste a photo or video URL" className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-base outline-none focus:border-gold md:text-sm" />
             )}
             <div className="flex gap-2">
-              <input value={ppvPrice} onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Coins" inputMode="numeric" className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold" />
+              <input value={ppvPrice} onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Coins" inputMode="numeric" className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-base outline-none focus:border-gold md:text-sm" />
               <button
                 onClick={sendPpv}
                 disabled={sendingMedia || uploading || (!ppvPath && !ppvUrl.trim())}
-                className="flex-1 rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal disabled:opacity-50"
+                className="min-h-[44px] flex-1 rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal disabled:opacity-50"
               >
                 {sendingMedia ? 'Sending…' : 'Send locked'}
               </button>
             </div>
+            {Number(ppvPrice) > 0 && (
+              <p className="text-[11px] text-neutral-500">
+                Unlock price: {coinsWithNgn(Number(ppvPrice))}
+              </p>
+            )}
           </div>
           <p className="mt-1 text-[11px] text-neutral-500">Clients pay coins to view. Uploaded files stay private until a client unlocks them. You keep your share automatically.</p>
         </div>
@@ -768,7 +802,7 @@ export default function ThreadPage() {
             onClick={() => setShowTemplates((v) => !v)}
             disabled={!active}
             aria-label="Message templates"
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${
               showTemplates ? 'bg-gold/20' : 'bg-cream'
             } disabled:opacity-40`}
           >
@@ -778,7 +812,7 @@ export default function ThreadPage() {
             onClick={() => setDisappearing((v) => !v)}
             aria-label="Disappearing messages"
             title="Disappearing messages (24h)"
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'bg-cream'} disabled:opacity-40`}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'bg-cream'} disabled:opacity-40`}
           >
             <Timer className={`h-4 w-4 ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
           </button>
@@ -786,7 +820,7 @@ export default function ThreadPage() {
             onClick={() => mediaFileRef.current?.click()}
             disabled={!active || uploading}
             aria-label="Attach a photo or video"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-cream disabled:opacity-40"
           >
             <ImageIcon className="h-5 w-5 text-neutral-500" />
           </button>
@@ -797,13 +831,13 @@ export default function ThreadPage() {
             placeholder={active ? 'Type a message...' : 'Chat locked'}
             disabled={!active || sending}
             maxLength={1000}
-            className="min-w-0 flex-1 rounded-full border border-neutral-200 bg-cream/60 px-4 py-2.5 text-sm text-charcoal outline-none placeholder:text-neutral-400 focus:border-primary disabled:opacity-50"
+            className="min-h-[44px] min-w-0 flex-1 rounded-full border border-neutral-200 bg-cream/60 px-4 py-2.5 text-base text-charcoal outline-none placeholder:text-neutral-400 focus:border-primary disabled:opacity-50 md:text-sm"
           />
           {!other?.isProvider && active && (
             <button
               onClick={() => setShowPpv((v) => !v)}
               aria-label="Send locked media"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold"
             >
               <Lock className="h-4 w-4" />
             </button>
@@ -812,7 +846,7 @@ export default function ThreadPage() {
             onClick={() => send(input)}
             disabled={!active || sending || !input.trim()}
             aria-label="Send"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-40"
           >
             <Send className="h-4 w-4" />
           </button>
@@ -887,7 +921,7 @@ function PpvMedia({
         onViewed(msg)
       }
     } else if (res.status === 402) {
-      alert(`Not enough coins. You need ${price} coins. Top up from Coins.`)
+      alert(`Not enough coins. You need ${coinsWithNgn(price)}. Top up from Coins.`)
     } else {
       alert('Could not unlock. Please try again.')
     }
@@ -903,7 +937,11 @@ function PpvMedia({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 backdrop-blur-md">
           <span className="text-sm font-semibold text-white">Locked {msg.media_type === 'video' ? 'video' : 'photo'}</span>
           <span className="rounded-full bg-gold px-3 py-1 text-xs font-bold text-charcoal">
-            {busy ? 'Unlocking…' : `Unlock · ${price} coins`}
+            {busy ? 'Unlocking…' : `Unlock · ${price.toLocaleString()} coins`}
+          </span>
+          <span className="text-[11px] font-medium text-white/70">≈ {ngnForCoins(price)}</span>
+          <span className="px-6 text-center text-[11px] leading-snug text-white/75">
+            {msg.view_once ? 'Pay once to unlock. View once media disappears after you open it.' : 'Pay once to unlock, and it stays open for you.'}
           </span>
         </div>
       </button>

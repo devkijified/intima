@@ -1,9 +1,11 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { MessageCircle, ChevronRight, Loader2 } from '@/lib/icons'
+import { MessageCircle, ChevronRight } from '@/lib/icons'
 
 interface ThreadRow {
   connectionId: string
@@ -28,64 +30,65 @@ export default function MessagesPage() {
   const [threads, setThreads] = useState<ThreadRow[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let live = true
-    ;(async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { if (live) setLoading(false); return }
+  const loadThreads = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setLoading(false); return }
 
-      const { data: conns } = await supabase
-        .from('connections')
-        .select('id, client_id, provider_id, created_at')
-        .or(`client_id.eq.${user.id},provider_id.eq.${user.id}`)
-        .eq('status', 'active')
+    const { data: conns } = await supabase
+      .from('connections')
+      .select('id, client_id, provider_id, created_at')
+      .or(`client_id.eq.${user.id},provider_id.eq.${user.id}`)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+
+    const rows: ThreadRow[] = []
+    for (const c of conns ?? []) {
+      const otherId = c.client_id === user.id ? c.provider_id : c.client_id
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('display_name, avatar_url')
+        .eq('id', otherId)
+        .single()
+      const { data: last } = await supabase
+        .from('messages')
+        .select('body, created_at, sender_id')
+        .eq('connection_id', c.id)
         .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const { count: unreadCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('connection_id', c.id)
+        .neq('sender_id', user.id)
+        .is('read_at', null)
+      rows.push({
+        connectionId: c.id,
+        counterpartId: otherId,
+        name: prof?.display_name ?? 'Member',
+        avatar: prof?.avatar_url ?? null,
+        lastBody: last?.body ?? null,
+        lastAt: last?.created_at ?? c.created_at,
+        unread: unreadCount ?? 0,
+      })
+    }
+    setThreads(rows); setLoading(false)
+  }
 
-      const rows: ThreadRow[] = []
-      for (const c of conns ?? []) {
-        const otherId = c.client_id === user.id ? c.provider_id : c.client_id
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('display_name, avatar_url')
-          .eq('id', otherId)
-          .single()
-        const { data: last } = await supabase
-          .from('messages')
-          .select('body, created_at, sender_id')
-          .eq('connection_id', c.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        const { count: unreadCount } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('connection_id', c.id)
-          .neq('sender_id', user.id)
-          .is('read_at', null)
-        rows.push({
-          connectionId: c.id,
-          counterpartId: otherId,
-          name: prof?.display_name ?? 'Member',
-          avatar: prof?.avatar_url ?? null,
-          lastBody: last?.body ?? null,
-          lastAt: last?.created_at ?? c.created_at,
-          unread: unreadCount ?? 0,
-        })
-      }
-      if (live) { setThreads(rows); setLoading(false) }
-    })()
-    return () => { live = false }
+  useEffect(() => {
+    loadThreads()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 pb-28 md:pb-10">
+    <PullToRefresh onRefresh={loadThreads} className="mx-auto max-w-2xl px-4 py-6 pb-28 md:pb-10">
       <h1 className="font-display text-2xl font-semibold text-charcoal">Messages</h1>
       <p className="mt-1 text-sm text-neutral-500">Chats open when a connection is active.</p>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-neutral-400">
-          <Loader2 className="h-6 w-6 animate-spin" />
+        <div className="flex items-center justify-center py-16">
+          <TikTokLoader size="lg" />
         </div>
       ) : threads.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-dashed border-neutral-200 bg-white p-10 text-center">
@@ -98,7 +101,7 @@ export default function MessagesPage() {
           </p>
           <Link
             href="/"
-            className="mt-5 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white"
+            className="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-white"
           >
             Browse companions
           </Link>
@@ -127,11 +130,11 @@ export default function MessagesPage() {
                   {t.lastBody ?? 'Connection active. Say hello'}
                 </p>
               </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300" />
+              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-neutral-300" />
             </Link>
           ))}
         </div>
       )}
-    </div>
+    </PullToRefresh>
   )
 }

@@ -34,7 +34,7 @@ export function ModelFilters({ filters, setFilters }: ModelFiltersProps) {
           <select
             value={filters.city}
             onChange={(e) => handleChange('city', e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-base md:text-sm focus:border-brand focus:outline-none"
           >
             <option value="">All Cities</option>
             {cities.map((city) => (
@@ -70,7 +70,7 @@ export function ModelFilters({ filters, setFilters }: ModelFiltersProps) {
           <select
             value={filters.availability}
             onChange={(e) => handleChange('availability', e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand focus:outline-none"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-base md:text-sm focus:border-brand focus:outline-none"
           >
             <option value="all">All</option>
             <option value="available">Available Now</option>

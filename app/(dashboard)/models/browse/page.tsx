@@ -1,5 +1,6 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ModelCard } from '@/components/models/ModelCard'
@@ -7,6 +8,7 @@ import { ModelFilters } from '@/components/models/ModelFilters'
 import { Input } from '@/components/ui/Input'
 import { Search, Sparkles, Filter, Grid, List } from '@/lib/icons'
 import { Button } from '@/components/ui/Button'
+import { resolveServices } from '@/lib/services'
 
 interface Model {
   id: string
@@ -21,11 +23,15 @@ interface Model {
   is_available: boolean
   is_verified: boolean
   is_new: boolean
+  is_featured?: boolean
+  created_at?: string
+  services?: string[] | null
   profile_id: string
   /** Auth user id of the provider, used as the call target. */
   userId?: string | null
   profiles: {
     avatar_url: string
+    gallery_urls?: string[] | null
   }
   specialties: string[]
 }
@@ -44,55 +50,69 @@ export default function BrowseModelsPage() {
   })
   const supabase = createClient()
 
-  useEffect(() => {
-    async function fetchModels() {
-      let query = supabase
-        .from('model_profiles')
-        .select(`
-          *,
-          profiles:profile_id (
-            avatar_url
-          )
-        `)
+  async function fetchModels() {
+    let query = supabase
+      .from('model_profiles')
+      .select(`
+        *,
+        profiles:profile_id (
+          avatar_url,
+          gallery_urls
+        )
+      `)
 
-      if (filters.availability === 'available') {
-        query = query.eq('is_available', true)
-      } else if (filters.availability === 'offline') {
-        query = query.eq('is_available', false)
-      }
-
-      if (search) {
-        query = query.ilike('display_name', `%${search}%`)
-      }
-      if (filters.city) {
-        query = query.eq('city', filters.city)
-      }
-      if (filters.minRate) {
-        query = query.gte('rate_per_hour', parseInt(filters.minRate))
-      }
-      if (filters.maxRate) {
-        query = query.lte('rate_per_hour', parseInt(filters.maxRate))
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('Error fetching models:', error)
-      } else {
-        // Add some mock data for demo purposes
-        const enhancedData = data?.map((model: any) => ({
-          ...model,
-          userId: model.profile_id ?? null,
-          is_verified: Math.random() > 0.3,
-          is_new: Math.random() > 0.7,
-          specialties: ['Massage', 'Dinner Date', 'Travel Companion'].slice(0, Math.floor(Math.random() * 3) + 1),
-        })) || []
-        setModels(enhancedData)
-      }
-      setLoading(false)
+    if (filters.availability === 'available') {
+      query = query.eq('is_available', true)
+    } else if (filters.availability === 'offline') {
+      query = query.eq('is_available', false)
     }
 
+    if (search) {
+      query = query.ilike('display_name', `%${search}%`)
+    }
+    if (filters.city) {
+      query = query.eq('city', filters.city)
+    }
+    if (filters.minRate) {
+      query = query.gte('rate_per_hour', parseInt(filters.minRate))
+    }
+    if (filters.maxRate) {
+      query = query.lte('rate_per_hour', parseInt(filters.maxRate))
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Error fetching models:', error)
+    } else {
+      // Bind every card field to the row itself: verification and
+      // featured flags as stored, New derived from created_at
+      // (14 days), specialties resolved from her services slugs
+      // through the catalog, falling back to the stored specialties
+      // list only when she has no catalog services recorded.
+      const enhancedData = data?.map((model: any) => {
+        const fromServices = resolveServices(model.services).map((s) => s.label)
+        return {
+          ...model,
+          userId: model.profile_id ?? null,
+          is_verified: model.is_verified ?? false,
+          is_featured: model.is_featured ?? false,
+          is_new: model.created_at
+            ? Date.now() - new Date(model.created_at).getTime() < 14 * 24 * 3600 * 1000
+            : false,
+          specialties: fromServices.length > 0
+            ? fromServices
+            : (Array.isArray(model.specialties) ? model.specialties : []),
+        }
+      }) || []
+      setModels(enhancedData)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchModels()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filters, supabase])
 
   if (loading) {
@@ -104,7 +124,7 @@ export default function BrowseModelsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PullToRefresh onRefresh={() => fetchModels()} className="space-y-6">
       
       {/* Category Header - Tryst inspired */}
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-200/80 pb-6 gap-4">
@@ -115,7 +135,7 @@ export default function BrowseModelsPage() {
               Live Directory Category
             </span>
           </div>
-          <h1 className="text-3xl font-serif font-normal text-neutral-900 tracking-tight">
+          <h1 className="text-3xl font-display font-semibold tracking-tight text-neutral-900">
             Companions Available Now
           </h1>
           <p className="text-neutral-500 text-sm mt-1">
@@ -143,7 +163,7 @@ export default function BrowseModelsPage() {
           {/* Search and Controls Toolbar */}
           <div className="bg-white p-4 border border-neutral-200/85 rounded-2xl shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="relative w-full sm:max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+              <Search aria-hidden className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -160,31 +180,33 @@ export default function BrowseModelsPage() {
                 className="lg:hidden"
                 onClick={() => setShowMobileFilters(!showMobileFilters)}
               >
-                <Filter className="h-4 w-4 mr-2" />
+                <Filter aria-hidden className="h-4 w-4 mr-2" />
                 Filters
               </Button>
 
               {/* View Toggle */}
               <div className="flex border border-neutral-200 rounded-lg overflow-hidden">
                 <button
+                  aria-label="Grid view"
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 transition-colors ${
+                  className={`inline-flex h-11 w-11 items-center justify-center transition-colors ${
                     viewMode === 'grid' 
                       ? 'bg-primary text-white' 
                       : 'bg-white text-neutral-400 hover:text-neutral-600'
                   }`}
                 >
-                  <Grid className="h-4 w-4" />
+                  <Grid aria-hidden className="h-4 w-4" />
                 </button>
                 <button
+                  aria-label="List view"
                   onClick={() => setViewMode('list')}
-                  className={`p-2 transition-colors ${
+                  className={`inline-flex h-11 w-11 items-center justify-center transition-colors ${
                     viewMode === 'list' 
                       ? 'bg-primary text-white' 
                       : 'bg-white text-neutral-400 hover:text-neutral-600'
                   }`}
                 >
-                  <List className="h-4 w-4" />
+                  <List aria-hidden className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -213,7 +235,7 @@ export default function BrowseModelsPage() {
             }
           `}>
             {models.map((model) => (
-              <ModelCard key={model.id} model={model} />
+              <ModelCard key={model.id} model={model} layout={viewMode} />
             ))}
           </div>
 
@@ -239,6 +261,6 @@ export default function BrowseModelsPage() {
 
         </div>
       </div>
-    </div>
+    </PullToRefresh>
   )
 }
