@@ -1101,9 +1101,22 @@ export default function StreamRoomPage() {
   }, [tapLike])
 
   const sendingGiftRef = useRef<string | null>(null)
+  // One-deep queue behind the in-flight send: a tap that lands while
+  // another gift is still sending used to be dropped silently, which
+  // ate real taps during combos. The queue keeps sends strictly
+  // serialized (no double charge path) while honouring the tap.
+  const queuedGiftRef = useRef<{
+    gift: GiftItem
+    resolve: (r: GiftSendResult) => void
+  } | null>(null)
   const sendGiftTracked = useCallback(
     async (gift: GiftItem): Promise<GiftSendResult> => {
-      if (sendingGiftRef.current) return 'fail'
+      if (sendingGiftRef.current) {
+        if (queuedGiftRef.current) return 'fail'
+        return new Promise<GiftSendResult>((resolve) => {
+          queuedGiftRef.current = { gift, resolve }
+        })
+      }
       sendingGiftRef.current = gift.id
       setSendingGift(gift.id)
       try {
@@ -1124,10 +1137,17 @@ export default function StreamRoomPage() {
       } finally {
         sendingGiftRef.current = null
         setSendingGift(null)
+        const queued = queuedGiftRef.current
+        queuedGiftRef.current = null
+        if (queued) {
+          void sendGiftTrackedRef.current(queued.gift).then(queued.resolve)
+        }
       }
     },
     [id]
   )
+  const sendGiftTrackedRef = useRef(sendGiftTracked)
+  sendGiftTrackedRef.current = sendGiftTracked
 
   const sendGift = useCallback(
     async (gift: GiftItem) => {

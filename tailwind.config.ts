@@ -28,6 +28,7 @@ const config: Config = {
         },
         cream: '#FDF9F6',
         charcoal: '#1A1A1A',
+        gold: '#C9A84C',
       },
       fontFamily: {
         // One pairing: Figtree for UI text, Inter for display. The CSS
