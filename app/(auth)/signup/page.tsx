@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { friendlyAuthError } from '@/lib/auth/errors'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
 import { PasswordInput } from '@/components/auth/PasswordInput'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { CheckCircle } from '@/lib/icons'
 import { cn } from '@/lib/utils/helpers'
 
@@ -34,7 +35,7 @@ function passwordHint(password: string): { label: string; bars: number; barClass
 }
 
 const ROLE_OPTIONS = [
-  { value: 'model', label: 'Model' },
+  { value: 'model', label: 'Companion' },
   { value: 'client', label: 'Client' },
 ] as const
 
@@ -91,7 +92,7 @@ export default function SignupPage() {
         setSuccess(true)
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred during signup')
+      setError(friendlyAuthError(err, 'We could not create your account. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -234,7 +235,7 @@ export default function SignupPage() {
             <Button type="submit" size="lg" className="w-full" disabled={loading} aria-busy={loading}>
               {loading ? (
                 <span className="inline-flex items-center gap-2.5">
-                  <TikTokLoader size="sm" />
+                  <IntimaLoader size="sm" />
                   Creating...
                 </span>
               ) : (

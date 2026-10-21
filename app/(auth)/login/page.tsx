@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { friendlyAuthError } from '@/lib/auth/errors'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
 import { PasswordInput } from '@/components/auth/PasswordInput'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 
 /**
  * Returns the validated `?next=` redirect target, or null.
@@ -45,7 +46,7 @@ export default function LoginPage() {
         window.location.href = nextParam ?? '/dashboard'
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.')
+      setError(friendlyAuthError(err, 'We could not sign you in. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -107,7 +108,7 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2.5">
-                  <TikTokLoader size="sm" />
+                  <IntimaLoader size="sm" />
                   Signing in...
                 </span>
               ) : (

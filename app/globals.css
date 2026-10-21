@@ -394,27 +394,20 @@
   }
 }
 
-/* TikTok-style two-dot loader (components/shared/TikTokLoader.tsx).
-   Two dots chase and swap places; reduced motion falls back to a
-   gentle pulse so nothing spins for users who opt out. */
-@keyframes tt-swap-a {
-  0% { transform: translateX(0) scale(1); }
-  50% { transform: translateX(var(--tt-travel)) scale(0.72); }
-  100% { transform: translateX(0) scale(1); }
+/* Intima loader (components/shared/IntimaLoader.tsx): three dots in
+   burgundy and gold rising in a slow wave; reduced motion falls back
+   to a gentle pulse so nothing moves for users who opt out. */
+@keyframes il-wave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
 }
-@keyframes tt-swap-b {
-  0% { transform: translateX(0) scale(0.72); }
-  50% { transform: translateX(calc(var(--tt-travel) * -1)) scale(1); }
-  100% { transform: translateX(0) scale(0.72); }
-}
-@keyframes tt-pulse {
+@keyframes il-pulse {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 1; }
 }
-.tt-dot-a { animation: tt-swap-a 0.64s ease-in-out infinite; }
-.tt-dot-b { animation: tt-swap-b 0.64s ease-in-out infinite; }
+.il-dot { animation: il-wave 0.9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .tt-dot-a, .tt-dot-b { animation: tt-pulse 1.4s ease-in-out infinite; }
+  .il-dot { animation: il-pulse 1.4s ease-in-out infinite; }
   .animate-rise-in, .animate-pop-in, .stagger > * { animation: none; }
 }
 

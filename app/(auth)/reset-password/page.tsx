@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { friendlyAuthError } from '@/lib/auth/errors'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
 import { PasswordInput } from '@/components/auth/PasswordInput'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { CheckCircle } from '@/lib/icons'
 
 export default function ResetPasswordPage() {
@@ -51,7 +52,7 @@ export default function ResetPasswordPage() {
       if (error) throw error
       setDone(true)
     } catch (err: any) {
-      setError(err.message || 'Could not update the password.')
+      setError(friendlyAuthError(err, 'Could not update your password. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -108,7 +109,7 @@ export default function ResetPasswordPage() {
               <Button type="submit" size="lg" disabled={loading} aria-busy={loading} className="w-full">
                 {loading ? (
                   <span className="inline-flex items-center gap-2.5">
-                    <TikTokLoader size="sm" />
+                    <IntimaLoader size="sm" />
                     Updating...
                   </span>
                 ) : (
@@ -126,7 +127,7 @@ export default function ResetPasswordPage() {
               </div>
             )}
             <div className="flex flex-col items-center gap-3 py-2">
-              <TikTokLoader size="md" />
+              <IntimaLoader size="md" />
               <p className="text-center text-sm text-neutral-500">
                 If the link expired, request a new one.
               </p>

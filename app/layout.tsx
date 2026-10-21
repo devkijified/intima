@@ -30,7 +30,7 @@ export const viewport = { viewportFit: 'cover', themeColor: '#AC244D' };
 
 export const metadata: Metadata = {
   title: 'Intima - Premium Companion Platform',
-  description: "Nigeria's premier platform for verified companions.",
+  description: "The premier platform for verified companions.",
   manifest: '/manifest.webmanifest',
   themeColor: '#AC244D',
   icons: {

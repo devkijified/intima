@@ -17,10 +17,55 @@ async function trackedFetch(
   }
 }
 
+// IMPORTANT: the installed @supabase/ssr is 0.1.0. Its createBrowserClient
+// destructures `cookies` out of whatever options object it receives;
+// pass options WITHOUT a cookies key and `cookies` becomes undefined,
+// after which every storage getItem/setItem throws "Cannot read
+// properties of undefined (reading 'get' / 'set')" and sign-in dies.
+// Always pass an explicit get/set/remove adapter over document.cookie
+// (same lesson as the server client in lib/supabase/server.ts).
+type CookieSetOptions = {
+  maxAge?: number
+  path?: string
+  domain?: string
+  sameSite?: string | boolean
+  secure?: boolean
+}
+
+const browserCookies = {
+  get(name: string): string | undefined {
+    if (typeof document === 'undefined') return undefined
+    const prefix = `${name}=`
+    const part = document.cookie.split('; ').find((c) => c.startsWith(prefix))
+    if (!part) return undefined
+    const raw = part.slice(prefix.length)
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      return raw
+    }
+  },
+  set(name: string, value: string, options: CookieSetOptions = {}) {
+    if (typeof document === 'undefined') return
+    let str = `${name}=${encodeURIComponent(value)}`
+    str += `; Path=${options.path ?? '/'}`
+    if (typeof options.maxAge === 'number') str += `; Max-Age=${Math.floor(options.maxAge)}`
+    if (options.domain) str += `; Domain=${options.domain}`
+    if (options.sameSite) {
+      str += `; SameSite=${options.sameSite === true ? 'Strict' : options.sameSite}`
+    }
+    if (options.secure) str += '; Secure'
+    document.cookie = str
+  },
+  remove(name: string, options: CookieSetOptions = {}) {
+    browserCookies.set(name, '', { ...options, maxAge: 0 })
+  },
+}
+
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { fetch: trackedFetch } }
+    { cookies: browserCookies, global: { fetch: trackedFetch } }
   )
 }

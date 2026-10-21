@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { friendlyAuthError } from '@/lib/auth/errors'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
-import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { Mail } from '@/lib/icons'
 
 export default function ForgotPasswordPage() {
@@ -49,7 +50,7 @@ export default function ForgotPasswordPage() {
       if (error) throw error
       setSent(true)
     } catch (err: any) {
-      setError(err.message || 'Could not send the reset email.')
+      setError(friendlyAuthError(err, 'Could not send the reset email. Please try again.'))
     } finally {
       setLoading(false)
     }
@@ -96,7 +97,7 @@ export default function ForgotPasswordPage() {
               <Button type="submit" size="lg" disabled={loading} aria-busy={loading} className="w-full">
                 {loading ? (
                   <span className="inline-flex items-center gap-2.5">
-                    <TikTokLoader size="sm" />
+                    <IntimaLoader size="sm" />
                     Sending...
                   </span>
                 ) : (

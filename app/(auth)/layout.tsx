@@ -49,7 +49,7 @@ export default function AuthLayout({
                 </p>
               </div>
             </div>
-            <p className="text-xs text-white/45">Nigeria&apos;s premium companion community</p>
+            <p className="text-xs text-white/45">The premium companion community</p>
           </div>
         </div>
 
