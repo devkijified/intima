@@ -3,7 +3,13 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { SERVICE_CATALOG, SERVICE_CATEGORIES, type ServiceCategory } from '@/lib/services'
+import {
+  SERVICE_CATALOG,
+  SERVICE_CATEGORIES,
+  isCustomService,
+  serviceLabel,
+  type ServiceCategory,
+} from '@/lib/services'
 import { Tag } from '@/lib/icons'
 
 /**
@@ -35,13 +41,20 @@ export default function AdminServicesPage() {
   }
   for (const s of SERVICE_CATALOG) grouped[s.category].push(s)
 
+  // Custom services live in the same counts map under their full
+  // "custom:<text>" storage value; labels resolve through lib/services.
+  const customKeys = Object.keys(counts)
+    .filter(isCustomService)
+    .sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0))
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-charcoal">Services</h1>
         <p className="text-sm text-neutral-500">
-          The platform service catalog. Companions pick from this list on their profile.
-          Changes to the catalog ship with a code update.
+          The platform service catalog. Companions pick from this list on their profile and
+          can add their own services in their own words. Changes to the catalog ship with a
+          code update.
         </p>
       </div>
       {SERVICE_CATEGORIES.map((cat) => (
@@ -54,8 +67,8 @@ export default function AdminServicesPage() {
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {grouped[cat].map((s) => (
-                <div key={s.id} className="rounded-xl border border-neutral-200 px-4 py-3">
-                  <p className="text-sm font-medium text-charcoal">{s.label}</p>
+                <div key={s.id} className="min-w-0 rounded-xl border border-neutral-200 px-4 py-3">
+                  <p className="break-words text-sm font-medium text-charcoal">{s.label}</p>
                   <p className="mt-0.5 text-xs text-neutral-500">
                     {loading ? '…' : `${counts[s.id] ?? 0} companion${(counts[s.id] ?? 0) === 1 ? '' : 's'}`}
                   </p>
@@ -65,6 +78,33 @@ export default function AdminServicesPage() {
           </CardContent>
         </Card>
       ))}
+      {customKeys.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Tag className="h-4 w-4 text-[#C9A84C]" /> Custom services
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-neutral-500">
+              Services companions added in their own words, beyond the catalog.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {customKeys.map((key) => (
+                <div
+                  key={key}
+                  className="min-w-0 rounded-xl border border-[#C9A84C]/50 bg-[#C9A84C]/[0.06] px-4 py-3"
+                >
+                  <p className="break-words text-sm font-medium text-charcoal">{serviceLabel(key)}</p>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    {loading ? '…' : `${counts[key] ?? 0} companion${(counts[key] ?? 0) === 1 ? '' : 's'}`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

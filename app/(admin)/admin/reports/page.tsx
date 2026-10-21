@@ -104,8 +104,8 @@ export default function AdminReportsPage() {
   if (!authorized) {
     return (
       <div className="max-w-md mx-auto text-center py-16">
-        <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h1 className="text-xl font-bold text-gray-900">Not authorized</h1>
+        <ShieldAlert aria-hidden className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h1 className="font-display text-xl font-semibold tracking-tight text-gray-900">Not authorized</h1>
         <p className="text-gray-600 mt-2">This area is restricted to platform administrators.</p>
       </div>
     )
@@ -115,7 +115,7 @@ export default function AdminReportsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Reports</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900 mb-2">Reports</h1>
       <p className="text-gray-600 mb-6">
         User safety reports. Triage quickly, keep the audit trail honest.
       </p>
@@ -125,7 +125,7 @@ export default function AdminReportsPage() {
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
+            className={`inline-flex min-h-[44px] items-center justify-center px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
               filter === s
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -154,7 +154,7 @@ export default function AdminReportsPage() {
           <Card key={row.id}>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Flag className="w-4 h-4 text-primary" />
+                <Flag aria-hidden className="w-4 h-4 text-primary" />
                 {row.reason}
                 <span className="ml-auto text-xs font-normal text-gray-500">
                   {new Date(row.created_at).toLocaleString()}
@@ -183,9 +183,9 @@ export default function AdminReportsPage() {
                     className="bg-green-600 hover:bg-green-700"
                   >
                     {acting === row.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 aria-hidden className="w-4 h-4 animate-spin" />
                     ) : (
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      <CheckCircle2 aria-hidden className="w-4 h-4 mr-2" />
                     )}
                     Resolve
                   </Button>
@@ -195,9 +195,9 @@ export default function AdminReportsPage() {
                     variant="outline"
                   >
                     {acting === row.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 aria-hidden className="w-4 h-4 animate-spin" />
                     ) : (
-                      <XCircle className="w-4 h-4 mr-2" />
+                      <XCircle aria-hidden className="w-4 h-4 mr-2" />
                     )}
                     Dismiss
                   </Button>

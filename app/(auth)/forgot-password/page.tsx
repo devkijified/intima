@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { Mail } from '@/lib/icons'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -55,10 +57,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="w-full">
-      <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="font-display text-3xl font-semibold tracking-tight">{sent ? 'Check your email' : 'Reset your password'}</CardTitle>
-          <CardDescription>
+      <Card className="w-full">
+        <CardHeader className="items-center space-y-1.5 text-center">
+          {sent && (
+            <span className="mb-1.5 flex h-14 w-14 items-center justify-center rounded-full bg-[#AC244D]/10 text-[#AC244D]">
+              <Mail className="h-7 w-7" />
+            </span>
+          )}
+          <CardTitle className="font-display text-3xl font-semibold tracking-tight text-charcoal">{sent ? 'Check your email' : 'Reset your password'}</CardTitle>
+          <CardDescription className="text-[15px] text-neutral-500">
             {sent
               ? 'We sent a password reset link to your email. Tap it to choose a new password.'
               : 'Enter your account email and we will send you a reset link.'}
@@ -67,21 +74,43 @@ export default function ForgotPasswordPage() {
         {!sent && (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+              {error && (
+                <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+                <label htmlFor="forgot-email" className="text-sm font-medium text-charcoal">Email</label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                />
               </div>
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={loading} className="w-full bg-[#AC244D] hover:bg-[#8F1D40]">
-                {loading ? 'Sending...' : 'Send reset link'}
+              <Button type="submit" size="lg" disabled={loading} aria-busy={loading} className="w-full">
+                {loading ? (
+                  <span className="inline-flex items-center gap-2.5">
+                    <TikTokLoader size="sm" />
+                    Sending...
+                  </span>
+                ) : (
+                  'Send reset link'
+                )}
               </Button>
             </CardFooter>
           </form>
         )}
         <CardFooter className="justify-center">
-          <Link href="/login" className="text-sm text-[#AC244D] hover:underline">
+          <Link
+            href="/login"
+            className="inline-flex min-h-[44px] items-center rounded-full px-2 text-sm font-medium text-[#AC244D] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AC244D]/40"
+          >
             Back to sign in
           </Link>
         </CardFooter>

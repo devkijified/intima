@@ -72,9 +72,9 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-charcoal">Users</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-charcoal">Users</h1>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Search aria-hidden className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -96,7 +96,7 @@ export default function AdminUsersPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-charcoal">
                       {u.display_name ?? u.username ?? 'Unnamed'}
-                      {u.is_verified && <ShieldCheck className="ml-1 inline h-4 w-4 text-primary" />}
+                      {u.is_verified && <ShieldCheck aria-hidden className="ml-1 inline h-4 w-4 text-primary" />}
                     </p>
                     <p className="text-xs text-neutral-500">
                       {u.username ? `@${u.username}` : ''} · {u.role} · joined {new Date(u.created_at).toLocaleDateString()}
@@ -108,9 +108,10 @@ export default function AdminUsersPage() {
                       variant="outline"
                       disabled={acting === u.id}
                       onClick={() => toggleSuspend(u)}
+                      aria-label="Suspend user"
                       className="text-red-600"
                     >
-                      <UserX className="h-3.5 w-3.5" />
+                      <UserX aria-hidden className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </div>

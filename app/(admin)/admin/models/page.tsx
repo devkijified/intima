@@ -83,9 +83,9 @@ export default function AdminModelsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-charcoal">Companions</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-charcoal">Companions</h1>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Search aria-hidden className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -114,7 +114,7 @@ export default function AdminModelsPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-charcoal">
                       {m.display_name ?? 'Unnamed'}
-                      {m.is_verified && <ShieldCheck className="ml-1 inline h-4 w-4 text-primary" />}
+                      {m.is_verified && <ShieldCheck aria-hidden className="ml-1 inline h-4 w-4 text-primary" />}
                     </p>
                     <p className="text-xs text-neutral-500">
                       {m.city ?? 'No city'}{m.rate_short_time_ngn ? ` · ₦${m.rate_short_time_ngn.toLocaleString()}` : ''}
@@ -122,7 +122,7 @@ export default function AdminModelsPage() {
                   </div>
                   <Link
                     href={m.username ? `/companion/${m.username}` : `/companion/${m.id}`}
-                    className="text-xs font-medium text-primary hover:underline"
+                    className="inline-flex min-h-[44px] items-center px-1 text-xs font-medium text-primary hover:underline"
                   >
                     View
                   </Link>
@@ -132,6 +132,7 @@ export default function AdminModelsPage() {
                     disabled={acting === m.id}
                     onClick={() => toggleMap(m)}
                     title={m.show_on_map ? 'Hide from map' : 'Show on map'}
+                    aria-label={m.show_on_map ? 'Hide from map' : 'Show on map'}
                   >
                     {m.show_on_map ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                   </Button>

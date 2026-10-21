@@ -8,6 +8,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ShieldAlert, Save, Loader2 } from '@/lib/icons'
+import { HelpTip } from '@/components/ui/Tooltip'
+
+/** Plain-language warnings for the keys where a wrong value breaks
+ * money flows. Shown as a help icon beside the setting name. */
+const SETTING_HELP: Record<string, string> = {
+  connection_fee_ngn:
+    'What every client pays to open a connection, in naira. This one number drives the connect buttons, the booking modal and checkout. A wrong value charges every client the wrong fee.',
+  gift_platform_cut_pct:
+    'The platform share of every gift, as a percent. The companion keeps the rest. It applies to new gifts from the moment you save.',
+  subscription_platform_cut_pct:
+    'The platform share of fan club subscriptions, as a percent. The companion keeps the rest. It applies at the next charge or renewal.',
+  cashout_min_coins:
+    'The smallest number of coins a companion can cash out. Requests below this are refused, so raising it can strand small balances.',
+  usd_ngn_rate:
+    'The naira rate used when dollar amounts are shown or converted. A wrong rate misstates prices anywhere dollars appear.',
+}
 
 interface SettingRow {
   key: string
@@ -163,7 +179,12 @@ export default function AdminSettingsPage() {
           return (
             <Card key={row.key}>
               <CardHeader>
-                <CardTitle className="text-base font-mono">{row.key}</CardTitle>
+                <CardTitle className="flex items-center gap-1 text-base font-mono">
+                  {row.key}
+                  {SETTING_HELP[row.key] && (
+                    <HelpTip text={SETTING_HELP[row.key]} label={`About ${row.key}`} />
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {row.description && (
@@ -179,7 +200,7 @@ export default function AdminSettingsPage() {
                       onChange={(e) =>
                         setDrafts((d) => ({ ...d, [row.key]: e.target.value }))
                       }
-                      className="border border-gray-300 rounded-xl px-3 py-2 text-sm flex-1"
+                      className="min-h-[44px] flex-1 rounded-xl border border-gray-300 px-3 py-2 text-base md:text-sm"
                     >
                       <option value="true">On</option>
                       <option value="false">Off</option>

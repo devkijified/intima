@@ -93,43 +93,21 @@ export default function AdminVerificationsPage() {
     setActing(id)
     setNotice('')
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not signed in')
-
-      const status = approve ? 'approved' : 'rejected'
-      const { error } = await supabase
-        .from('verifications')
-        .update({
-          status,
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          review_notes: approve ? notes || null : notes,
-        })
-        .eq('id', id)
-      if (error) throw error
-
-      // Keep the public profile in sync. A badge must never show before approval.
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          verification_status: approve ? 'verified' : 'rejected',
-          is_verified: approve,
-        })
-        .eq('id', row.provider_id)
-      if (profileError) throw profileError
-
-      await supabase.from('admin_audit_logs').insert({
-        admin_id: user.id,
-        action: approve ? 'verification_approved' : 'verification_rejected',
-        target_type: 'verification',
-        target_id: id,
-        details: { provider_id: row.provider_id, notes: notes || null },
+      // Decisions go through the server route: it performs the same
+      // writes (verification row, profile sync, audit log) and then
+      // notifies the companion, which the browser cannot do itself.
+      const res = await fetch('/api/admin/verifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, approve, notes }),
       })
+      const data = (await res.json().catch(() => null)) as
+        | { error?: string; status?: string }
+        | null
+      if (!res.ok) throw new Error(data?.error ?? 'Action failed')
 
       await load()
-      setNotice(`Verification ${status}.`)
+      setNotice(`Verification ${data?.status ?? (approve ? 'approved' : 'rejected')}.`)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Action failed')
     } finally {
@@ -144,8 +122,8 @@ export default function AdminVerificationsPage() {
   if (!authorized) {
     return (
       <div className="max-w-md mx-auto text-center py-16">
-        <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h1 className="text-xl font-bold text-gray-900">Not authorized</h1>
+        <ShieldAlert aria-hidden className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h1 className="font-display text-xl font-semibold tracking-tight text-gray-900">Not authorized</h1>
         <p className="text-gray-600 mt-2">This area is restricted to platform administrators.</p>
       </div>
     )
@@ -160,7 +138,7 @@ export default function AdminVerificationsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Verification Queue</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900 mb-2">Verification Queue</h1>
       <p className="text-gray-600 mb-6">
         Every provider badge is earned here. Approve only after the ID and selfie genuinely match.
       </p>
@@ -181,7 +159,7 @@ export default function AdminVerificationsPage() {
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
+            className={`inline-flex min-h-[44px] items-center justify-center px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
               filter === s
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -223,9 +201,9 @@ export default function AdminVerificationsPage() {
                     href={row.id_document_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm text-primary hover:text-primary-dark flex items-center gap-1"
+                    className="flex min-h-[44px] items-center gap-1 text-sm text-primary hover:text-primary-dark"
                   >
-                    <ExternalLink className="w-4 h-4" /> ID document
+                    <ExternalLink aria-hidden className="w-4 h-4" /> ID document
                   </a>
                 ) : (
                   <span className="text-sm text-gray-400">No ID document</span>
@@ -235,9 +213,9 @@ export default function AdminVerificationsPage() {
                     href={row.selfie_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm text-primary hover:text-primary-dark flex items-center gap-1"
+                    className="flex min-h-[44px] items-center gap-1 text-sm text-primary hover:text-primary-dark"
                   >
-                    <ExternalLink className="w-4 h-4" /> Selfie
+                    <ExternalLink aria-hidden className="w-4 h-4" /> Selfie
                   </a>
                 ) : (
                   <span className="text-sm text-gray-400">No selfie</span>
@@ -247,9 +225,9 @@ export default function AdminVerificationsPage() {
                     href={row.sign_selfie_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm text-primary hover:text-primary-dark flex items-center gap-1"
+                    className="flex min-h-[44px] items-center gap-1 text-sm text-primary hover:text-primary-dark"
                   >
-                    <ExternalLink className="w-4 h-4" /> Sign selfie
+                    <ExternalLink aria-hidden className="w-4 h-4" /> Sign selfie
                   </a>
                 ) : (
                   <span className="text-sm text-gray-400">No sign selfie</span>
@@ -267,7 +245,7 @@ export default function AdminVerificationsPage() {
                       setRejectNotes((n) => ({ ...n, [row.id]: e.target.value }))
                     }
                     placeholder="Review note (required when rejecting)"
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
+                    className="min-h-[44px] w-full border border-gray-300 rounded-xl px-3 py-2 text-base md:text-sm"
                   />
                   <div className="flex gap-3">
                     <Button
@@ -276,9 +254,9 @@ export default function AdminVerificationsPage() {
                       className="bg-green-600 hover:bg-green-700"
                     >
                       {acting === row.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 aria-hidden className="w-4 h-4 animate-spin" />
                       ) : (
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        <CheckCircle2 aria-hidden className="w-4 h-4 mr-2" />
                       )}
                       Approve
                     </Button>
@@ -289,9 +267,9 @@ export default function AdminVerificationsPage() {
                       className="border-red-300 text-red-600 hover:bg-red-50"
                     >
                       {acting === row.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 aria-hidden className="w-4 h-4 animate-spin" />
                       ) : (
-                        <XCircle className="w-4 h-4 mr-2" />
+                        <XCircle aria-hidden className="w-4 h-4 mr-2" />
                       )}
                       Reject
                     </Button>

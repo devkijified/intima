@@ -70,7 +70,7 @@ export default function AuthLayout({
         </div>
 
         {/* Form column */}
-        <div className="flex flex-1 items-center justify-center px-5 py-10 md:px-12">
+        <div className="flex flex-1 items-center justify-center px-4 py-10 md:px-12">
           <div className="w-full max-w-md animate-rise-in">{children}</div>
         </div>
       </div>

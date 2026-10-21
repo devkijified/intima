@@ -87,12 +87,12 @@ export default function AdminSnapsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16 pt-6">
-      <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
-        <ArrowLeft className="h-4 w-4" /> Admin
+      <Link href="/admin" className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
+        <ArrowLeft aria-hidden className="h-4 w-4" /> Admin
       </Link>
       <div className="mt-2 flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
-          <Lock className="h-5 w-5 text-primary" />
+          <Lock aria-hidden className="h-5 w-5 text-primary" />
         </span>
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Fans Only review</h1>
@@ -106,7 +106,7 @@ export default function AdminSnapsPage() {
       {error && (
         <div className="card-luxe mt-6 p-5 text-center">
           <p className="text-sm text-red-500">{error}</p>
-          <button onClick={load} className="btn-luxe mt-3 px-4 py-2 text-xs">Try again</button>
+          <button onClick={load} className="btn-luxe mt-3 min-h-[44px] px-4 py-2 text-xs">Try again</button>
         </div>
       )}
 
@@ -148,14 +148,14 @@ export default function AdminSnapsPage() {
                     {snap.providerUsername && (
                       <span className="text-xs font-medium text-neutral-400">@{snap.providerUsername}</span>
                     )}
-                    <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[10px] font-bold text-primary">
+                    <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-primary">
                       {snap.collection}
                     </span>
                   </p>
                   {snap.caption && <p className="mt-1 text-sm text-neutral-600">{snap.caption}</p>}
                   <p className="mt-2 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
                     <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> Uploaded {formatUploaded(snap.createdAt)}
+                      <Clock aria-hidden className="h-3 w-3" /> Uploaded {formatUploaded(snap.createdAt)}
                     </span>
                     {snap.mediaType === 'video' && snap.durationSeconds != null && (
                       <span>Video, {formatDuration(snap.durationSeconds)}</span>
@@ -169,20 +169,20 @@ export default function AdminSnapsPage() {
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="Reason for rejecting (saved with the snap)"
-                        className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-primary"
+                        className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base md:text-sm outline-none focus:border-primary"
                       />
                       <div className="flex gap-2">
                         <button
                           onClick={() => decide(snap, 'rejected')}
                           disabled={busyId === snap.id}
-                          className="rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-red-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
                         >
                           {busyId === snap.id ? 'Saving…' : 'Confirm reject'}
                         </button>
                         <button
                           onClick={() => { setRejectingId(null); setReason('') }}
                           disabled={busyId === snap.id}
-                          className="rounded-full px-4 py-2 text-xs font-semibold text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50 disabled:opacity-50"
+                          className="inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-xs font-semibold text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50 disabled:opacity-50"
                         >
                           Back
                         </button>
@@ -193,16 +193,16 @@ export default function AdminSnapsPage() {
                       <button
                         onClick={() => decide(snap, 'approved')}
                         disabled={busyId === snap.id}
-                        className="btn-luxe px-4 py-2 text-xs disabled:opacity-50"
+                        className="btn-luxe min-h-[44px] px-4 py-2 text-xs disabled:opacity-50"
                       >
-                        <CheckCircle2 className="h-3 w-3" /> {busyId === snap.id ? 'Saving…' : 'Approve'}
+                        <CheckCircle2 aria-hidden className="h-3 w-3" /> {busyId === snap.id ? 'Saving…' : 'Approve'}
                       </button>
                       <button
                         onClick={() => { setRejectingId(snap.id); setReason('') }}
                         disabled={busyId === snap.id}
-                        className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-semibold text-red-500 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50"
+                        className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-full px-4 py-2 text-xs font-semibold text-red-500 ring-1 ring-red-200 hover:bg-red-50 disabled:opacity-50"
                       >
-                        <XCircle className="h-3 w-3" /> Reject
+                        <XCircle aria-hidden className="h-3 w-3" /> Reject
                       </button>
                     </div>
                   )}

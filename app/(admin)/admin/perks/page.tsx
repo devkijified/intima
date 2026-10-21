@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, Trophy, XCircle } from '@/lib/icons'
+import { coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 
 interface AdminContest {
   id: string
@@ -73,7 +74,7 @@ export default function AdminPerksPage() {
     const d = await res.json().catch(() => ({}))
     setBusy('')
     if (res.ok) {
-      setMsg(d.winners ? `Paid: ${d.winners.map((w: { place: number; coins: number }) => `#${w.place} ${w.coins} coins`).join(', ')}` : okMsg)
+      setMsg(d.winners ? `Paid: ${d.winners.map((w: { place: number; coins: number }) => `#${w.place} ${coinsWithNgn(w.coins)}`).join(', ')}` : okMsg)
       void load()
     } else {
       setMsg(d.error ?? 'That did not save.')
@@ -99,16 +100,16 @@ export default function AdminPerksPage() {
   }
 
   const inputCls =
-    'w-full rounded-2xl bg-cream px-4 py-3 text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40'
+    'min-h-[44px] w-full rounded-2xl bg-cream px-4 py-3 text-base md:text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40'
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16 pt-6">
-      <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
-        <ArrowLeft className="h-4 w-4" /> Admin
+      <Link href="/admin" className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
+        <ArrowLeft aria-hidden className="h-4 w-4" /> Admin
       </Link>
       <div className="mt-2 flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
-          <Trophy className="h-5 w-5 text-primary" />
+          <Trophy aria-hidden className="h-5 w-5 text-primary" />
         </span>
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Perks contests</h1>
@@ -130,6 +131,9 @@ export default function AdminPerksPage() {
             <label className="text-xs text-neutral-500">
               Prize (coins)
               <input value={prize} onChange={(e) => setPrize(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" className={`${inputCls} mt-1`} />
+              {Number(prize) > 0 && (
+                <span className="mt-1 block font-normal text-neutral-400">That is {ngnForCoins(Number(prize))} in naira.</span>
+              )}
             </label>
             <label className="text-xs text-neutral-500">
               Split by place (%), e.g. 60 25 15
@@ -178,17 +182,17 @@ export default function AdminPerksPage() {
                   type="button"
                   disabled={!!busy}
                   onClick={() => post({ action: 'entry', entryId: e.id, decision: 'approved' }, 'Entry approved.')}
-                  className="btn-luxe flex h-10 items-center gap-1.5 px-4 text-sm disabled:opacity-50"
+                  className="btn-luxe flex min-h-[44px] items-center gap-1.5 px-4 text-sm disabled:opacity-50"
                 >
-                  <CheckCircle2 className="h-4 w-4" /> Approve
+                  <CheckCircle2 aria-hidden className="h-4 w-4" /> Approve
                 </button>
                 <button
                   type="button"
                   disabled={!!busy}
                   onClick={() => post({ action: 'entry', entryId: e.id, decision: 'rejected' }, 'Entry rejected.')}
-                  className="flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-red-600 ring-1 ring-red-200 disabled:opacity-50"
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-red-600 ring-1 ring-red-200 disabled:opacity-50"
                 >
-                  <XCircle className="h-4 w-4" /> Reject
+                  <XCircle aria-hidden className="h-4 w-4" /> Reject
                 </button>
               </div>
             </div>
@@ -203,7 +207,7 @@ export default function AdminPerksPage() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-charcoal">{c.title}</p>
               <p className="text-xs text-neutral-500">
-                {c.prize_coins.toLocaleString()} coins · split {(c.prize_split ?? []).join(' / ')} · status {c.status} ·{' '}
+                {coinsWithNgn(c.prize_coins)} · split {(c.prize_split ?? []).join(' / ')} · status {c.status} ·{' '}
                 {new Date(c.starts_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} to{' '}
                 {new Date(c.ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
               </p>
@@ -213,7 +217,7 @@ export default function AdminPerksPage() {
                 type="button"
                 disabled={!!busy}
                 onClick={() => post({ action: 'close', contestId: c.id }, 'Contest closed. Voting and entries are off.')}
-                className="btn-soft px-4 py-2.5 text-[13px] disabled:opacity-50"
+                className="btn-soft min-h-[44px] px-4 py-2.5 text-[13px] disabled:opacity-50"
               >
                 Close
               </button>
@@ -223,7 +227,7 @@ export default function AdminPerksPage() {
                 type="button"
                 disabled={!!busy}
                 onClick={() => post({ action: 'pay', contestId: c.id }, 'Winners paid.')}
-                className="btn-luxe px-4 py-2.5 text-[13px] disabled:opacity-50"
+                className="btn-luxe min-h-[44px] px-4 py-2.5 text-[13px] disabled:opacity-50"
               >
                 Pay winners
               </button>

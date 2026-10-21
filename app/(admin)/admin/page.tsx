@@ -68,13 +68,13 @@ export default function AdminPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-gray-900 mb-8">Admin Dashboard</h1>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <StatCard icon={<Users className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
-        <StatCard icon={<UserCheck className="h-6 w-6 text-[#AC244D]" />} title="Total Models" value={stats.totalModels} />
-        <StatCard icon={<UserX className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
-        <StatCard icon={<Star className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
+        <StatCard icon={<Users aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
+        <StatCard icon={<UserCheck aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Models" value={stats.totalModels} />
+        <StatCard icon={<UserX aria-hidden className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
+        <StatCard icon={<Star aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -83,16 +83,16 @@ export default function AdminPage() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Link href="/admin/verifications" className="flex w-full items-center justify-start rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white">
-              <UserCheck className="mr-2 h-4 w-4" />
+            <Link href="/admin/verifications" className="flex min-h-[44px] w-full items-center justify-start rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white">
+              <UserCheck aria-hidden className="mr-2 h-4 w-4" />
               Verify Models
             </Link>
-            <Link href="/admin/users" className="flex w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
-              <Users className="mr-2 h-4 w-4" />
+            <Link href="/admin/users" className="flex min-h-[44px] w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
+              <Users aria-hidden className="mr-2 h-4 w-4" />
               Manage Users
             </Link>
-            <Link href="/admin/live" className="flex w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
-              <Video className="mr-2 h-4 w-4" />
+            <Link href="/admin/live" className="flex min-h-[44px] w-full items-center justify-start rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-charcoal hover:bg-neutral-50">
+              <Video aria-hidden className="mr-2 h-4 w-4" />
               Monitor Live Streams
             </Link>
           </CardContent>
