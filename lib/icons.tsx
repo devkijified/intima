@@ -18,6 +18,7 @@ import {
   Call as SaxCall,
   Camera as SaxCamera,
   Category as SaxCategory,
+  Chart as SaxChart,
   Clock as SaxClock,
   CloseCircle as SaxCloseCircle,
   CloseSquare as SaxCloseSquare,
@@ -81,9 +82,18 @@ import {
   Wifi as SaxWifi,
   WifiSquare as SaxWifiSquare,
 } from 'iconsax-react'
-import type { ComponentType } from 'react'
+import type { AriaAttributes, ComponentType } from 'react'
 
-type IconProps = { className?: string; size?: number | string; color?: string }
+// AriaAttributes lets call sites pass aria-hidden (and the other
+// standard aria props) so decorative icons inside labelled controls
+// can be hidden from screen readers; the wrapper forwards them to
+// the underlying svg.
+type IconProps = {
+  className?: string
+  size?: number | string
+  color?: string
+  role?: string
+} & AriaAttributes
 
 function wrap(Sax: ComponentType<any>) {
   return function Icon({ className, ...rest }: IconProps) {
@@ -117,6 +127,7 @@ export const MessageCircle = wrap(SaxMessage)
 export const MapPin = wrap(SaxSearchNormal1)
 export const LocationIcon = wrap(SaxSearchNormal1)
 export const Coins = wrap(SaxCoin)
+export const Chart = wrap(SaxChart)
 export const Clock = wrap(SaxClock)
 export const Trash2 = wrap(SaxTrash)
 export const Heart = wrap(SaxHeart)

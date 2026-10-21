@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Plus, Loader2, Trash2, Eye } from '@/lib/icons';
+import { HelpTip } from '@/components/ui/Tooltip';
 import { CONTACT_WARNING, scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 
 /**
@@ -93,14 +94,14 @@ export function StoryManager() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Photo or video URL"
-          className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary"
+          className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-base outline-none focus:border-primary md:text-sm"
         />
         <input
           value={caption}
           onChange={(e) => setCaption(e.target.value)}
           placeholder="Caption (optional, 200 chars)"
           maxLength={200}
-          className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary"
+          className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-base outline-none focus:border-primary md:text-sm"
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-neutral-600">
@@ -121,6 +122,7 @@ export function StoryManager() {
             />
             Subscribers only
           </label>
+          <HelpTip text="Only your fan club members can open a subscribers only story. It stays hidden from everyone else." />
           {blocked && (
             <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {blockedMsg || CONTACT_WARNING}
@@ -129,7 +131,7 @@ export function StoryManager() {
           <button
             onClick={post}
             disabled={posting || !url.trim()}
-            className="ml-auto flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            className="ml-auto flex min-h-[44px] items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
           >
             {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Post story
@@ -151,18 +153,18 @@ export function StoryManager() {
                 ) : (
                   <img src={s.media_url} alt="" className="h-full w-full object-cover" />
                 )}
-                <span className="absolute bottom-1 left-1 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white">
+                <span className="absolute bottom-1 left-1 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
                   <Eye className="h-2.5 w-2.5" /> {s.views}
                 </span>
                 {s.is_subscribers_only && (
-                  <span className="absolute left-1 top-1 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold text-charcoal">
+                  <span className="absolute left-1 top-1 rounded-full bg-gold px-2 py-0.5 text-[11px] font-bold text-charcoal">
                     Fan club
                   </span>
                 )}
                 <button
                   onClick={() => remove(s.id)}
                   aria-label="Delete story"
-                  className="absolute right-1 top-1 rounded-full bg-black/55 p-1.5 text-white"
+                  className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>

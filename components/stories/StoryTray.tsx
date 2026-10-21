@@ -148,7 +148,7 @@ export function StoryTray() {
                 )}
               </span>
             </span>
-            <span className="w-full truncate text-center text-[11px] text-neutral-600">
+            <span className="w-full min-w-0 truncate text-center text-[11px] text-neutral-600">
               {g.provider_id === myId ? 'You' : g.provider_name.split(' ')[0]}
             </span>
           </button>

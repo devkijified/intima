@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { reencodeImage } from '@/lib/uploads/reencode'
 import { Camera, Loader2, Trash2 } from '@/lib/icons'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 const BUCKET = 'profile-photos'
 const MAX_BYTES = 10 * 1024 * 1024
@@ -88,14 +89,16 @@ export function AvatarUploader({
       {value ? (
         <div className="relative">
           <img src={value} alt="" className={`${box} rounded-2xl object-cover`} />
+          <Tooltip label="Remove photo" wrapperClassName="absolute right-2 top-2">
           <button
             type="button"
             onClick={() => { void deletePhoto(value); onChange('') }}
-            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
             aria-label="Remove photo"
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          </Tooltip>
         </div>
       ) : (
         <button
@@ -109,7 +112,7 @@ export function AvatarUploader({
         </button>
       )}
       {value && (
-        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="btn-soft mt-2 w-full py-2 text-xs disabled:opacity-50">
+        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="btn-soft mt-2 inline-flex min-h-[44px] w-full items-center justify-center py-2 text-xs disabled:opacity-50">
           {busy ? 'Uploading…' : 'Change photo'}
         </button>
       )}
@@ -166,14 +169,16 @@ export function GalleryUploader({
         {value.map((url) => (
           <div key={url} className="relative">
             <img src={url} alt="" className="h-24 w-full rounded-xl object-cover" />
+            <Tooltip label="Remove photo" wrapperClassName="absolute right-1.5 top-1.5">
             <button
               type="button"
               onClick={() => remove(url)}
-              className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white"
               aria-label="Remove photo"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
+            </Tooltip>
           </div>
         ))}
         {value.length < max && (

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Eye } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 export interface Story {
   id: string;
@@ -125,9 +126,11 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
             {new Date(story.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        <button onClick={onClose} aria-label="Close" className="rounded-full bg-white/15 p-3 text-white">
+        <Tooltip label="Close">
+        <button onClick={onClose} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
           <X className="h-5 w-5" />
         </button>
+        </Tooltip>
       </div>
 
       {/* Media with tap zones */}
@@ -164,14 +167,18 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
       </div>
 
       {/* Edge arrows for desktop */}
+      <Tooltip label="Previous story" wrapperClassName="absolute left-3 top-1/2 z-10 hidden -translate-y-1/2 md:block">
       <button onClick={prev} aria-label="Previous story"
-        className="absolute left-3 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/15 p-2 text-white md:block">
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white">
         <ChevronLeft className="h-5 w-5" />
       </button>
+      </Tooltip>
+      <Tooltip label="Next story" wrapperClassName="absolute right-3 top-1/2 z-10 hidden -translate-y-1/2 md:block">
       <button onClick={next} aria-label="Next story"
-        className="absolute right-3 top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-white/15 p-2 text-white md:block">
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white">
         <ChevronRight className="h-5 w-5" />
       </button>
+      </Tooltip>
     </div>
   );
 }

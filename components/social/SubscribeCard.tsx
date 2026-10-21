@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { showToast } from '@/lib/toast';
+import { coinsWithNgn } from '@/lib/utils/helpers';
+import { HelpTip } from '@/components/ui/Tooltip';
 
 interface SubState {
   status: string;
@@ -139,14 +141,20 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
 
   return (
     <div className="card-luxe mt-4 p-4">
-      <p className="text-[13px] font-bold uppercase tracking-[0.1em] text-neutral-400">
+      <p className="flex items-center gap-1 text-[13px] font-bold uppercase tracking-[0.1em] text-neutral-400">
         Fan club
+        <HelpTip text="Membership renews every month in coins (1 coin = ₦10), taken from your coin balance. If you cancel, you keep full access until the month you paid for ends." />
       </p>
       {sub ? (
         <>
           <p className="mt-2 text-sm text-charcoal">
             You are in the fan club until {fmtDate(sub.current_period_end)}
           </p>
+          {!sub.cancelled && (
+            <p className="mt-1 text-xs text-neutral-500">
+              Renews at {coinsWithNgn(priceCoins)} a month unless you cancel.
+            </p>
+          )}
           {sub.cancelled ? (
             <p className="mt-1 text-xs text-neutral-500">
               Cancelled. Your access runs until {fmtDate(sub.current_period_end)}.
@@ -156,7 +164,7 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
               <button
                 onClick={cancel}
                 disabled={busy}
-                className="mt-3 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-neutral-600 shadow-soft ring-1 ring-black/[0.08] transition-all active:scale-[0.98] disabled:opacity-50"
+                className="mt-3 inline-flex min-h-[44px] items-center rounded-full bg-white px-5 py-2 text-[13px] font-semibold text-neutral-600 shadow-soft ring-1 ring-black/[0.08] transition-all active:scale-[0.98] disabled:opacity-50"
               >
                 {busy ? 'Cancelling...' : 'Cancel subscription'}
               </button>
@@ -169,7 +177,7 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
       ) : (
         <>
           <p className="mt-2 text-sm text-charcoal">
-            Join the fan club for {priceCoins.toLocaleString()} coins a month
+            Join the fan club for {coinsWithNgn(priceCoins)} a month
           </p>
           <p className="mt-1 text-xs text-neutral-500">
             Fan club members get a Fan badge in chat and access to subscribers only
@@ -178,7 +186,7 @@ export function SubscribeCard({ providerId, providerName }: SubscribeCardProps) 
           <button
             onClick={subscribe}
             disabled={busy}
-            className="btn-luxe mt-3 px-5 py-2.5 text-[13px] disabled:opacity-50"
+            className="btn-luxe mt-3 min-h-[44px] px-5 py-2.5 text-[13px] disabled:opacity-50"
           >
             {busy ? 'Subscribing...' : 'Subscribe'}
           </button>

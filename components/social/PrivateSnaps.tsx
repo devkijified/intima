@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { reencodeImage } from '@/lib/uploads/reencode';
 import { Camera, Loader2, Lock, PictureInPicture2, Play, Trash2, X } from '@/lib/icons';
 import { SubscribeCard } from '@/components/social/SubscribeCard';
+import { HelpTip } from '@/components/ui/Tooltip';
 import { useDock } from '@/components/dock/FloatingDock';
 
 const BUCKET = 'private-snaps';
@@ -417,8 +418,9 @@ export function PrivateSnaps({
       {ownerView && summary.standing && (
         <div className="card-luxe mt-3 p-4">
           {summary.standing.canEarn ? (
-            <p className="text-sm font-semibold text-emerald-700">
+            <p className="flex items-center gap-1 text-sm font-semibold text-emerald-700">
               Your fan club is open and earning.
+              <HelpTip text="Keep posting fresh content. If your newest approved post passes 30 days, new fans cannot subscribe until you post again. Fans you already have keep their access." />
             </p>
           ) : (
             <>
@@ -478,7 +480,7 @@ export function PrivateSnaps({
               placeholder={DEFAULT_COLLECTION}
               list={datalistId}
               maxLength={40}
-              className="w-full rounded-2xl bg-cream px-4 py-3 text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40"
+              className="w-full rounded-2xl bg-cream px-4 py-3 text-base text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40 md:text-sm"
             />
             <datalist id={datalistId}>
               {summary.collections.map((c) => (
@@ -490,14 +492,14 @@ export function PrivateSnaps({
               onChange={(e) => setCaption(e.target.value)}
               placeholder="Caption (optional)"
               maxLength={300}
-              className="w-full rounded-2xl bg-cream px-4 py-3 text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40"
+              className="w-full rounded-2xl bg-cream px-4 py-3 text-base text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40 md:text-sm"
             />
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={adding}
-                className="btn-soft flex items-center gap-2 px-4 py-2.5 text-[13px] disabled:opacity-50"
+                className="btn-soft flex min-h-[44px] items-center gap-2 px-4 py-2.5 text-[13px] disabled:opacity-50"
               >
                 <Camera className="h-4 w-4" />
                 {picked ? 'Change file' : 'Choose photo or video'}
@@ -570,10 +572,12 @@ export function PrivateSnaps({
                           playsInline
                           className="h-full w-full object-cover"
                         />
-                        <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-semibold text-white drop-shadow">
+                        <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[11px] font-semibold text-white drop-shadow">
                           <Play className="h-2.5 w-2.5 fill-white" />
                         </span>
-                        <span className="absolute right-1 top-1 rounded bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white">
+                        {/* Top-left: the top-right corner belongs to
+                            the owner's 44px delete button. */}
+                        <span className="absolute left-1 top-1 rounded bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white">
                           VIDEO
                         </span>
                       </>
@@ -595,7 +599,7 @@ export function PrivateSnaps({
                       onClick={() => void deleteSnap(snap)}
                       disabled={deletingId === snap.id}
                       aria-label="Delete snap"
-                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-50"
+                      className="absolute right-1.5 top-1.5 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-50"
                     >
                       {deletingId === snap.id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -619,7 +623,7 @@ export function PrivateSnaps({
         >
           <button
             aria-label="Close"
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -634,7 +638,7 @@ export function PrivateSnaps({
                 });
                 setLightbox(null);
               }}
-              className="absolute right-16 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+              className="absolute right-16 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white"
             >
               <PictureInPicture2 className="h-5 w-5" />
             </button>
