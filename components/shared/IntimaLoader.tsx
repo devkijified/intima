@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils/helpers'
  * one underneath, and the burgundy and gold one on top revealed by
  * an animated clip (keyframes live in app/globals.css).
  * prefers-reduced-motion rests the rose at full colour.
+ * (Build marker: v2, request board UI release.)
  */
 
 const BODY =
