@@ -29,6 +29,22 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 
   try {
     const supabase = createClient()
+    // Signed-out visitors cannot read platform_settings directly
+    // (the table holds secrets, so it has no public read policy).
+    // The get_public_setting RPC (migration 053) serves an
+    // explicit whitelist of display-safe keys to everyone; use it
+    // first, then fall back to the direct read for signed-in
+    // sessions and non-whitelisted keys.
+    const { data: rpcValue, error: rpcError } = await supabase.rpc(
+      'get_public_setting',
+      { p_key: key }
+    )
+    if (!rpcError && rpcValue !== null && rpcValue !== undefined) {
+      const value = rpcValue as T
+      cache.set(key, { value, expiresAt: Date.now() + TTL_MS })
+      return value
+    }
+
     const { data, error } = await supabase
       .from('platform_settings')
       .select('value')

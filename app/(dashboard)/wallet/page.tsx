@@ -28,10 +28,22 @@ export default function WalletPage() {
         .order('created_at', { ascending: false })
         .limit(20)
       const { data: conns } = await supabase.from('connections')
-        .select('fee_ngn, created_at, provider_id, profiles!connections_provider_id_fkey(display_name)')
+        .select('fee_ngn, created_at, provider_id')
         .eq('client_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20)
+      // Provider names are fetched separately (the bookings page
+      // pattern): there is no connections to profiles foreign key
+      // for PostgREST to embed, and the embedded select used to
+      // fail with a 400, silently dropping every fee row.
+      const providerIds = [...new Set(((conns ?? []) as any[]).map((c) => c.provider_id).filter(Boolean))]
+      const nameById = new Map<string, string>()
+      if (providerIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles')
+          .select('id, display_name')
+          .in('id', providerIds)
+        ;(profs ?? []).forEach((p: any) => nameById.set(p.id, p.display_name ?? 'companion'))
+      }
       const txs = [
         ...((topups ?? []) as any[]).map((t) => ({
           id: `top-${t.reference}`,
@@ -42,7 +54,7 @@ export default function WalletPage() {
         })),
         ...((conns ?? []) as any[]).map((c) => ({
           id: `conn-${c.created_at}`,
-          label: `Connection fee: ${(c.profiles as any)?.display_name ?? 'companion'}`,
+          label: `Connection fee: ${nameById.get(c.provider_id) ?? 'companion'}`,
           sub: 'Unlocked chat, calls, WhatsApp',
           amount: `-₦${c.fee_ngn.toLocaleString()}`,
           date: c.created_at,
