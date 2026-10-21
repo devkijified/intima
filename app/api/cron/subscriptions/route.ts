@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
       const isStale = standing.blockedBy === 'stale';
       await notifyUsers({
         userIds: [sub.subscriber_id as string],
-        type: 'system',
+        type: 'subscription_paused',
         title: 'Fan club subscription ended',
         body: isStale
           ? 'Your fan club subscription was not renewed because the companion has not posted new approved content recently. No coins were charged. You can join again from their profile once fresh content lands.'
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
         companionNotified.add(sub.provider_id as string);
         await notifyUsers({
           userIds: [sub.provider_id as string],
-          type: 'system',
+          type: 'subscription_paused',
           title: 'Fan club renewals paused',
           body: isStale
             ? 'Renewals for your fan club have paused because your Fans Only gallery has not had new approved content recently. Post new content and pass review to restart renewals. Fans keep the access they already paid for.'
@@ -172,7 +172,7 @@ export async function GET(req: NextRequest) {
       if (!updated) continue;
       await notifyUsers({
         userIds: [sub.subscriber_id as string],
-        type: 'system',
+        type: 'subscription_lapsed',
         title: 'Fan club subscription lapsed',
         body: 'Your fan club renewal could not be charged because there were not enough coins. You can resubscribe anytime from her profile.',
       }).catch(() => {});
@@ -210,6 +210,12 @@ export async function GET(req: NextRequest) {
         console.error('[cron/subscriptions] provider credit failed', sub.id, creditErr);
       }
     }
+    await notifyUsers({
+      userIds: [sub.subscriber_id as string],
+      type: 'subscription_renewed',
+      title: 'Fan club renewed',
+      body: `Your fan club subscription was renewed for ${sub.price_coins} coins. Your access continues without a break.`,
+    }).catch(() => {});
     renewed++;
   }
 

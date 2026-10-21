@@ -48,11 +48,20 @@ export async function POST(req: NextRequest) {
   const db = svc();
   const { data: profile } = await db
     .from('profiles')
-    .select('role')
+    .select('role, is_verified, verification_status')
     .eq('id', user.id)
     .maybeSingle();
   if (!profile || profile.role !== 'model') {
     return NextResponse.json({ error: 'Only companions can enter a contest' }, { status: 403 });
+  }
+  // Verified members only (user decision, 2026-10-21): same check as
+  // lib/connections/eligibility.ts; admin approval sets both flags.
+  const isVerified = profile.is_verified === true || profile.verification_status === 'verified';
+  if (!isVerified) {
+    return NextResponse.json(
+      { error: 'Only verified companions can enter contests. Complete your ID verification first.' },
+      { status: 403 },
+    );
   }
 
   const { data: contest } = await db

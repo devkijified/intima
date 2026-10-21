@@ -18,7 +18,11 @@ function service() {
  * GET /api/payments/paystack/verify?reference=CARD-XXXXXX
  * Confirms a connection-fee card payment with Paystack and flips the
  * card_payments row to paid. The callback page calls this, then
- * creates the connection through POST /api/connections.
+ * creates the connection through POST /api/connections. When the
+ * payment is paid, the screening answers and service pick stored on
+ * the row at initialize time come back with it (intakeAnswers,
+ * serviceType), so the callback does not depend on the client's
+ * sessionStorage surviving the redirect.
  */
 export async function GET(req: NextRequest) {
   if (!paystackConfigured()) {
@@ -41,7 +45,7 @@ export async function GET(req: NextRequest) {
   const svc = service();
   const { data: row } = await svc
     .from('card_payments')
-    .select('id, user_id, kind, reference, amount_ngn, target_provider_id, status')
+    .select('id, user_id, kind, reference, amount_ngn, target_provider_id, status, intake_answers, service_type')
     .eq('reference', reference)
     .eq('user_id', user.id)
     .maybeSingle();
@@ -71,11 +75,15 @@ function publicRow(row: {
   reference: string;
   amount_ngn: number;
   target_provider_id: string | null;
+  intake_answers?: unknown;
+  service_type?: string | null;
 }) {
   return {
     kind: row.kind,
     reference: row.reference,
     amountNgn: row.amount_ngn,
     targetProviderId: row.target_provider_id,
+    intakeAnswers: Array.isArray(row.intake_answers) ? row.intake_answers : null,
+    serviceType: row.service_type ?? null,
   };
 }

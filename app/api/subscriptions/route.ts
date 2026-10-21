@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     await notifyUsers({
       userIds: [providerId],
-      type: 'system',
+      type: 'subscription_started',
       title: 'New fan club member',
       body: `${subscriber?.display_name ?? 'Someone'} joined your fan club.`,
     }).catch(() => {});

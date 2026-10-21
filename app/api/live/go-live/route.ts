@@ -101,7 +101,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ ok: true, notified: ids.length });
+    // "Notify me" audience: everyone who tapped Notify me on this
+    // scheduled stream, minus anyone already notified above and the
+    // host, so nobody receives the alert twice.
+    const { data: interests } = await service
+      .from('live_interests')
+      .select('user_id')
+      .eq('session_id', sessionId);
+    const alreadyNotified = new Set([...ids, user.id]);
+    const interestIds = [
+      ...new Set((interests ?? []).map((r: { user_id: string }) => r.user_id)),
+    ].filter((id) => !alreadyNotified.has(id));
+
+    if (interestIds.length > 0) {
+      await notifyUsers({
+        userIds: interestIds,
+        type: 'live_started',
+        title: `${host?.display_name ?? 'A companion'} is live now`,
+        body: session.title,
+        link: `/live/${sessionId}`,
+      });
+    }
+
+    return NextResponse.json({ ok: true, notified: ids.length + interestIds.length });
   } catch (e) {
     console.error('[live/go-live]', e);
     return NextResponse.json({ error: 'Could not go live' }, { status: 500 });

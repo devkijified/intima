@@ -34,6 +34,22 @@ export async function POST(req: NextRequest) {
   }
 
   const db = svc();
+  // Verified members only (user decision, 2026-10-21): same check as
+  // lib/connections/eligibility.ts; admin approval sets both flags.
+  const { data: profile } = await db
+    .from('profiles')
+    .select('is_verified, verification_status')
+    .eq('id', user.id)
+    .maybeSingle();
+  const isVerified =
+    profile?.is_verified === true || profile?.verification_status === 'verified';
+  if (!isVerified) {
+    return NextResponse.json(
+      { error: 'Only verified members can vote in contests. Verify your identity to take part.' },
+      { status: 403 },
+    );
+  }
+
   const { data: contest } = await db
     .from('contests')
     .select('id, starts_at, ends_at, status')

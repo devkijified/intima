@@ -5,6 +5,7 @@ import {
   settleCoinTopup,
   markCardPaymentPaid,
 } from '@/lib/payments/paystack';
+import { dvaCreditMath, settleDvaTopup } from '@/lib/payments/dva';
 
 function service() {
   return createServiceClient(
@@ -19,6 +20,8 @@ interface PaystackEvent {
     reference?: string;
     amount?: number;
     metadata?: Record<string, unknown>;
+    authorization?: { channel?: string; receiver_bank_account_number?: string };
+    customer?: { customer_code?: string };
   };
 }
 
@@ -51,6 +54,43 @@ export async function POST(req: NextRequest) {
   const reference = event.data.reference;
   const meta = (event.data.metadata ?? {}) as Record<string, unknown>;
   const svc = service();
+
+  // Dedicated virtual account credits arrive with no app metadata:
+  // the money names the account it landed in, so resolve the owner
+  // from user_bank_accounts (by account number, then customer code)
+  // and credit coins at the DVA rate. This branch must run before
+  // the metadata branches below.
+  if (event.data.authorization?.channel === 'dedicated_nuban') {
+    const accountNumber = event.data.authorization.receiver_bank_account_number;
+    const customerCode = event.data.customer?.customer_code;
+    let ownerId: string | null = null;
+    if (accountNumber) {
+      const { data } = await svc
+        .from('user_bank_accounts')
+        .select('user_id')
+        .eq('account_number', accountNumber)
+        .maybeSingle();
+      ownerId = data?.user_id ?? null;
+    }
+    if (!ownerId && customerCode) {
+      const { data } = await svc
+        .from('user_bank_accounts')
+        .select('user_id')
+        .eq('paystack_customer_code', customerCode)
+        .maybeSingle();
+      ownerId = data?.user_id ?? null;
+    }
+    if (!ownerId) {
+      return NextResponse.json({ ok: true, ignored: 'dva_unknown_account' });
+    }
+    const amountNgn = Math.round((event.data.amount ?? 0) / 100);
+    const { coins, belowMinimum } = dvaCreditMath(amountNgn);
+    if (belowMinimum || coins <= 0) {
+      return NextResponse.json({ ok: true, ignored: 'dva_below_minimum' });
+    }
+    await settleDvaTopup(svc, { reference, userId: ownerId, coins, amountNgn });
+    return NextResponse.json({ ok: true, settled: 'dva' });
+  }
 
   // Coin top-ups carry coins + user_id in metadata.
   const coins = Number(meta.coins);
