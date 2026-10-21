@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { ngnForCoins } from '@/lib/utils/helpers'
 import { Calendar, Coins, Eye, Heart, Star, Users } from '@/lib/icons'
 
 interface PeriodStats {
@@ -243,7 +244,7 @@ export default function AnalyticsPage() {
         >
           <div className="mt-3 flex items-center justify-between gap-2">
             <DeltaChip current={current.giftCoins} previous={previous.giftCoins} />
-            <span className="text-xs text-neutral-400">About ₦{(current.giftCoins * 10).toLocaleString()}</span>
+            <span className="text-xs text-neutral-400">About {ngnForCoins(current.giftCoins)}</span>
           </div>
         </MetricCard>
 

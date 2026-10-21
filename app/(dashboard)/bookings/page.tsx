@@ -1,10 +1,14 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
+import { formatCompactPrice } from '@/lib/utils/helpers'
+import { serviceTypeLabel } from '@/lib/connections/serviceType'
 import { Calendar, MessageCircle, Phone, Video, ArrowUpRight, Loader2, Wallet } from '@/lib/icons'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 type ConnectionStatus = 'pending_payment' | 'active' | 'refunded' | 'expired'
 
@@ -20,6 +24,7 @@ interface ConnectionRow {
   fee_ngn: number
   status: ConnectionStatus
   proposed_rate_ngn: number | null
+  service_type: string | null
   created_at: string
   counterpart: Counterpart
 }
@@ -53,76 +58,78 @@ export default function BookingsPage() {
   const [isModel, setIsModel] = useState(false)
   const supabase = createClient()
 
-  useEffect(() => {
-    async function fetchConnections() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        window.location.href = '/login'
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      const model = (profile?.role ?? user.user_metadata?.role ?? 'client') === 'model'
-      setIsModel(model)
-
-      // Connections where I am the client (client view) or the provider (provider inbox).
-      const { data: conns } = await supabase
-        .from('connections')
-        .select('id, fee_ngn, status, proposed_rate_ngn, created_at, client_id, provider_id')
-        .eq(model ? 'provider_id' : 'client_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (!conns || conns.length === 0) {
-        setConnections([])
-        setLoading(false)
-        return
-      }
-
-      // Counterpart profiles (provider for clients, client for providers).
-      const counterpartIds = [...new Set(conns.map((c) => (model ? c.client_id : c.provider_id)))]
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url')
-        .in('id', counterpartIds)
-
-      // Cities for the provider side.
-      const providerIds = [...new Set(conns.map((c) => c.provider_id))]
-      const { data: presence } = await supabase
-        .from('provider_presence')
-        .select('provider_id, city')
-        .in('provider_id', providerIds)
-
-      const profileById = new Map((profiles ?? []).map((p) => [p.id, p]))
-      const cityByProvider = new Map((presence ?? []).map((p) => [p.provider_id, p.city]))
-
-      setConnections(
-        conns.map((c) => {
-          const counterpartId = model ? c.client_id : c.provider_id
-          const p = profileById.get(counterpartId)
-          return {
-            id: c.id,
-            fee_ngn: c.fee_ngn,
-            status: c.status as ConnectionStatus,
-            proposed_rate_ngn: c.proposed_rate_ngn,
-            created_at: c.created_at,
-            counterpart: {
-              id: counterpartId,
-              display_name: p?.display_name ?? null,
-              avatar_url: p?.avatar_url ?? null,
-              city: model ? null : (cityByProvider.get(c.provider_id) ?? null),
-            },
-          }
-        })
-      )
-      setLoading(false)
+  async function fetchConnections() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      window.location.href = '/login'
+      return
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const model = (profile?.role ?? user.user_metadata?.role ?? 'client') === 'model'
+    setIsModel(model)
+
+    // Connections where I am the client (client view) or the provider (provider inbox).
+    const { data: conns } = await supabase
+      .from('connections')
+      .select('id, fee_ngn, status, proposed_rate_ngn, service_type, created_at, client_id, provider_id')
+      .eq(model ? 'provider_id' : 'client_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (!conns || conns.length === 0) {
+      setConnections([])
+      setLoading(false)
+      return
+    }
+
+    // Counterpart profiles (provider for clients, client for providers).
+    const counterpartIds = [...new Set(conns.map((c) => (model ? c.client_id : c.provider_id)))]
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_url')
+      .in('id', counterpartIds)
+
+    // Cities for the provider side.
+    const providerIds = [...new Set(conns.map((c) => c.provider_id))]
+    const { data: presence } = await supabase
+      .from('provider_presence')
+      .select('provider_id, city')
+      .in('provider_id', providerIds)
+
+    const profileById = new Map((profiles ?? []).map((p) => [p.id, p]))
+    const cityByProvider = new Map((presence ?? []).map((p) => [p.provider_id, p.city]))
+
+    setConnections(
+      conns.map((c) => {
+        const counterpartId = model ? c.client_id : c.provider_id
+        const p = profileById.get(counterpartId)
+        return {
+          id: c.id,
+          fee_ngn: c.fee_ngn,
+          status: c.status as ConnectionStatus,
+          proposed_rate_ngn: c.proposed_rate_ngn,
+          service_type: (c as { service_type?: string | null }).service_type ?? null,
+          created_at: c.created_at,
+          counterpart: {
+            id: counterpartId,
+            display_name: p?.display_name ?? null,
+            avatar_url: p?.avatar_url ?? null,
+            city: model ? null : (cityByProvider.get(c.provider_id) ?? null),
+          },
+        }
+      })
+    )
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchConnections()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase])
 
   if (loading) {
@@ -137,19 +144,20 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 font-sans">
+    <PullToRefresh onRefresh={fetchConnections} className="max-w-5xl mx-auto space-y-8 font-sans">
       {/* Header */}
       <div className="border-b border-neutral-200/80 pb-6">
         <span className="text-xs uppercase tracking-widest font-semibold text-[#AC244D]">
           {isModel ? 'Incoming requests' : 'My bookings'}
         </span>
-        <h1 className="text-3xl font-serif font-normal text-neutral-900 tracking-tight mt-1">
+        <h1 className="text-3xl font-display font-semibold tracking-tight text-neutral-900 mt-1">
           {isModel ? 'Connection Requests' : 'My Bookings'}
         </h1>
-        <p className="text-sm text-neutral-500 mt-1">
+        <p className="flex items-center gap-1 text-sm text-neutral-500 mt-1">
           {isModel
             ? 'Clients who paid the connection fee to reach you.'
             : 'Companions you have connected with.'}
+          <HelpTip text="Active means the connection fee is paid and the private chat is open. Payment pending means a request started but the fee has not landed yet, and you can open a dispute from inside the chat within 24 hours of paying." />
         </p>
       </div>
 
@@ -169,10 +177,10 @@ export default function BookingsPage() {
           {!isModel && (
             <Link
               href="/"
-              className="mt-6 inline-flex items-center justify-center gap-1 rounded-full bg-[#AC244D] px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
+              className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-1 rounded-full bg-[#AC244D] px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
             >
               Browse Companions
-              <ArrowUpRight className="h-4 w-4" />
+              <ArrowUpRight aria-hidden className="h-4 w-4" />
             </Link>
           )}
         </div>
@@ -214,16 +222,21 @@ export default function BookingsPage() {
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-600">
                     <span className="inline-flex items-center gap-1">
-                      <Wallet className="h-3.5 w-3.5 text-neutral-400" />
+                      <Wallet aria-hidden className="h-3.5 w-3.5 text-neutral-400" />
                       Fee paid: <strong className="text-neutral-900">₦{c.fee_ngn.toLocaleString()}</strong>
                     </span>
+                    {serviceTypeLabel(c.service_type) !== null && (
+                      <span>
+                        Wants: <strong className="text-neutral-900">{serviceTypeLabel(c.service_type)}</strong>
+                      </span>
+                    )}
                     {c.proposed_rate_ngn != null && (
                       <span>
-                        Offered: <strong className="text-neutral-900">₦{c.proposed_rate_ngn.toLocaleString()}</strong>
+                        Offer: <strong className="text-neutral-900">{formatCompactPrice(c.proposed_rate_ngn)}</strong>
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1 text-neutral-400">
-                      <Calendar className="h-3.5 w-3.5" />
+                      <Calendar aria-hidden className="h-3.5 w-3.5" />
                       {formatDate(c.created_at)}
                     </span>
                   </div>
@@ -235,9 +248,9 @@ export default function BookingsPage() {
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-100 pt-4">
                   <Link
                     href={`/messages/${c.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <MessageCircle aria-hidden className="h-4 w-4" />
                     Open chat
                   </Link>
 
@@ -247,9 +260,9 @@ export default function BookingsPage() {
                 <div className="mt-4 border-t border-neutral-100 pt-4">
                   <button
                     onClick={() => setPayFor(c)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-amber-600"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-amber-600"
                   >
-                    <Wallet className="h-4 w-4" />
+                    <Wallet aria-hidden className="h-4 w-4" />
                     Complete payment
                   </button>
                 </div>
@@ -267,6 +280,6 @@ export default function BookingsPage() {
           onConnected={() => window.location.reload()}
         />
       )}
-    </div>
+    </PullToRefresh>
   )
 }

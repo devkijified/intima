@@ -4,14 +4,18 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PasswordInput } from '@/components/auth/PasswordInput'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
+import { CheckCircle } from '@/lib/icons'
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const [done, setDone] = useState(false)
   const supabase = createClient()
@@ -30,12 +34,14 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setPasswordError(null)
+    setConfirmError(null)
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
+      setPasswordError('Password must be at least 8 characters.')
       return
     }
     if (password !== confirm) {
-      setError('Passwords do not match.')
+      setConfirmError('Passwords do not match.')
       return
     }
     setLoading(true)
@@ -53,10 +59,15 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="w-full">
-      <Card className="w-full border-0 shadow-none md:border md:shadow-soft">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl">{done ? 'Password updated' : 'Choose a new password'}</CardTitle>
-          <CardDescription>
+      <Card className="w-full">
+        <CardHeader className="items-center space-y-1.5 text-center">
+          {done && (
+            <span className="mb-1.5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <CheckCircle className="h-7 w-7" />
+            </span>
+          )}
+          <CardTitle className="font-display text-3xl font-semibold tracking-tight text-charcoal">{done ? 'Password updated' : 'Choose a new password'}</CardTitle>
+          <CardDescription className="text-[15px] text-neutral-500">
             {done
               ? 'Your password has been changed. Sign in with it to continue.'
               : ready
@@ -67,33 +78,66 @@ export default function ResetPasswordPage() {
         {!done && ready && (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">New password</label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Confirm new password</label>
-                <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Repeat the new password" required />
-              </div>
+              {error && (
+                <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+              <PasswordInput
+                id="reset-password"
+                label="New password"
+                value={password}
+                onChange={setPassword}
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+                required
+                error={passwordError}
+              />
+              <PasswordInput
+                id="reset-password-confirm"
+                label="Confirm new password"
+                value={confirm}
+                onChange={setConfirm}
+                placeholder="Repeat the new password"
+                autoComplete="new-password"
+                required
+                error={confirmError}
+              />
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={loading} className="w-full bg-[#AC244D] hover:bg-[#8F1D40]">
-                {loading ? 'Updating...' : 'Update password'}
+              <Button type="submit" size="lg" disabled={loading} aria-busy={loading} className="w-full">
+                {loading ? (
+                  <span className="inline-flex items-center gap-2.5">
+                    <TikTokLoader size="sm" />
+                    Updating...
+                  </span>
+                ) : (
+                  'Update password'
+                )}
               </Button>
             </CardFooter>
           </form>
         )}
         {!done && !ready && (
           <CardContent>
-            {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-            <p className="text-center text-sm text-neutral-500">
-              If the link expired, request a new one.
-            </p>
+            {error && (
+              <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+            <div className="flex flex-col items-center gap-3 py-2">
+              <TikTokLoader size="md" />
+              <p className="text-center text-sm text-neutral-500">
+                If the link expired, request a new one.
+              </p>
+            </div>
           </CardContent>
         )}
         <CardFooter className="justify-center">
-          <Link href={done ? '/login' : '/forgot-password'} className="text-sm text-[#AC244D] hover:underline">
+          <Link
+            href={done ? '/login' : '/forgot-password'}
+            className="inline-flex min-h-[44px] items-center rounded-full px-2 text-sm font-medium text-[#AC244D] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AC244D]/40"
+          >
             {done ? 'Sign in' : 'Request a new link'}
           </Link>
         </CardFooter>
