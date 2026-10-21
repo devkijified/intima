@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Share, PlusSquare } from '@/lib/icons';
+import { claimPrompt, releasePrompt, onPromptFree } from '@/lib/promptGate';
 
 /**
  * Install pop, modelled on the download card people already
@@ -42,6 +43,7 @@ export function InstallPrompt() {
   const [deferred, setDeferred] = useState<any>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [open, setOpen] = useState(false);
+  const [gateOk, setGateOk] = useState(false);
 
   useEffect(() => {
     if (window.matchMedia('(display-mode: standalone)').matches) return;
@@ -64,6 +66,7 @@ export function InstallPrompt() {
 
     const onInstalled = () => {
       localStorage.setItem(INSTALLED_KEY, '1');
+      releasePrompt('install');
       setOpen(false);
     };
     window.addEventListener('appinstalled', onInstalled);
@@ -90,8 +93,25 @@ export function InstallPrompt() {
     };
   }, []);
 
+  // One prompt at a time (lib/promptGate): if the push card or the
+  // update card is showing, this pop waits its turn instead of
+  // stacking on top of them.
+  useEffect(() => {
+    if (!open || !mode) return;
+    if (claimPrompt('install')) {
+      setGateOk(true);
+      return () => releasePrompt('install');
+    }
+    setGateOk(false);
+    const off = onPromptFree(() => {
+      if (claimPrompt('install')) setGateOk(true);
+    });
+    return off;
+  }, [open, mode ]);
+
   const later = () => {
     localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS));
+    releasePrompt('install');
     setOpen(false);
   };
 
@@ -101,13 +121,14 @@ export function InstallPrompt() {
     const choice = await deferred.userChoice.catch(() => null);
     if (choice?.outcome === 'accepted') {
       localStorage.setItem(INSTALLED_KEY, '1');
+      releasePrompt('install');
       setOpen(false);
     } else {
       later();
     }
   };
 
-  if (!open || !mode) return null;
+  if (!open || !mode || !gateOk) return null;
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center sm:p-4">

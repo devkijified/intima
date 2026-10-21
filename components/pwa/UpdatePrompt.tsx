@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, X } from '@/lib/icons';
+import { claimPrompt, releasePrompt, onPromptFree } from '@/lib/promptGate';
 
 /**
  * "New version ready" prompt, the MamaShop pattern.
@@ -19,6 +20,7 @@ import { RefreshCw, X } from '@/lib/icons';
 export function UpdatePrompt() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [visible, setVisible] = useState(false);
+  const [gateOk, setGateOk] = useState(false);
   const [reloading, setReloading] = useState(false);
   const reloadingRef = useRef(false);
 
@@ -74,8 +76,24 @@ export function UpdatePrompt() {
     };
   }, []);
 
+  // One prompt at a time (lib/promptGate): wait while the install
+  // pop or the push card is showing instead of stacking.
+  useEffect(() => {
+    if (!visible) return;
+    if (claimPrompt('update')) {
+      setGateOk(true);
+      return () => releasePrompt('update');
+    }
+    setGateOk(false);
+    const off = onPromptFree(() => {
+      if (claimPrompt('update')) setGateOk(true);
+    });
+    return off;
+  }, [visible]);
+
   const dismiss = () => {
     sessionStorage.setItem('intima_update_dismissed', '1');
+    releasePrompt('update');
     setVisible(false);
   };
 
@@ -87,7 +105,7 @@ export function UpdatePrompt() {
     setTimeout(() => window.location.reload(), 4000);
   };
 
-  if (!visible || !waiting) return null;
+  if (!visible || !waiting || !gateOk) return null;
 
   return (
     <div className="fixed bottom-24 left-4 right-4 z-[95] sm:left-auto sm:right-6 sm:w-96">

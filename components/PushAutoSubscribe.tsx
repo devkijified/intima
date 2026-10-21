@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Bell, X } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { pushState, subscribePush, iosNeedsInstall } from '@/lib/push-client'
+import { claimPrompt, releasePrompt, onPromptFree } from '@/lib/promptGate'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
 
 const DONE_KEY = 'intima_push_auto'
@@ -25,13 +26,15 @@ function snooze() {
 
 // Push priming card, Apple-style: explain WHY in our own words first,
 // and only fire the browser's permission prompt when the user taps
-// Enable. (The previous version fired the system prompt cold, 2.5s
-// after first load, which earns denials that can never be re-asked.)
-// Signed-in users only, on home surfaces; Maybe later snoozes for 3
-// days; a granted or denied system permission is final.
+// Enable. Signed-in users only, on home surfaces; Maybe later snoozes
+// for 3 days; a granted or denied system permission is final.
+// iPhone browser tabs cannot receive push at all (Apple rule: Home
+// Screen apps only), so on those the card teaches the install step
+// first instead of offering an Enable button that could never work.
 export default function PushAutoSubscribe() {
   const pathname = usePathname()
   const [visible, setVisible] = useState(false)
+  const [needsInstall, setNeedsInstall] = useState(false)
   const [busy, setBusy] = useState(false)
   const [enabled, setEnabled] = useState(false)
 
@@ -49,20 +52,37 @@ export default function PushAutoSubscribe() {
     } catch {
       return
     }
-    // iOS Safari can't do push until the app is on the Home Screen; the
-    // install prompt and the notifications page cover that path.
-    if (iosNeedsInstall()) return
 
+    const installFirst = iosNeedsInstall()
     let cancelled = false
+    let off: (() => void) | undefined
     const t = setTimeout(async () => {
       try {
         const supabase = createClient()
         const { data } = await supabase.auth.getUser()
         if (!data.user || cancelled) return
+        // One prompt at a time (lib/promptGate): if the install pop
+        // or the update card is up, wait for the slot to free instead
+        // of sliding in underneath another prompt.
+        const ready = () => {
+          if (cancelled) return
+          if (claimPrompt('push')) {
+            setVisible(true)
+            return
+          }
+          off = onPromptFree(() => {
+            if (!cancelled && claimPrompt('push')) setVisible(true)
+          })
+        }
+        if (installFirst) {
+          setNeedsInstall(true)
+          ready()
+          return
+        }
         const state = await pushState()
         if (cancelled) return
         if (state === 'available') {
-          setVisible(true)
+          ready()
         } else {
           // Subscribed, denied or unsupported: never show the card.
           markDone()
@@ -72,13 +92,18 @@ export default function PushAutoSubscribe() {
     return () => {
       cancelled = true
       clearTimeout(t)
+      if (off) off()
     }
   }, [pathname])
+
+  // Never hold the prompt slot after unmount.
+  useEffect(() => () => releasePrompt('push'), [])
 
   if (!visible) return null
 
   const dismiss = () => {
     snooze()
+    releasePrompt('push')
     setVisible(false)
   }
 
@@ -89,13 +114,18 @@ export default function PushAutoSubscribe() {
       if (res.ok) {
         markDone()
         setEnabled(true)
-        setTimeout(() => setVisible(false), 1800)
+        setTimeout(() => {
+          releasePrompt('push')
+          setVisible(false)
+        }, 1800)
       } else if (res.reason === 'denied') {
         // The system prompt was answered No: respect it permanently.
         markDone()
+        releasePrompt('push')
         setVisible(false)
       } else {
         snooze()
+        releasePrompt('push')
         setVisible(false)
       }
     } finally {
@@ -116,7 +146,43 @@ export default function PushAutoSubscribe() {
         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
           <Bell aria-hidden className="h-6 w-6 text-primary" />
         </div>
-        {enabled ? (
+        {needsInstall ? (
+          <>
+            <h2 className="font-display text-lg font-semibold text-charcoal">
+              Turn on notifications
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-neutral-600">
+              On iPhone, notifications only work once Intima is on your
+              Home Screen. It takes ten seconds:
+            </p>
+            <ol className="mt-3 space-y-2.5">
+              {[
+                'Tap the Share button at the bottom of Safari.',
+                'Scroll down and tap Add to Home Screen.',
+                'Open Intima from your home screen, and we will turn notifications on there.',
+              ].map((step, i) => (
+                <li key={step} className="flex items-start gap-2.5 text-sm leading-relaxed text-neutral-600">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                    {i + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+            <button
+              onClick={dismiss}
+              className="mt-4 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-primary py-3 font-medium text-white transition hover:bg-primary-dark"
+            >
+              Got it
+            </button>
+            <button
+              onClick={dismiss}
+              className="mt-2 min-h-[44px] w-full rounded-xl py-2.5 font-medium text-neutral-500 transition hover:text-charcoal"
+            >
+              Maybe later
+            </button>
+          </>
+        ) : enabled ? (
           <>
             <h2 className="font-display text-lg font-semibold text-charcoal">
               You are all set
