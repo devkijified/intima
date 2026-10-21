@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { X, ShieldAlert } from '@/lib/icons'
 
 interface AgeVerificationModalProps {
@@ -84,7 +85,20 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
           </button>
 
           <p className="text-xs text-gray-400 text-center">
-            By tapping Verify & Continue, you confirm you are an adult and agree to our Terms of Service and Privacy Policy
+            By tapping Verify & Continue, you confirm you are an adult and agree to our{' '}
+            <Link
+              href="/terms"
+              className="-my-1 inline-block py-1 underline underline-offset-2 hover:text-gray-600"
+            >
+              Terms of Service
+            </Link>{' '}
+            and{' '}
+            <Link
+              href="/privacy"
+              className="-my-1 inline-block py-1 underline underline-offset-2 hover:text-gray-600"
+            >
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </div>

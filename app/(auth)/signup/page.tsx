@@ -243,8 +243,21 @@ export default function SignupPage() {
               )}
             </Button>
             <p className="text-center text-xs leading-relaxed text-neutral-500">
-              By creating an account you agree to Intima&apos;s terms of use and privacy policy.
-              You must be 18 or older to join.
+              By creating an account you agree to Intima&apos;s{' '}
+              <Link
+                href="/terms"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link
+                href="/privacy"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Privacy Policy
+              </Link>
+              . You must be 18 or older to join.
             </p>
             <p className="text-center text-sm text-neutral-600">
               Already have an account?{' '}
