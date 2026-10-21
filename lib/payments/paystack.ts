@@ -212,7 +212,7 @@ interface PaystackRefundRow {
 export async function listRefundsForTransaction(
   reference: string
 ): Promise<PaystackRefundRow[]> {
-  const txRes = await fetch(`${API_BASE}/transaction/${encodeURIComponent(reference)}`, {
+  const txRes = await fetch(`${API_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
     headers: authHeaders(),
   });
   const tx = await txRes.json().catch(() => null);
