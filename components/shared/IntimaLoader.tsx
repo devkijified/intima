@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils/helpers'
 /**
  * Intima's own loading indicator: the rose, drawn in black and
  * white while colour fills it from the base up, holds, then drains
- * and starts again. Two stacked copies of the same artwork: a grey
+ * and starts again. (Redeploy marker: production had stayed on the
+ * previous build after the rose commit landed.) Two stacked copies of the same artwork: a grey
  * one underneath, and the burgundy and gold one on top revealed by
  * an animated clip (keyframes live in app/globals.css).
  * prefers-reduced-motion rests the rose at full colour.
