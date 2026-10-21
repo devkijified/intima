@@ -6,7 +6,7 @@ import {
   type CompanionRequirements,
 } from '@/lib/connections/eligibility';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
-import { refundTransaction } from '@/lib/payments/paystack';
+import { refundTransaction, refundAmountNgn } from '@/lib/payments/paystack';
 import { SERVICE_TYPE_LABELS, type ServiceType } from '@/lib/connections/serviceType';
 import { formatCompactPrice } from '@/lib/utils/helpers';
 
@@ -209,7 +209,10 @@ export async function attemptRefund(
     return 'pending';
   }
   try {
-    const result = await refundTransaction(request.payment_ref);
+    // Board refunds return 85% of the fee; the platform keeps
+    // 15% for processing (see REFUND_PCT in lib/payments/paystack).
+    const fee = await boardFeeNgn(svc);
+    const result = await refundTransaction(request.payment_ref, refundAmountNgn(fee) * 100);
     const state =
       result.status === 'success' ? 'refunded' : result.status === 'pending' ? 'pending' : 'failed';
     await svc
@@ -250,8 +253,8 @@ export async function expireIfDue(
     title: 'Your request expired',
     body:
       refund === 'refunded'
-        ? `No companion picked up your request in time. Your ${formatCompactPrice(fee)} connection fee has been refunded.`
-        : `No companion picked up your request in time. Your ${formatCompactPrice(fee)} connection fee refund is being processed.`,
+        ? `No companion picked up your request in time. 85% of your connection fee (₦${refundAmountNgn(fee).toLocaleString('en-NG')}) has been refunded.`
+        : `No companion picked up your request in time. Your refund of 85% of the connection fee (₦${refundAmountNgn(fee).toLocaleString('en-NG')}) is being processed.`,
     link: '/board',
   }).catch(() => {});
   return { ...row, refund_state: refund };

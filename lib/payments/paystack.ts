@@ -148,21 +148,34 @@ export async function settleCoinTopup(
   return { credited: true };
 }
 
+/** Intima refunds this share of a payment; the rest is kept for processing. */
+export const REFUND_PCT = 85;
+
+/** The refund due on an amount, in naira: REFUND_PCT of it. */
+export function refundAmountNgn(amountNgn: number): number {
+  return Math.round((amountNgn * REFUND_PCT) / 100);
+}
+
 /**
- * Refund a settled transaction in full through Paystack. Used by
- * the request board when a request expires unfilled (or is
- * cancelled after payment): the fee goes back through the rail it
- * arrived on. Paystack processes refunds asynchronously, so the
- * answer is a state, not a guarantee: 'success' and 'processed'
- * mean the money is moving, 'pending' means it is queued.
+ * Refund a settled transaction through Paystack. Used by the
+ * request board when a request expires unfilled (or is cancelled
+ * after payment): the fee goes back through the rail it arrived
+ * on. Pass amountKobo for a partial refund of that amount; omit
+ * it to refund in full. Paystack processes refunds
+ * asynchronously, so the answer is a state, not a guarantee:
+ * 'success' and 'processed' mean the money is moving, 'pending'
+ * means it is queued.
  */
 export async function refundTransaction(
-  reference: string
+  reference: string,
+  amountKobo?: number
 ): Promise<{ status: 'success' | 'pending' | 'failed' }> {
   const res = await fetch(`${API_BASE}/refund`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ transaction: reference }),
+    body: JSON.stringify(
+      amountKobo ? { transaction: reference, amount: amountKobo } : { transaction: reference }
+    ),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok || !data?.status) {

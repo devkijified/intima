@@ -146,10 +146,27 @@ export default function TermsPage() {
         <p>
           If something goes wrong, either side can open a dispute within 24
           hours of paying the fee. The dispute covers the connection fee
-          only. Where a dispute is resolved in the client&apos;s favour, the
-          fee is refunded through the original payment method. The
+          only. Where a dispute is resolved in the client&apos;s favour,
+          85% of the fee is refunded through the original payment method
+          and 15% is kept for payment processing. The
           companion&apos;s rate is never part of a dispute on Intima,
           because that money never passes through us.
+        </p>
+      </Section>
+
+      <Section title="Request board">
+        <p>
+          You can post a request describing what you want, and verified
+          companions in your city can respond. Posting a request means
+          paying the connection fee up front. The request stays open for
+          48 hours, and if you pick a companion, a normal connection
+          opens at the rate you both agreed.
+        </p>
+        <p>
+          If nobody fills your request within 48 hours, or you cancel it
+          while it is still open, 85% of the fee is refunded through the
+          original payment method. The remaining 15% is kept for payment
+          processing.
         </p>
       </Section>
 

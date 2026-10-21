@@ -169,7 +169,7 @@ export default function BoardPage() {
       }
       showToast(
         json?.refund_state === 'refunded'
-          ? 'Request cancelled. Your fee has been refunded.'
+          ? 'Request cancelled. 85% of your fee (₦4,250) has been refunded.'
           : 'Request cancelled.'
       )
       await load()
@@ -293,7 +293,7 @@ export default function BoardPage() {
         <div>
           <h1 className="t-page-title flex items-center gap-2 font-display font-semibold text-charcoal">
             Request board
-            <HelpTip text="Post what you want and your offer. Verified companions in your city respond, and you pick who to connect with. The connection fee is refunded in full if nobody fills your request in 48 hours." />
+            <HelpTip text="Post what you want and your offer. Verified companions in your city respond, and you pick who to connect with. If nobody fills your request in 48 hours, 85% of the connection fee (₦4,250 of ₦5,000) is refunded and 15% is kept for processing." />
           </h1>
           <p className="t-body mt-1 text-neutral-500">
             {isModel
@@ -376,7 +376,7 @@ export default function BoardPage() {
                 The connection fee is ₦5,000, paid now.
                 <HelpTip text="The fee holds your request on the board for 48 hours. If nobody fills it, or you cancel before it is filled, the fee comes back to you through the same payment method." />
               </p>
-              <p className="mt-0.5 text-xs text-neutral-500">Refunded in full if your request is not filled in 48 hours.</p>
+              <p className="mt-0.5 text-xs text-neutral-500">85% of the fee is refunded if your request is not filled in 48 hours.</p>
             </div>
             {formError && <p className="text-sm text-red-500">{formError}</p>}
             <button
@@ -546,13 +546,13 @@ export default function BoardPage() {
                 {r.status === 'expired' && (
                   <p className="mt-3 text-sm text-neutral-600">
                     {r.refund_state === 'refunded'
-                      ? 'Expired with no pick. Your ₦5,000 fee has been refunded.'
-                      : 'Expired with no pick. Your ₦5,000 fee refund is being processed.'}
+                      ? 'Expired with no pick. 85% of your fee (₦4,250) has been refunded.'
+                      : 'Expired with no pick. Your refund (85% of the fee, ₦4,250) is being processed.'}
                   </p>
                 )}
                 {r.status === 'cancelled' && (
                   <p className="mt-3 text-sm text-neutral-500">
-                    Cancelled.{r.refund_state === 'refunded' ? ' Your fee has been refunded.' : r.refund_state ? ' Your fee refund is being processed.' : ''}
+                    Cancelled.{r.refund_state === 'refunded' ? ' 85% of your fee (₦4,250) has been refunded.' : r.refund_state ? ' Your refund (85% of the fee) is being processed.' : ''}
                   </p>
                 )}
               </article>

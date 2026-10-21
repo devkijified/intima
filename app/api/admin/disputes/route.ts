@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
     title: body.outcome === 'refunded' ? 'Dispute resolved: fee refunded' : 'Dispute resolved: fee released',
     body:
       body.outcome === 'refunded'
-        ? 'Our team reviewed the dispute and refunded the connection fee. The connection is closed.'
+        ? 'Our team reviewed the dispute and refunded 85% of the connection fee. The connection is closed.'
         : 'Our team reviewed the dispute and the connection fee stands. The connection stays open.',
     link: '/messages',
   }).catch(() => {});
