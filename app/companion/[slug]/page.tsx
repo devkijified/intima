@@ -21,6 +21,7 @@ import { companionShareLink, shareLink } from '@/lib/links'
 import { StoryViewer, type Story } from '@/components/stories/StoryViewer'
 import { SubscribeCard } from '@/components/social/SubscribeCard'
 import { PrivateSnaps } from '@/components/social/PrivateSnaps'
+import { PhotoWatermark } from '@/components/media/PhotoWatermark'
 import { ProfileViewTracker } from '@/components/analytics/ProfileViewTracker'
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import type { MockReview } from '@/lib/map/mockReviews'
@@ -453,6 +454,7 @@ export default function ModelDetailPage() {
           created_at: s.created_at,
           provider_name: p.display_name ?? 'Intima companion',
           provider_avatar: p.avatar_url,
+          provider_username: p.username ?? null,
         }))
       )
       setLiveSessionId(liveRow?.id ?? null)
@@ -1042,6 +1044,7 @@ export default function ModelDetailPage() {
                     <Play aria-hidden className="h-2.5 w-2.5 fill-white" />
                     {formatCompactCount(Math.max(1, Math.round(provider.viewCount / Math.max(1, totalSlides))))}
                   </span>
+                  <PhotoWatermark username={provider.username} className="bottom-1 right-1" />
                   {slide.kind === 'video' && (
                     <span className="absolute right-1 top-1 rounded bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white">
                       VIDEO
@@ -1096,6 +1099,7 @@ export default function ModelDetailPage() {
         <PrivateSnaps
           providerId={provider.id}
           providerName={provider.displayName}
+          providerUsername={provider.username}
           isOwner={viewerIsOwner}
           active={activeTab === 'private'}
           onVisibilityChange={setPrivateTabVisible}
@@ -1121,7 +1125,8 @@ export default function ModelDetailPage() {
             <X aria-hidden className="h-5 w-5" />
           </button>
           </Tooltip>
-          <div className="max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
+            <PhotoWatermark username={provider.username} variant="edge" />
             {slides[lightbox].kind === 'photo' ? (
               <img src={slides[lightbox].src} alt="" className="max-h-[80vh] w-full rounded-2xl object-contain" draggable={false} />
             ) : (
