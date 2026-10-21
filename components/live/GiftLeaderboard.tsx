@@ -12,8 +12,9 @@ interface LeaderRow {
 }
 
 /** In-stream gift leaderboard: top gifters this session, live-updated.
- * The overlay variant floats over the stage on mobile; the rail
- * variant is the static top-3 block pinned in the desktop chat rail. */
+ * The overlay variant floats over the stage on mobile (top 5); the
+ * rail variant is the static top-3 block pinned in the desktop
+ * chat rail. */
 export function GiftLeaderboard({
   sessionId,
   variant = 'overlay',
@@ -48,12 +49,17 @@ export function GiftLeaderboard({
         setRows(ids
           .map((id) => ({ userId: id, name: names[id] ?? 'Someone', coins: totals[id], level: levelBy[id] ?? 1 }))
           .sort((a, b) => b.coins - a.coins)
-          .slice(0, 5))
+          .slice(0, 10))
       }
     }
     load()
+    // The topic carries the variant: the room renders this component
+    // twice (mobile overlay + desktop rail), and supabase returns the
+    // SAME channel object for a repeated topic, so a second instance
+    // adding a postgres_changes listener after the first subscribed
+    // throws and crashes the whole room page.
     const ch = supabase
-      .channel(`lb-${sessionId}`)
+      .channel(`lb-${sessionId}-${variant}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'gift_transactions', filter: `session_id=eq.${sessionId}` }, load)
       .subscribe()
     return () => { live = false; supabase.removeChannel(ch) }
@@ -92,7 +98,7 @@ export function GiftLeaderboard({
         <Star className="h-3 w-3" /> Top gifters
       </p>
       <div className="mt-1.5 space-y-1.5">
-        {rows.map((r, i) => (
+        {rows.slice(0, 5).map((r, i) => (
           <div key={r.userId} className="flex items-center justify-between text-[11px] text-white">
             <span className="flex items-center gap-1.5 truncate">
               <span className={`font-bold ${i === 0 ? 'text-gold' : 'text-white/60'}`}>{i + 1}.</span>
