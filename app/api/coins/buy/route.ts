@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     const reference = `intima-${user.id.slice(0, 8)}-${Date.now().toString(36)}`;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://intima-snowy.vercel.app';
+    const appUrl = new URL(req.url).origin;
 
     const res = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   const code = req.nextUrl.searchParams.get('code');
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://intima-snowy.vercel.app';
+  const appUrl = new URL(req.url).origin;
   if (!code) {
     return NextResponse.redirect(new URL('/admin/email-setup?error=no_code', appUrl));
   }

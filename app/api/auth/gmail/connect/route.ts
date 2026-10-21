@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://intima-snowy.vercel.app';
+  const appUrl = new URL(req.url).origin;
   const oauth2 = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
