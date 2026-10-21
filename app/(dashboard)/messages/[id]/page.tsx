@@ -594,7 +594,7 @@ export default function ThreadPage() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto bg-cream/40 px-4 py-4">
         {loading ? (
-          <div className="flex h-full items-center justify-center">
+          <div data-page-loader className="flex h-full items-center justify-center">
             <IntimaLoader size="lg" />
           </div>
         ) : msgs.length === 0 ? (
