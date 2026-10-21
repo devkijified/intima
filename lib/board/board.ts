@@ -6,7 +6,12 @@ import {
   type CompanionRequirements,
 } from '@/lib/connections/eligibility';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
-import { refundTransaction, refundAmountNgn } from '@/lib/payments/paystack';
+import {
+  refundTransaction,
+  refundAmountNgn,
+  listRefundsForTransaction,
+  refundStateForGatewayStatus,
+} from '@/lib/payments/paystack';
 import { SERVICE_TYPE_LABELS, type ServiceType } from '@/lib/connections/serviceType';
 import { formatCompactPrice } from '@/lib/utils/helpers';
 
@@ -221,11 +226,28 @@ export async function attemptRefundDetailed(
       .eq('id', request.id);
     return { state: 'pending', error: null };
   }
+  // Board refunds return 85% of the fee; the platform keeps
+  // 15% for processing (see REFUND_PCT in lib/payments/paystack).
+  const fee = await boardFeeNgn(svc);
+  const paymentRef = request.payment_ref;
+  // Adopt a refund that already exists at the gateway before
+  // creating another: expiry, the cron sweep and an admin retry
+  // can all reach this code for the same request, and Paystack
+  // refuses a second refund once the total would pass the
+  // original charge. An in-flight refund is a healthy pending,
+  // not a failure to retry blindly.
+  const existing = await listRefundsForTransaction(paymentRef);
+  const live = existing.find((r) => refundStateForGatewayStatus(r.status) !== 'failed');
+  if (live) {
+    const state = refundStateForGatewayStatus(live.status);
+    await svc
+      .from('board_requests')
+      .update({ refund_state: state, updated_at: new Date().toISOString() })
+      .eq('id', request.id);
+    return { state, error: null };
+  }
   try {
-    // Board refunds return 85% of the fee; the platform keeps
-    // 15% for processing (see REFUND_PCT in lib/payments/paystack).
-    const fee = await boardFeeNgn(svc);
-    const result = await refundTransaction(request.payment_ref, refundAmountNgn(fee) * 100);
+    const result = await refundTransaction(paymentRef, refundAmountNgn(fee) * 100);
     const state =
       result.status === 'success' ? 'refunded' : result.status === 'pending' ? 'pending' : 'failed';
     await svc
@@ -238,6 +260,21 @@ export async function attemptRefundDetailed(
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Refund request failed';
+    // A refusal saying a refund already covers this charge means
+    // one exists after all (a race, or the list read missed it):
+    // adopt its state instead of recording a failure.
+    if (/exceed/i.test(message)) {
+      const again = await listRefundsForTransaction(paymentRef);
+      const found = again.find((r) => refundStateForGatewayStatus(r.status) !== 'failed');
+      if (found) {
+        const state = refundStateForGatewayStatus(found.status);
+        await svc
+          .from('board_requests')
+          .update({ refund_state: state, updated_at: new Date().toISOString() })
+          .eq('id', request.id);
+        return { state, error: null };
+      }
+    }
     console.error(`board refund failed for request ${request.id}: ${message}`);
     await svc
       .from('board_requests')

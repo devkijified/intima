@@ -187,6 +187,45 @@ export async function refundTransaction(
   return { status: 'failed' };
 }
 
+/** Map a Paystack refund status onto the board's refund states. */
+export function refundStateForGatewayStatus(
+  status: string | undefined
+): 'refunded' | 'pending' | 'failed' {
+  const s = String(status ?? '');
+  if (s === 'success' || s === 'processed') return 'refunded';
+  if (s === 'pending' || s === 'processing') return 'pending';
+  return 'failed';
+}
+
+interface PaystackRefundRow {
+  amount?: number;
+  status?: string;
+}
+
+/**
+ * The refunds already sitting on a transaction at Paystack. The
+ * list endpoint filters by the numeric transaction id, so resolve
+ * it from our reference first. Any failure reads as "none found";
+ * callers treat that as a prompt to look again, never as proof a
+ * refund does not exist.
+ */
+export async function listRefundsForTransaction(
+  reference: string
+): Promise<PaystackRefundRow[]> {
+  const txRes = await fetch(`${API_BASE}/transaction/${encodeURIComponent(reference)}`, {
+    headers: authHeaders(),
+  });
+  const tx = await txRes.json().catch(() => null);
+  const txId = (tx?.data as { id?: number } | undefined)?.id;
+  if (!txRes.ok || !txId) return [];
+  const res = await fetch(`${API_BASE}/refund?transaction=${txId}&perPage=50`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !Array.isArray(data?.data)) return [];
+  return data.data as PaystackRefundRow[];
+}
+
 /** Flip a card_payments row to paid, claiming the transition once. */
 export async function markCardPaymentPaid(
   svc: SupabaseClient,

@@ -24,6 +24,7 @@ interface PaystackEvent {
     metadata?: Record<string, unknown>;
     authorization?: { channel?: string; receiver_bank_account_number?: string };
     customer?: { customer_code?: string };
+    transaction?: { reference?: string };
   };
 }
 
@@ -35,7 +36,9 @@ interface PaystackEvent {
  * before the callback: coin top-ups credit through the shared
  * idempotent settler; connection fees flip card_payments to paid; a
  * board fee also opens its request right here, so nothing depends on
- * the payer's browser coming back.
+ * the payer's browser coming back. Refund outcomes (refund.processed,
+ * refund.failed) land here too and close out the board request's
+ * refund_state, whenever Paystack finishes with them.
  */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -49,6 +52,26 @@ export async function POST(req: NextRequest) {
     event = JSON.parse(rawBody) as PaystackEvent;
   } catch {
     return NextResponse.json({ error: 'Bad body' }, { status: 400 });
+  }
+
+  // Refund outcomes arrive as their own events, potentially hours
+  // after the refund was created: close out the board request's
+  // refund_state so the final state lands even if nobody is
+  // watching. Guarded to rows still waiting on an outcome.
+  if (event?.event === 'refund.processed' || event?.event === 'refund.failed') {
+    const txRef = event.data?.transaction?.reference;
+    if (txRef) {
+      const svc = service();
+      await svc
+        .from('board_requests')
+        .update({
+          refund_state: event.event === 'refund.processed' ? 'refunded' : 'failed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('payment_ref', txRef)
+        .in('refund_state', ['pending', 'failed']);
+    }
+    return NextResponse.json({ ok: true, settled: 'refund' });
   }
 
   if (event?.event !== 'charge.success' || !event.data?.reference) {
