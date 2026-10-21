@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Room, createLocalVideoTrack, createLocalAudioTrack, VideoPresets, type LocalVideoTrack, type LocalAudioTrack, type TrackPublishOptions } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
+import { GiftFxLayer, type GiftFxHandle } from '@/components/live/GiftFx'
+import { GiftMenuEditor } from '@/components/live/GiftMenuEditor'
+import type { GiftFxEvent } from '@/components/live/giftTypes'
+import { ngnForCoins } from '@/lib/utils/helpers'
 import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift, Eye, Crown, CheckCircle } from '@/lib/icons'
+import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 
 // Simulcast ladder for the camera, stated on purpose rather than left
 // to SDK defaults: the full capture (720p class on a phone) stays the
@@ -46,6 +51,7 @@ export default function GoLivePage() {
   const [schedMsg, setSchedMsg] = useState('')
 
   const router = useRouter()
+  const fxRef = useRef<GiftFxHandle>(null)
   const roomRef = useRef<Room | null>(null)
   const videoEl = useRef<HTMLVideoElement>(null)
   const videoTrack = useRef<LocalVideoTrack | null>(null)
@@ -257,19 +263,59 @@ export default function GoLivePage() {
     }
   }
 
-  // Track gift earnings while live.
+  // Track gift earnings while live, and run the same gift FX the
+  // viewers see (the host watches her own stage effects).
   useEffect(() => {
     if (phase !== 'live' || !sessionId) return
     const supabase = createClient()
+    let catalog: { id: string; name: string; emoji: string; coin_cost: number; anim_tier: GiftFxEvent['animTier'] }[] = []
+    const nameCache = new Map<string, string>()
+    const resolveSenderName = async (senderId: string): Promise<string> => {
+      const hit = nameCache.get(senderId)
+      if (hit) return hit
+      const { data: sender } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', senderId)
+        .maybeSingle()
+      const name: string = sender?.display_name ?? 'Someone'
+      nameCache.set(senderId, name)
+      return name
+    }
+    supabase
+      .from('gift_catalog')
+      .select('id, name, emoji, coin_cost, anim_tier')
+      .then(({ data }) => {
+        catalog = (data ?? []) as typeof catalog
+      })
     const ch = supabase
       .channel(`host-gifts-${sessionId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'gift_transactions', filter: `session_id=eq.${sessionId}` },
-        (payload) => {
-          const row = payload.new as { coin_cost: number; host_earnings_coins: number }
+        async (payload) => {
+          const row = payload.new as {
+            id: string
+            gift_id: string
+            sender_id: string
+            coin_cost: number
+            host_earnings_coins: number
+          }
           setGiftCount((n) => n + 1)
           setGiftEarnings((n) => n + (row.host_earnings_coins ?? 0))
+          const gift = catalog.find((g) => g.id === row.gift_id)
+          if (!gift) return
+          const senderName = await resolveSenderName(row.sender_id)
+          fxRef.current?.push({
+            id: row.id,
+            giftId: gift.id,
+            name: gift.name,
+            emoji: gift.emoji,
+            animTier: gift.anim_tier ?? 'float',
+            coinCost: gift.coin_cost,
+            senderId: row.sender_id,
+            senderName,
+          })
         }
       )
       .subscribe()
@@ -329,7 +375,7 @@ export default function GoLivePage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-charcoal">Stream title</label>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Evening chat"
-                maxLength={80} className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary" />
+                maxLength={80} className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-base outline-none focus:border-primary md:text-sm" />
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-charcoal">Access</label>
@@ -361,7 +407,8 @@ export default function GoLivePage() {
               {showPremiumChecks && premium && !premium.eligible && (
                 <div className="mt-3 rounded-2xl border border-neutral-200 p-4">
                   <p className="flex items-center gap-2 text-sm font-semibold text-charcoal">
-                    <Crown className="h-4 w-4 text-gold" /> Premium is earned, not given
+                    <Crown className="h-4 w-4 text-gold" aria-hidden /> Premium is earned, not given
+                    <HelpTip text="Premium unlocks fans only streams. Each line below is a trust mark: a verified ID, enough completed connections, strong ratings, fast replies, few cancellations, and a fan club price set. When every line passes, Premium opens on its own." />
                   </p>
                   <p className="mt-0.5 text-xs text-neutral-500">
                     Fans only shows are a reward for a proven track record. Here is where you stand:
@@ -391,7 +438,7 @@ export default function GoLivePage() {
               <div>
                 <label className="mb-1 block text-sm font-medium text-charcoal">Join price (N)</label>
                 <input type="number" min={100} step={100} value={price} onChange={(e) => setPrice(e.target.value)}
-                  placeholder="e.g. 2000" className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary" />
+                  placeholder="e.g. 2000" className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-base outline-none focus:border-primary md:text-sm" />
                 <p className="mt-1 text-xs text-neutral-400">Viewers pay once to join. Your fan club subscribers enter free.</p>
               </div>
             )}
@@ -402,18 +449,21 @@ export default function GoLivePage() {
               </div>
             )}
             <button type="submit" disabled={phase === 'publishing'}
-              className="w-full rounded-full bg-primary py-3 text-sm font-bold text-white disabled:opacity-50">
+              className="flex min-h-[48px] w-full items-center justify-center rounded-full bg-primary py-3 text-sm font-bold text-white disabled:opacity-50">
               {phase === 'publishing' ? 'Starting camera...' : 'Go live now'}
             </button>
             <div className="rounded-2xl border border-neutral-200 p-4">
-              <label className="block text-sm font-medium text-charcoal">Schedule for later</label>
+              <label className="flex items-center gap-1 text-sm font-medium text-charcoal">
+                Schedule for later
+                <HelpTip text="Announce the stream now and it appears under Upcoming on the live page. When the time comes, open this console and go live as usual. Your followers get a notification the moment you start." />
+              </label>
               <p className="mt-0.5 text-xs text-neutral-400">
                 Same title, access, and price as above, but announced in Upcoming instead of starting now.
               </p>
               <input type="datetime-local" value={schedWhen} onChange={(e) => setSchedWhen(e.target.value)}
                 className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-primary" />
               <button type="button" onClick={handleSchedule} disabled={!schedWhen || scheduling}
-                className="mt-3 w-full rounded-full bg-charcoal py-2.5 text-sm font-bold text-white disabled:opacity-40">
+                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full bg-charcoal py-2.5 text-sm font-bold text-white disabled:opacity-40">
                 {scheduling ? 'Scheduling...' : 'Schedule stream'}
               </button>
               {schedMsg && <p className="mt-2 text-center text-xs text-neutral-500">{schedMsg}</p>}
@@ -423,6 +473,7 @@ export default function GoLivePage() {
             </p>
           </form>
         </div>
+        <GiftMenuEditor />
       </div>
     )
   }
@@ -431,6 +482,8 @@ export default function GoLivePage() {
   return (
     <div className="fixed inset-0 z-40 bg-black">
       <video ref={videoEl} autoPlay playsInline muted className="h-full w-full object-cover" />
+      {/* Gift FX: the same tiered effects her viewers see */}
+      <GiftFxLayer ref={fxRef} myId={null} />
       {/* Top bar */}
       <div className="absolute left-0 right-0 top-0 flex items-center justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <span className="flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
@@ -444,21 +497,32 @@ export default function GoLivePage() {
       <div className="absolute left-4 top-16 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur">
         <Gift className="h-3.5 w-3.5 text-gold" />
         {giftCount} gifts · {giftEarnings.toLocaleString()} coins
+        <span className="text-white/60">≈ {ngnForCoins(giftEarnings)}</span>
+        <HelpTip
+          side="bottom"
+          text="This is your share of the gifts from this stream. Intima keeps half of every gift, so a 100 coin gift adds 50 coins here."
+        />
       </div>
       {/* Bottom controls */}
       <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-4 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <button onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur active:scale-95">
-          {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-        </button>
-        <button onClick={flipCamera} aria-label="Flip camera"
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur active:scale-95">
-          <RefreshCw className="h-5 w-5" />
-        </button>
-        <button onClick={endStream} disabled={ending} aria-label="End stream"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg active:scale-95 disabled:opacity-50">
-          <XCircle className="h-7 w-7" />
-        </button>
+        <Tooltip label={muted ? 'Unmute' : 'Mute'}>
+          <button onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur active:scale-95">
+            {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          </button>
+        </Tooltip>
+        <Tooltip label="Flip camera">
+          <button onClick={flipCamera} aria-label="Flip camera"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur active:scale-95">
+            <RefreshCw className="h-5 w-5" />
+          </button>
+        </Tooltip>
+        <Tooltip label="End stream">
+          <button onClick={endStream} disabled={ending} aria-label="End stream"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg active:scale-95 disabled:opacity-50">
+            <XCircle className="h-7 w-7" />
+          </button>
+        </Tooltip>
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/0">
           <Camera className="hidden h-5 w-5" />
         </span>

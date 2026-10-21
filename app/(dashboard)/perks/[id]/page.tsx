@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Camera, Heart, Loader2, Share2, Trophy } from '@/lib/icons';
+import { coinsWithNgn } from '@/lib/utils/helpers';
 import { createClient } from '@/lib/supabase/client';
+import { Tooltip, HelpTip } from '@/components/ui/Tooltip';
 import { reencodeImage } from '@/lib/uploads/reencode';
 
 const BUCKET = 'contest-entries';
@@ -154,7 +156,7 @@ export default function ContestPage() {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6">
         <p className="text-sm text-red-600">{error}</p>
-        <Link href="/perks" className="mt-3 inline-block text-sm font-semibold text-primary">
+        <Link href="/perks" className="mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold text-primary">
           Back to Perks
         </Link>
       </div>
@@ -183,7 +185,7 @@ export default function ContestPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6">
-      <Link href="/perks" className="text-sm font-semibold text-primary">
+      <Link href="/perks" className="inline-flex min-h-[44px] items-center text-sm font-semibold text-primary">
         All contests
       </Link>
 
@@ -195,11 +197,12 @@ export default function ContestPage() {
           <h1 className="font-display text-2xl font-semibold text-charcoal">{contest.title}</h1>
           {contest.theme && <p className="mt-0.5 text-sm text-neutral-500">{contest.theme}</p>}
           <p className="mt-1 text-xs text-neutral-500">
-            Prize: <span className="font-semibold text-charcoal">{contest.prizeCoins.toLocaleString()} coins</span>
+            Prize: <span className="font-semibold text-charcoal">{coinsWithNgn(contest.prizeCoins)}</span>
             {contest.prizeSplit.length > 1 &&
               ` split ${contest.prizeSplit.map((p) => `${p}%`).join(' / ')}`}
             {' · '}
-            {live ? `Ends ${endsLabel}` : contest.phase === 'upcoming' ? 'Opens soon' : 'Voting closed'}
+            {live ? `Ends ${endsLabel}` : contest.phase === 'upcoming' ? 'Opens soon' : 'Voting closed'}{' '}
+            <HelpTip text="The split is the share each place wins: first place takes the first percentage, second takes the next, and so on. You get one vote and can move it any time before the contest ends, and only verified members can vote or enter." />
           </p>
         </div>
       </div>
@@ -232,16 +235,16 @@ export default function ContestPage() {
             onChange={(e) => setCaption(e.target.value)}
             placeholder="Caption (optional)"
             maxLength={300}
-            className="mt-3 w-full rounded-2xl bg-cream px-4 py-3 text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40"
+            className="mt-3 w-full rounded-2xl bg-cream px-4 py-3 text-base md:text-sm text-charcoal outline-none ring-1 ring-black/[0.06] placeholder:text-neutral-400 focus:ring-primary/40"
           />
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={entering}
-              className="btn-soft flex items-center gap-2 px-4 py-2.5 text-[13px] disabled:opacity-50"
+              className="btn-soft flex min-h-[44px] items-center gap-2 px-4 py-2.5 text-[13px] disabled:opacity-50"
             >
-              <Camera className="h-4 w-4" />
+              <Camera aria-hidden className="h-4 w-4" />
               {picked ? 'Change photo' : 'Choose photo'}
             </button>
             {picked && <span className="min-w-0 flex-1 truncate text-xs text-neutral-500">{picked.name}</span>}
@@ -302,25 +305,27 @@ export default function ContestPage() {
                       type="button"
                       onClick={() => void vote(e.id)}
                       disabled={!live || voteBusy === e.id || mine}
-                      className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 ${
+                      className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 ${
                         voted ? 'bg-primary text-white' : 'bg-cream text-charcoal ring-1 ring-black/[0.06]'
                       }`}
                     >
                       {voteBusy === e.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Heart className="h-4 w-4" />
+                        <Heart aria-hidden className="h-4 w-4" />
                       )}
                       {mine ? 'Your entry' : voted ? 'Voted' : 'Vote'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void share(e)}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-cream ring-1 ring-black/[0.06] transition-all active:scale-95"
-                      aria-label={`Share ${e.providerName}'s entry`}
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </button>
+                    <Tooltip label={`Share ${e.providerName}'s entry`}>
+                      <button
+                        type="button"
+                        onClick={() => void share(e)}
+                        className="flex h-11 w-11 items-center justify-center rounded-full bg-cream ring-1 ring-black/[0.06] transition-all active:scale-95"
+                        aria-label={`Share ${e.providerName}'s entry`}
+                      >
+                        <Share2 aria-hidden className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
                   </div>
                   {shared === e.id && <p className="mt-1.5 text-xs text-emerald-600">Link copied. Send it to your voters.</p>}
                 </div>

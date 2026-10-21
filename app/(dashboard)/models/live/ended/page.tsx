@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { ngnForCoins } from '@/lib/utils/helpers'
 import { Eye, Gift, Clock, Coins, Loader2 } from '@/lib/icons'
 
 interface Summary {
@@ -63,29 +64,29 @@ export default function StreamEndedPage() {
             <h1 className="mt-2 font-display text-2xl font-semibold text-charcoal">{summary.title}</h1>
             <div className="mt-6 grid grid-cols-3 gap-3">
               <div className="rounded-2xl bg-cream p-4">
-                <Clock className="mx-auto h-5 w-5 text-neutral-400" />
+                <Clock className="mx-auto h-5 w-5 text-neutral-400" aria-hidden />
                 <p className="mt-1 text-lg font-bold text-charcoal">{minutes ?? '…'}</p>
                 <p className="text-xs text-neutral-500">minutes</p>
               </div>
               <div className="rounded-2xl bg-cream p-4">
-                <Gift className="mx-auto h-5 w-5 text-gold" />
+                <Gift className="mx-auto h-5 w-5 text-gold" aria-hidden />
                 <p className="mt-1 text-lg font-bold text-charcoal">{summary.giftCount}</p>
                 <p className="text-xs text-neutral-500">gifts</p>
               </div>
               <div className="rounded-2xl bg-cream p-4">
-                <Coins className="mx-auto h-5 w-5 text-primary" />
+                <Coins className="mx-auto h-5 w-5 text-primary" aria-hidden />
                 <p className="mt-1 text-lg font-bold text-charcoal">{summary.giftEarnings.toLocaleString()}</p>
                 <p className="text-xs text-neutral-500">coins earned</p>
               </div>
             </div>
             <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-neutral-400">
-              <Eye className="h-3.5 w-3.5" /> ≈ ₦{(summary.giftEarnings * 10).toLocaleString()} at ₦10 per coin
+              <Eye className="h-3.5 w-3.5" aria-hidden /> ≈ {ngnForCoins(summary.giftEarnings)} at ₦10 per coin
             </p>
             <div className="mt-6 flex gap-3">
-              <Link href="/models/live" className="flex-1 rounded-full bg-primary py-3 text-sm font-bold text-white">
+              <Link href="/models/live" className="flex flex-1 min-h-[44px] items-center justify-center rounded-full bg-primary py-3 text-sm font-bold text-white">
                 Go live again
               </Link>
-              <Link href="/dashboard" className="flex-1 rounded-full border border-neutral-200 py-3 text-sm font-semibold text-charcoal">
+              <Link href="/dashboard" className="flex flex-1 min-h-[44px] items-center justify-center rounded-full border border-neutral-200 py-3 text-sm font-semibold text-charcoal">
                 Dashboard
               </Link>
             </div>

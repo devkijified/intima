@@ -1,8 +1,10 @@
 'use client';
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Trophy } from '@/lib/icons';
+import { coinsWithNgn } from '@/lib/utils/helpers';
 
 interface ContestCard {
   id: string;
@@ -33,17 +35,20 @@ export default function PerksPage() {
   const [contests, setContests] = useState<ContestCard[] | null>(null);
   const [error, setError] = useState('');
 
+  const loadContests = async () => {
+    const res = await fetch('/api/perks');
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) setContests(d.contests ?? []);
+    else setError(d.error ?? 'Could not load Perks.');
+  };
+
   useEffect(() => {
-    (async () => {
-      const res = await fetch('/api/perks');
-      const d = await res.json().catch(() => ({}));
-      if (res.ok) setContests(d.contests ?? []);
-      else setError(d.error ?? 'Could not load Perks.');
-    })();
+    loadContests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6">
+    <PullToRefresh onRefresh={loadContests} className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6">
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
           <Trophy className="h-5 w-5 text-primary" />
@@ -100,7 +105,7 @@ export default function PerksPage() {
             </div>
             <div className="mt-3 flex items-center gap-4 text-xs text-neutral-500">
               <span className="font-semibold text-charcoal">
-                Prize: {c.prizeCoins.toLocaleString()} coins
+                Prize: {coinsWithNgn(c.prizeCoins)}
               </span>
               <span>{c.entryCount} {c.entryCount === 1 ? 'entry' : 'entries'}</span>
               <span>
@@ -110,6 +115,6 @@ export default function PerksPage() {
           </Link>
         ))}
       </div>
-    </div>
+    </PullToRefresh>
   );
 }

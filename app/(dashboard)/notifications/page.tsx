@@ -1,5 +1,7 @@
 'use client'
 
+import { PullToRefresh } from '@/components/shared/PullToRefresh'
+import { TikTokLoader } from '@/components/shared/TikTokLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -44,16 +46,18 @@ export default function NotificationsPage() {
   const [iosInstallNeeded, setIosInstallNeeded] = useState(false)
   const supabase = createClient()
 
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { window.location.href = '/login'; return }
+    const { data } = await supabase.from('notifications')
+      .select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+    setNotifs((data ?? []) as Notif[])
+    setLoading(false)
+  }
+
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { window.location.href = '/login'; return }
-      const { data } = await supabase.from('notifications')
-        .select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
-      setNotifs((data ?? []) as Notif[])
-      setLoading(false)
-    }
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase])
 
   const markAllRead = async () => {
@@ -124,18 +128,18 @@ export default function NotificationsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <TikTokLoader size="lg" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <PullToRefresh onRefresh={load} className="mx-auto max-w-2xl">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold text-charcoal">Notifications</h1>
         {notifs.some((n) => !n.read) && (
-          <button onClick={markAllRead} className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-            <CheckCheck className="h-4 w-4" /> Mark all read
+          <button onClick={markAllRead} className="flex min-h-[44px] items-center gap-1.5 px-2 text-xs font-semibold text-primary">
+            <CheckCheck aria-hidden className="h-4 w-4" /> Mark all read
           </button>
         )}
       </div>
@@ -159,7 +163,7 @@ export default function NotificationsPage() {
             <button
               onClick={togglePush}
               disabled={pushBusy}
-              className={'shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ' +
+              className={'shrink-0 rounded-full px-4 py-2 min-h-[44px] text-xs font-semibold transition-colors disabled:opacity-50 ' +
                 (push === 'subscribed' ? 'border border-neutral-300 text-charcoal hover:bg-neutral-50' : 'bg-primary text-white hover:bg-primary/90')}
             >
               {push === 'subscribed' ? 'Turn off' : 'Turn on'}
@@ -167,7 +171,7 @@ export default function NotificationsPage() {
           )}
         </div>
         {push === 'subscribed' && (
-          <button onClick={sendTestPush} disabled={pushBusy} className="mt-3 text-xs font-semibold text-primary hover:underline disabled:opacity-50">
+          <button onClick={sendTestPush} disabled={pushBusy} className="mt-3 inline-flex min-h-[44px] items-center text-xs font-semibold text-primary hover:underline disabled:opacity-50">
             Send me a test notification
           </button>
         )}
@@ -202,6 +206,6 @@ export default function NotificationsPage() {
           })}
         </div>
       )}
-    </div>
+    </PullToRefresh>
   )
 }
