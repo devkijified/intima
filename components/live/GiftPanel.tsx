@@ -46,7 +46,7 @@ function writeList(key: string, list: string[]) {
  * bottom sheet over the room (the video stays visible above it),
  * one scrollable chip row to browse by (All, Favourites, Recent,
  * the store categories, and Premium for the animated gifts), a
- * four-column grid ordered by price with every tile carrying its
+ * three-column grid ordered by price with every tile carrying its
  * exact naira twin, the host's pinned gift menu as a strip above
  * the grid, and a sticky footer with the coin balance and a
  * Recharge-style Buy coins button that swaps the sheet to the coin
@@ -340,7 +340,7 @@ export function GiftPanel({
               </div>
             )}
 
-            <div className="grid max-h-[44vh] grid-cols-4 gap-2 overflow-y-auto">
+            <div className="grid max-h-[44vh] grid-cols-3 gap-2 overflow-y-auto">
               {visibleGifts.map((g) => {
                 const unaffordable = balance !== null && g.coin_cost > balance
                 const isFav = favs.includes(g.id)
