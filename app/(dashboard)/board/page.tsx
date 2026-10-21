@@ -277,7 +277,7 @@ export default function BoardPage() {
 
   if (!data) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
+      <div data-page-loader className="flex min-h-[50vh] items-center justify-center">
         {loadError ? <p className="text-sm text-red-500">{loadError}</p> : <IntimaLoader size="lg" />}
       </div>
     )
