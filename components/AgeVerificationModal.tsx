@@ -37,7 +37,7 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
       <div className="bg-white rounded-t-3xl md:rounded-3xl max-w-md w-full px-8 pt-8 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl animate-sheet-up md:animate-none">
         <div className="flex justify-between items-start mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-charcoal">Age Verification</h2>
+            <h2 className="text-2xl font-bold text-charcoal">Adult Content Warning</h2>
             <p className="text-gray-500 text-sm mt-1">Please confirm you are 18 or older</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="-mr-2 -mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-gray-600">
@@ -49,9 +49,9 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
           <div className="bg-primary-muted p-4 rounded-xl text-sm text-gray-700">
             <p className="font-medium flex items-center gap-2">
               <ShieldAlert aria-hidden className="w-4 h-4 text-primary" />
-              Age Restriction
+              Why we ask
             </p>
-            <p>This platform is strictly for adults aged 18 and above.</p>
+            <p>Intima is an adult platform. It contains adult companionship content, including nudity and sexually explicit material. If you are under 18, or under the age of majority where you live, do not enter.</p>
           </div>
 
           <div>
@@ -84,7 +84,7 @@ export function AgeVerificationModal({ isOpen, onClose, onVerify }: AgeVerificat
           </button>
 
           <p className="text-xs text-gray-400 text-center">
-            By proceeding, you agree to our Privacy Policy and Terms of Service
+            By tapping Verify & Continue, you confirm you are an adult and agree to our Terms of Service and Privacy Policy
           </p>
         </div>
       </div>
