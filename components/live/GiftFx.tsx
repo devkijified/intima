@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties } from 'react'
 import { coinsWithNgn } from '@/lib/utils/helpers'
 import type { GiftFxEvent } from './giftTypes'
+import GiftObjectIcon from './GiftObjectIcon'
 
 export type { GiftFxEvent }
 
@@ -192,7 +193,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
   const pushBurst = (evt: GiftFxEvent, banner = false) => {
     const play: FxPlay = {
       evt,
-      particles: makeParticles(evt.id, 12, ['✨', '💕', '✦']),
+      particles: makeParticles(evt.id, 12, ['✦', '♥', '✧']),
       fallers: [],
       compressed: false,
       banner,
@@ -211,7 +212,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
   const pushStage = (evt: GiftFxEvent) => {
     const play: FxPlay = {
       evt,
-      particles: makeParticles(evt.id, 8, ['✨', '💕']),
+      particles: makeParticles(evt.id, 8, ['✦', '♥']),
       fallers: [],
       compressed: false,
       banner: false,
@@ -242,10 +243,10 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
     // Rose sprays gold. Anything else keeps the sparkle set.
     const glyphs =
       evt.giftId === 'chest'
-        ? ['🌹', '⚡', '🍆', '💋']
+        ? ['✦', '♥', '❋', '✧']
         : evt.giftId === 'golden-rose'
-          ? ['✦', '✨', '💛']
-          : ['✨', '💕', '✦']
+          ? ['✦', '❋', '✧']
+          : ['✦', '♥', '✧']
     const play: FxPlay = {
       evt,
       particles: makeParticles(evt.id, evt.giftId === 'chest' ? 16 : 14, glyphs, evt.giftId === 'chest' ? 165 : 130),
@@ -266,8 +267,11 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
 
   useImperativeHandle(ref, () => ({
     push: (evt: GiftFxEvent) => {
-      if (evt.animTier === 'burst') pushBurst(evt)
-      else if (evt.animTier === 'stage') pushStage(evt)
+      // Owner rule (2026-10-21): only PREMIUM gifts get the animated
+      // show, like TikTok's Lion. Premium = the stage and takeover
+      // tiers (1,000 coins and up). Everything cheaper lands as a
+      // feed chip only, no pop animation.
+      if (evt.animTier === 'stage') pushStage(evt)
       else if (evt.animTier === 'takeover') pushTakeover(evt)
       else pushFloat(evt)
     },
@@ -329,8 +333,8 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
             <SenderDisc name={f.evt.senderName} />
             <div className="leading-tight">
               <p className="max-w-[120px] truncate text-[11px] font-semibold text-white">{f.evt.senderName}</p>
-              <p className="text-[11px] text-white/70">
-                sent {f.evt.name} {f.evt.emoji}
+              <p className="flex items-center gap-1 text-[11px] text-white/70">
+                sent {f.evt.name} <GiftObjectIcon giftId={f.evt.giftId} size={14} />
               </p>
             </div>
             {f.count > 1 && (
@@ -366,7 +370,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
               className="relative inline-block"
               style={f.evt.giftId === 'rose' ? { animation: 'giftfx-heartbeat 1.2s ease-in-out' } : undefined}
             >
-              {f.evt.emoji}
+              <GiftObjectIcon giftId={f.evt.giftId} size={36} />
             </span>
           </span>
         </span>
@@ -379,12 +383,11 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
             <span
               className="giftfx-emoji relative block leading-none"
               style={{
-                fontSize: 104,
                 animation:
                   'giftfx-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both, giftfx-fadeout 0.35s ease-in 1.8s forwards',
               }}
             >
-              {burst.evt.emoji}
+              <GiftObjectIcon giftId={burst.evt.giftId} size={104} />
             </span>
             {burst.particles.map((p, i) => (
               <span
@@ -462,14 +465,13 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
               <span
                 className="giftfx-emoji relative block leading-none"
                 style={{
-                  fontSize: 216,
                   animation:
                     stage.evt.giftId === 'dildo'
                       ? 'giftfx-bounce-arc 1.6s ease-in-out infinite'
                       : 'giftfx-throb 0.9s ease-in-out infinite',
                 }}
               >
-                {stage.evt.emoji}
+                <GiftObjectIcon giftId={stage.evt.giftId} size={216} />
               </span>
               {stage.evt.giftId === 'dildo' &&
                 stage.particles.map((p, i) => (
@@ -530,7 +532,7 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
                   } as CSSProperties
                 }
               >
-                ✨
+                ✦
               </span>
             )
           )}
@@ -550,13 +552,12 @@ export const GiftFxLayer = forwardRef<GiftFxHandle, { myId: string | null }>(fun
               <span
                 className="giftfx-emoji relative block leading-none"
                 style={{
-                  fontSize: 230,
                   animation: `giftfx-takeover-in 0.5s cubic-bezier(0.22, 0.9, 0.28, 1) both${
                     take.evt.giftId === 'chest' ? ', giftfx-pop-open 0.6s ease-in-out 0.55s' : ''
                   }, giftfx-fadeout 0.45s ease-in ${takeoverMs(take.evt, take.compressed) - 450}ms forwards`,
                 }}
               >
-                {take.evt.emoji}
+                <GiftObjectIcon giftId={take.evt.giftId} size={230} />
               </span>
               {take.evt.giftId === 'chest' &&
                 take.particles.map((p, i) => (
