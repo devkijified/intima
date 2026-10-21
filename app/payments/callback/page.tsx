@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2, CheckCircle2, XCircle } from '@/lib/icons'
+import { CheckCircle2, XCircle } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
+import { IntimaLoader } from '@/components/shared/IntimaLoader'
 
 /**
  * Paystack return page for the connection fee.
@@ -25,7 +26,7 @@ import { createClient } from '@/lib/supabase/client'
  *   done         connected (including alreadyConnected).
  */
 
-type State = 'working' | 'waiting' | 'done' | 'notCompleted' | 'questions' | 'paidFailed'
+type State = 'working' | 'waiting' | 'done' | 'notCompleted' | 'questions' | 'paidFailed' | 'boardLive'
 
 /** Paystack statuses that mean "money still in flight" (bank transfers). */
 const PENDING_STATUSES = ['pending', 'processing', 'ongoing', 'queued']
@@ -107,6 +108,7 @@ export default function PaymentsCallbackPage() {
           paid?: boolean
           status?: string
           targetProviderId?: string | null
+          boardRequestId?: string | null
           intakeAnswers?: unknown
           serviceType?: string | null
         } | null = null
@@ -141,6 +143,15 @@ export default function PaymentsCallbackPage() {
           }
           setState('notCompleted')
           setMessage('The payment did not confirm. You have not been connected.')
+          return
+        }
+        // A request-board fee: settlement opened the request on
+        // the board. There is no single companion to connect to.
+        if (v.boardRequestId) {
+          setState('boardLive')
+          setMessage(
+            'Your request is live on the board. Verified companions in your city can now respond, and you pick who to connect with.'
+          )
           return
         }
         // Paid, but nothing to connect to: a support case, and the
@@ -259,14 +270,14 @@ export default function PaymentsCallbackPage() {
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4 py-16 text-center">
       {state === 'working' && (
         <>
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <IntimaLoader size="lg" />
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">One moment</h1>
           <p className="mt-1 text-sm text-neutral-500">{message}</p>
         </>
       )}
       {state === 'waiting' && (
         <>
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <IntimaLoader size="lg" />
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Waiting for your transfer to confirm</h1>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
           <Link href="/" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Back to the map</Link>
@@ -293,6 +304,14 @@ export default function PaymentsCallbackPage() {
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Payment confirmed</h1>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
           <Link href="/" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Back to the map</Link>
+        </>
+      )}
+      {state === 'boardLive' && (
+        <>
+          <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+          <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Your request is live</h1>
+          <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
+          <Link href="/board" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Open the board</Link>
         </>
       )}
       {state === 'questions' && (

@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { computeSetupSteps, isLiveOnMap, setupProgress, type SetupProfile } from '@/lib/setup/completeness'
 import { Walkthrough } from '@/components/setup/Walkthrough'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
-  Banknote, BookOpen, Gift } from '@/lib/icons'
+  Banknote, BookOpen, Gift, ListChecks } from '@/lib/icons'
 import { formatCompactCount, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
 
@@ -381,6 +381,10 @@ export default function DashboardPage() {
                 <Link href="/" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">Browse All Verified Companions</span>
                   <ArrowUpRight aria-hidden className="h-4 w-4 text-neutral-400" />
+                </Link>
+                <Link href="/board" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
+                  <span className="text-sm font-medium">Request Board: Post What You Want</span>
+                  <ListChecks aria-hidden className="h-4 w-4 text-[#AC244D]" />
                 </Link>
                 <Link href="/bookings" className="flex items-center justify-between rounded-2xl p-3.5 transition-all hover:bg-cream text-neutral-700 active:scale-[0.99]">
                   <span className="text-sm font-medium">View Booking History</span>
