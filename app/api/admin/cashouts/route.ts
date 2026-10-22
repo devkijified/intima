@@ -51,7 +51,11 @@ export async function POST(req: NextRequest) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const { id, action, note } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body.id !== 'string' || typeof body.action !== 'string') {
+    return NextResponse.json({ error: 'id and action are required' }, { status: 400 });
+  }
+  const { id, action, note } = body as { id: string; action: string; note?: string };
   const svc = service();
 
   const { data: request } = await svc
@@ -77,7 +81,10 @@ export async function POST(req: NextRequest) {
       p_ref: id,
       p_meta: {},
     });
-    if (creditErr) throw creditErr;
+    if (creditErr) {
+      console.error('[admin/cashouts] refund credit failed:', creditErr);
+      return NextResponse.json({ error: 'The coin refund failed, so the request was not rejected. Please try again.' }, { status: 502 });
+    }
     await svc.from('cashout_requests').update({
       status: 'rejected', admin_note: note ?? null, processed_at: new Date().toISOString(),
     }).eq('id', id);

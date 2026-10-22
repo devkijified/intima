@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server';
 import { paystackConfigured } from '@/lib/payments/paystack';
 import {
   getOrCreateUserDedicatedAccount,
-  DvaError,
   DvaNotEnabledError,
 } from '@/lib/payments/dva';
 
@@ -65,10 +64,12 @@ export async function GET() {
     if (err instanceof DvaNotEnabledError) {
       return NextResponse.json({ enabled: false });
     }
-    const message =
-      err instanceof DvaError || err instanceof Error
-        ? err.message
-        : 'Could not get your dedicated account';
-    return NextResponse.json({ error: message }, { status: 502 });
+    // Never hand the raw gateway message to the client (house rule:
+    // users see human sentences); the detail stays in the server log.
+    console.error('[dedicated-account] DVA error:', err);
+    return NextResponse.json(
+      { error: 'We could not get your account number right now. Please try again in a moment.' },
+      { status: 502 },
+    );
   }
 }

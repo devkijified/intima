@@ -62,5 +62,10 @@ export async function POST(
     );
   }
   const { state, error } = await attemptRefundDetailed(svc, row);
-  return NextResponse.json({ ok: true, refund_state: state, ...(error ? { error } : {}) });
+  if (error) console.error('[admin/board/refund] gateway error:', error);
+  return NextResponse.json({
+    ok: true,
+    refund_state: state,
+    ...(error ? { error: 'The gateway reported a problem with this refund. The detail is in the server log.' } : {}),
+  });
 }

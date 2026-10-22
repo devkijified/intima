@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   async function fetchUserData() {
+    try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       window.location.href = '/login'
@@ -129,6 +130,9 @@ export default function DashboardPage() {
     }
 
     setLoading(false)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {

@@ -101,6 +101,7 @@ export default function LiveFeedPage() {
 
   useEffect(() => {
     async function fetchLive() {
+     try {
       const { data, error } = await supabase
         .from('live_sessions')
         .select(`
@@ -130,6 +131,9 @@ export default function LiveFeedPage() {
       }
       setStreams(list)
       setLoading(false)
+     } finally {
+      setLoading(false)
+     }
     }
     fetchLive()
 

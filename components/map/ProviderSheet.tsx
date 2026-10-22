@@ -223,16 +223,19 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
         window.location.href = '/signup?next=/';
         return;
       }
+      // Flip the heart only when the write landed (same rule as the
+      // companion page): an unchecked insert let the heart claim a save
+      // that was never stored.
       if (isFav) {
-        await supabase.from('favorites')
+        const { error } = await supabase.from('favorites')
           .delete().eq('user_id', user.id).eq('provider_id', provider.userId);
-        setIsFav(false);
+        if (!error) setIsFav(false);
       } else {
-        await supabase.from('favorites')
+        const { error } = await supabase.from('favorites')
           .insert({ user_id: user.id, provider_id: provider.userId });
-        setIsFav(true);
+        if (!error || error.code === '23505') setIsFav(true);
       }
-    } catch { /* best-effort */ }
+    } catch { /* state stays truthful: no flip without a landed write */ }
     setFavBusy(false);
   };
 

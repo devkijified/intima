@@ -591,15 +591,23 @@ export default function ModelDetailPage() {
         router.push('/signup?next=/companion/' + (provider.username ?? provider.id))
         return
       }
+      // Only flip the heart when the write actually landed: the old code
+      // flipped unconditionally, so a rejected insert showed a saved
+      // companion that was never stored.
       if (isFav) {
-        await supabase.from('favorites').delete().eq('user_id', user.id).eq('provider_id', provider.id)
+        const { error } = await supabase.from('favorites').delete().eq('user_id', user.id).eq('provider_id', provider.id)
+        if (error) { showToast('Could not remove. Please try again'); return }
         setIsFav(false)
       } else {
-        await supabase.from('favorites').insert({ user_id: user.id, provider_id: provider.id })
+        const { error } = await supabase.from('favorites').insert({ user_id: user.id, provider_id: provider.id })
+        if (error && error.code !== '23505') { showToast('Could not save. Please try again'); return }
         setIsFav(true)
       }
-    } catch { /* best-effort */ }
-    setFavBusy(false)
+    } catch {
+      showToast('Could not save. Please try again')
+    } finally {
+      setFavBusy(false)
+    }
   }
 
   if (loading) {

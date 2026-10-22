@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
     if (String(spendErr.message).includes('insufficient_balance')) {
       return NextResponse.json({ error: 'Not enough coins', cost: msg.ppv_price_coins }, { status: 402 });
     }
-    throw spendErr;
+    console.error('[ppv/unlock] spend failed:', spendErr);
+    return NextResponse.json({ error: 'The unlock failed and your coins were not spent. Please try again.' }, { status: 502 });
   }
 
   // Host cut from platform_settings (same as gifts).
@@ -78,7 +79,9 @@ export async function POST(req: NextRequest) {
       p_ref: `${messageId}:${user.id}`,
       p_meta: {},
     });
-    if (creditErr) throw creditErr;
+    // The viewer already paid: never trap his unlock behind the host
+    // credit. Log it for reconciliation and let the unlock complete.
+    if (creditErr) console.error('[ppv/unlock] host credit failed, unlock continues:', creditErr);
   }
 
   await svc.from('messages').update({

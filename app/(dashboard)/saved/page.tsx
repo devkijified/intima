@@ -22,55 +22,62 @@ export default function SavedPage() {
   const supabase = createClient()
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { window.location.href = '/login'; return }
-    const { data: favs } = await supabase.from('favorites')
-      .select('provider_id').eq('user_id', user.id).order('created_at', { ascending: false })
-    const ids = (favs ?? []).map((f: any) => f.provider_id)
-    if (ids.length === 0) { setSaved([]); setLoading(false); return }
-    const { data: profs } = await supabase.from('profiles')
-      .select('id, display_name, avatar_url, username').in('id', ids)
-    const { data: pres } = await supabase.from('provider_presence')
-      .select('provider_id, city').in('provider_id', ids)
-    const cityById = new Map((pres ?? []).map((p: any) => [p.provider_id, p.city]))
-    const { data: revs } = await supabase.from('reviews')
-      .select('provider_id, rating').in('provider_id', ids)
-    const byProv: Record<string, { sum: number; n: number }> = {}
-    for (const r of (revs ?? []) as any[]) {
-      const e = byProv[r.provider_id] ?? { sum: 0, n: 0 }
-      e.sum += r.rating; e.n += 1
-      byProv[r.provider_id] = e
-    }
-    setSaved((profs ?? []).map((p: any) => {
-      const agg = byProv[p.id]
-      return {
-        provider_id: p.id,
-        display_name: p.display_name,
-        avatar_url: p.avatar_url,
-        city: cityById.get(p.id) ?? null,
-        username: p.username ?? null,
-        rating: agg ? Math.round((agg.sum / agg.n) * 10) / 10 : null,
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { window.location.href = '/login'; return }
+      // Saved and Following load independently: an empty or failed list
+      // must never starve the other section (the old early return on an
+      // empty favourites list hid the whole Following section).
+      const [{ data: favs }, { data: fols }] = await Promise.all([
+        supabase.from('favorites')
+          .select('provider_id').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('broadcast_follows')
+          .select('provider_id').eq('follower_id', user.id),
+      ])
+      const ids = (favs ?? []).map((f: any) => f.provider_id)
+      const folIds = (fols ?? []).map((f: any) => f.provider_id)
+      const allIds = [...new Set([...ids, ...folIds])]
+      if (allIds.length === 0) {
+        setSaved([])
+        setFollowingList([])
+        return
       }
-    }))
-    // Companions this member follows for go-live alerts.
-    const { data: fols } = await supabase.from('broadcast_follows')
-      .select('provider_id').eq('follower_id', user.id)
-    const folIds = (fols ?? []).map((f: any) => f.provider_id)
-    if (folIds.length > 0) {
-      const { data: folProfs } = await supabase.from('profiles')
-        .select('id, display_name, avatar_url, username').in('id', folIds)
-      setFollowingList((folProfs ?? []).map((p: any) => ({
-        provider_id: p.id,
-        display_name: p.display_name,
-        avatar_url: p.avatar_url,
-        city: cityById.get(p.id) ?? null,
-        username: p.username ?? null,
-        rating: null,
-      })))
-    } else {
-      setFollowingList([])
+      const [{ data: profs }, { data: pres }, { data: revs }] = await Promise.all([
+        supabase.from('profiles')
+          .select('id, display_name, avatar_url, username').in('id', allIds),
+        supabase.from('provider_presence')
+          .select('provider_id, city').in('provider_id', allIds),
+        supabase.from('reviews')
+          .select('provider_id, rating').in('provider_id', ids),
+      ])
+      const cityById = new Map((pres ?? []).map((p: any) => [p.provider_id, p.city]))
+      const byProv: Record<string, { sum: number; n: number }> = {}
+      for (const r of (revs ?? []) as any[]) {
+        const e = byProv[r.provider_id] ?? { sum: 0, n: 0 }
+        e.sum += r.rating; e.n += 1
+        byProv[r.provider_id] = e
+      }
+      const profById = new Map((profs ?? []).map((p: any) => [p.id, p]))
+      const toCard = (id: string, withRating: boolean): SavedProvider | null => {
+        const p = profById.get(id)
+        if (!p) return null
+        const agg = byProv[id]
+        return {
+          provider_id: p.id,
+          display_name: p.display_name,
+          avatar_url: p.avatar_url,
+          city: cityById.get(p.id) ?? null,
+          username: p.username ?? null,
+          rating: withRating && agg ? Math.round((agg.sum / agg.n) * 10) / 10 : null,
+        }
+      }
+      // Keep the stored order (favourites newest first, follows as stored)
+      // instead of whatever order the profile rows come back in.
+      setSaved(ids.map((id: string) => toCard(id, true)).filter(Boolean) as SavedProvider[])
+      setFollowingList(folIds.map((id: string) => toCard(id, false)).filter(Boolean) as SavedProvider[])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => { load() }, [])

@@ -43,7 +43,10 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
   const { error } = await svc.from('broadcasts').insert({ provider_id: user.id, body: text });
-  if (error) throw error;
+  if (error) {
+    console.error('[broadcasts] insert failed:', error);
+    return NextResponse.json({ error: 'Your broadcast could not be sent. Please try again.' }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true });
 }

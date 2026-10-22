@@ -122,26 +122,33 @@ export default function AdminUsersPage() {
   async function doSuspend(u: UserRow) {
     setSuspendTarget(null)
     setActing(u.id)
-    await supabase.from('profiles').update({ is_hidden: true }).eq('id', u.id)
-    await supabase.from('provider_presence').update({ show_on_map: false }).eq('provider_id', u.id)
-    await supabase.from('admin_audit_logs').insert({
-      action: 'user_suspended',
-      target_id: u.id,
-      details: `Suspended user ${u.display_name ?? u.id}`,
-    })
+    // Only write the audit row when both writes actually landed: the old
+    // code logged a suspension even when the profile update was rejected,
+    // so the list and the audit trail could disagree with reality.
+    const { error: profErr } = await supabase.from('profiles').update({ is_hidden: true }).eq('id', u.id)
+    const { error: presErr } = await supabase.from('provider_presence').update({ show_on_map: false }).eq('provider_id', u.id)
+    if (!profErr && !presErr) {
+      await supabase.from('admin_audit_logs').insert({
+        action: 'user_suspended',
+        target_id: u.id,
+        details: `Suspended user ${u.display_name ?? u.id}`,
+      })
+    }
     setActing(null)
     load()
   }
 
   async function restore(u: UserRow) {
     setActing(u.id)
-    await supabase.from('profiles').update({ is_hidden: false }).eq('id', u.id)
-    await supabase.from('provider_presence').update({ show_on_map: true }).eq('provider_id', u.id)
-    await supabase.from('admin_audit_logs').insert({
-      action: 'user_restored',
-      target_id: u.id,
-      details: `Restored user ${u.display_name ?? u.id}`,
-    })
+    const { error: profErr } = await supabase.from('profiles').update({ is_hidden: false }).eq('id', u.id)
+    const { error: presErr } = await supabase.from('provider_presence').update({ show_on_map: true }).eq('provider_id', u.id)
+    if (!profErr && !presErr) {
+      await supabase.from('admin_audit_logs').insert({
+        action: 'user_restored',
+        target_id: u.id,
+        details: `Restored user ${u.display_name ?? u.id}`,
+      })
+    }
     setActing(null)
     load()
   }

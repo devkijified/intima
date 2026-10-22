@@ -61,6 +61,7 @@ export default function BookingsPage() {
   const supabase = createClient()
 
   async function fetchConnections() {
+    try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       window.location.href = '/login'
@@ -127,6 +128,11 @@ export default function BookingsPage() {
       })
     )
     setLoading(false)
+    } finally {
+      // A rejected await mid-load used to strand this page on its
+      // spinner forever; the finally guarantees the loading state ends.
+      setLoading(false)
+    }
   }
 
   useEffect(() => {

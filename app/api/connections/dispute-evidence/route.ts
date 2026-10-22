@@ -31,7 +31,12 @@ export async function POST(req: NextRequest) {
     path?: string;
     note?: string;
   } | null;
-  if (!body?.connection_id || !body?.path) {
+  if (
+    !body ||
+    typeof body.connection_id !== 'string' || !body.connection_id ||
+    typeof body.path !== 'string' || !body.path ||
+    (body.note !== undefined && typeof body.note !== 'string')
+  ) {
     return NextResponse.json(
       { error: 'connection_id and path are required' },
       { status: 400 }

@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       status: 'published',
       story_status: body.series.storyStatus === 'completed' ? 'completed' : 'ongoing',
     }).select('id, title').single();
-    if (error) throw error;
+    if (error) { console.error('[admin/comics] write failed:', error); return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 }); }
     return NextResponse.json({ success: true, comic: data });
   }
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       await db.from('comics').update({ is_featured: false }).eq('is_featured', true);
     }
     const { error } = await db.from('comics').update({ is_featured: featured }).eq('id', sid);
-    if (error) throw error;
+    if (error) { console.error('[admin/comics] write failed:', error); return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 }); }
     return NextResponse.json({ success: true });
   }
 
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     const ss = body.seriesStatusUpdate.storyStatus === 'completed' ? 'completed' : 'ongoing';
     if (!sid) return NextResponse.json({ error: 'Comic id required' }, { status: 400 });
     const { error } = await db.from('comics').update({ story_status: ss }).eq('id', sid);
-    if (error) throw error;
+    if (error) { console.error('[admin/comics] write failed:', error); return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 }); }
     return NextResponse.json({ success: true });
   }
 

@@ -351,10 +351,18 @@ export default function GoLivePage() {
     setEnding(true)
     const supabase = createClient()
     try {
-      await supabase.from('live_sessions')
+      // The session row must actually flip to ended: an unchecked update
+      // used to leave ended streams showing LIVE on the map and /live.
+      const { error } = await supabase.from('live_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
         .eq('id', sessionId)
-    } catch { /* best-effort */ }
+      if (error) {
+        await new Promise((r) => setTimeout(r, 1000))
+        await supabase.from('live_sessions')
+          .update({ status: 'ended', ended_at: new Date().toISOString() })
+          .eq('id', sessionId)
+      }
+    } catch { /* retried above; leaving the room must never trap the host */ }
     roomRef.current?.disconnect()
     videoTrack.current?.stop()
     audioTrack.current?.stop()

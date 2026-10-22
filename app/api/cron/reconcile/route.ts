@@ -20,7 +20,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js';
 export async function GET(req: NextRequest) {
   try {
     const auth = req.headers.get('authorization');
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
