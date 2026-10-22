@@ -418,6 +418,14 @@ export default function IntimaMap() {
         }
         map.on('load', () => {
           if (!cancelled) {
+            // The compact attribution control starts EXPANDED
+            // (maplibregl-compact-show), a white bar across the
+            // bottom of the map. Collapse it to its small info
+            // toggle on load: the credit the free tiles require
+            // stays one tap away instead of shouting over the map.
+            containerRef.current
+              ?.querySelector('.maplibregl-ctrl-attrib')
+              ?.classList.remove('maplibregl-compact-show');
             // Force a resize after load: if the container wasn't fully laid
             // out at init, tiles only cover part of the viewport.
             map?.resize();

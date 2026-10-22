@@ -681,7 +681,8 @@ export default function ModelDetailPage() {
 
       {provider.isHidden && viewerIsOwner && (
         <div className="mx-4 mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Your profile is hidden from the map right now while our team reviews reports about it. Contact support if you think this is a mistake.
+          Your profile is hidden from the map right now while our team reviews reports about it.{' '}
+          <Link href="/tickets" className="font-semibold underline">Contact support</Link> if you think this is a mistake.
         </div>
       )}
 

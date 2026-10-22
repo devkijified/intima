@@ -281,6 +281,7 @@ export default function PaymentsCallbackPage() {
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Waiting for your transfer to confirm</h1>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
           <Link href="/" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Back to the map</Link>
+          <Link href="/tickets" className="mt-3 text-sm font-medium text-primary">Contact support</Link>
         </>
       )}
       {state === 'done' && (
@@ -296,6 +297,7 @@ export default function PaymentsCallbackPage() {
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Payment not completed</h1>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
           <Link href="/" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Back to the map</Link>
+          <Link href="/tickets" className="mt-3 text-sm font-medium text-primary">Contact support</Link>
         </>
       )}
       {state === 'paidFailed' && (
@@ -304,6 +306,7 @@ export default function PaymentsCallbackPage() {
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Payment confirmed</h1>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
           <Link href="/" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Back to the map</Link>
+          <Link href="/tickets" className="mt-3 text-sm font-medium text-primary">Contact support</Link>
         </>
       )}
       {state === 'boardLive' && (
