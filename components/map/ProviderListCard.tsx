@@ -32,7 +32,7 @@ export function ProviderListCard({ provider, onSelect, travelNote }: ProviderLis
           'sm:hover:-translate-y-1 sm:hover:shadow-lift ' +
           (provider.trustTier === 'elite' ? 'ring-[#C9A84C]/60' : 'ring-black/[0.05]')}
       >
-        <div className="relative aspect-[4/5] w-full overflow-hidden bg-neutral-100">
+        <div data-protect className="relative aspect-[4/5] w-full overflow-hidden bg-neutral-100">
           <img
             src={provider.avatar}
             alt={provider.displayName}

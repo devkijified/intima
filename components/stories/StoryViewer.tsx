@@ -175,7 +175,7 @@ export function StoryViewer({
   const showCta = !isMine && (onViewProfile || onRequestConnection);
 
   return (
-    <div className="fixed inset-0 z-[90] bg-black">
+    <div data-protect className="fixed inset-0 z-[90] bg-black">
       {/* Progress bars: this companion's segments only. */}
       <div className="absolute left-0 right-0 top-0 z-20 flex gap-1 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         {Array.from({ length: group.count }).map((_, i) => (

@@ -128,47 +128,69 @@ async function loadMapLibre(): Promise<{ lib: MapLibreLib | null; keys: string }
   return { lib: null, keys };
 }
 
+/** Compact pin recency, Snap Map style: "2m", "3h", "2d". */
+function shortRecency(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 0) return null;
+  if (mins < 60) return `${Math.max(1, mins)}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days <= 7) return `${days}d`;
+  return null;
+}
+
 function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'intima-pin';
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', `${escAttr(provider.displayName)} in ${escAttr(provider.area)}`);
   const firstName = escAttr(provider.displayName.split(' ')[0] ?? provider.displayName);
+  const recency = shortRecency(provider.lastActiveAt);
+  // Deterministic per-pin bob delay, so the figures never bob in sync.
+  const hash = (provider.id ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const delay = ((hash % 14) / 10).toFixed(1);
   el.innerHTML =
-    `<div style="position:relative;cursor:pointer;transition:transform .15s ease">` +
-    // Snap Map style heat glow behind the pin: warm burgundy halo,
-    // stronger for boosted or elite companions, so busy areas glow.
-    `<span style="position:absolute;left:50%;top:50%;width:128px;height:128px;transform:translate(-50%,-50%);border-radius:9999px;pointer-events:none;` +
+    `<div style="position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;width:76px;transition:transform .15s ease">` +
+    // Heat glow behind the figure: warm burgundy halo, stronger for
+    // boosted or elite companions, so busy areas glow.
+    `<span style="position:absolute;left:50%;top:24px;width:128px;height:128px;transform:translate(-50%,-50%);border-radius:9999px;pointer-events:none;` +
     `background:radial-gradient(circle, ${
       provider.boosted || provider.trustTier === 'elite'
         ? 'rgba(201,168,76,0.50)'
         : 'rgba(172,36,77,0.42)'
     } 0%, transparent 68%)"></span>` +
-    // Photo pin, Instagram-story style: ring + soft shadow, photo fully
-    // visible. Elite get a gold ring; boosted get a gold halo.
+    // Name + time plate above her head, Snap Map style.
+    `<span style="position:relative;z-index:2;background:rgba(8,8,12,0.72);color:#fff;font-size:10px;font-weight:600;line-height:1;` +
+    `padding:4px 7px;border-radius:9999px;white-space:nowrap;backdrop-filter:blur(4px);margin-bottom:3px">` +
+    `${firstName}${recency ? ` <span style="color:rgba(255,255,255,.65);font-weight:500">· ${recency}</span>` : ''}</span>` +
+    // The standing figure: a tall capsule of her photo planted on
+    // the ground point, gently bobbing like a Snap Map character.
+    `<div style="position:relative;z-index:1;animation:pin-bob 2.8s ease-in-out ${delay}s infinite alternate">` +
     `<img src="${escAttr(provider.avatar)}" alt="" loading="lazy" ` +
-    `style="width:54px;height:54px;border-radius:9999px;object-fit:cover;background:#222;` +
+    `style="width:46px;height:58px;border-radius:999px;object-fit:cover;object-position:top center;background:#222;display:block;` +
     `border:${provider.trustTier === 'elite' ? '3px solid #C9A84C' : '2.5px solid #fff'};` +
-    `box-shadow:0 4px 14px rgba(0,0,0,.45)${provider.boosted ? ', 0 0 0 4px rgba(201,168,76,.55)' : ''}"/>` +
-    // Verified is an explicit burgundy badge overlapping the pin corner.
+    `box-shadow:0 6px 16px rgba(0,0,0,.5)${provider.boosted ? ', 0 0 0 4px rgba(201,168,76,.55)' : ''}"/>` +
     (provider.verified
-      ? `<span title="Verified" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;` +
+      ? `<span title="Verified" style="position:absolute;bottom:1px;right:-4px;width:20px;height:20px;` +
         `border-radius:9999px;background:#AC244D;border:2px solid #fff;` +
         `display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.4)">` +
         CHECK_SVG +
         `</span>`
       : '') +
-    // Available: green dot with a soft pulse ring, top-right.
     (provider.available
-      ? `<span style="position:absolute;top:-1px;right:-1px;width:15px;height:15px;` +
+      ? `<span style="position:absolute;top:0;right:-3px;width:14px;height:14px;` +
         `background:#22c55e;border-radius:9999px;border:2.5px solid #fff;` +
         `box-shadow:0 0 0 3px rgba(34,197,94,.35)"></span>`
       : '') +
-    // Name label under the pin, Snap style: first name on a dark chip.
-    `<span style="position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);` +
-    `background:rgba(8,8,12,0.72);color:#fff;font-size:10px;font-weight:600;line-height:1;` +
-    `padding:4px 7px;border-radius:9999px;white-space:nowrap;backdrop-filter:blur(4px)">` +
-    `${firstName}</span>` +
+    `</div>` +
+    // Ground shadow: the plant mark. She stands HERE.
+    `<span style="width:38px;height:10px;margin-top:2px;border-radius:50%;pointer-events:none;` +
+    `background:radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, transparent 70%);` +
+    `animation:pin-shadow 2.8s ease-in-out ${delay}s infinite alternate"></span>` +
     `</div>`;
   el.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -176,7 +198,7 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
   });
   el.addEventListener('mouseenter', () => {
     const inner = el.firstElementChild as HTMLElement | null;
-    if (inner) inner.style.transform = 'scale(1.15)';
+    if (inner) inner.style.transform = 'scale(1.12)';
   });
   el.addEventListener('mouseleave', () => {
     const inner = el.firstElementChild as HTMLElement | null;
@@ -385,7 +407,7 @@ export default function IntimaMap() {
             style: useRasterPrimary ? (OSM_RASTER_STYLE as any) : CARTO_DARK,
             center: CITY_CENTERS[loadInitialCity()] ?? LAGOS_CENTER,
             zoom: 11,
-            attributionControl: true,
+            attributionControl: { compact: true } as any,
           });
           if (useRasterPrimary) setUsingRaster(true);
         } catch (err) {
@@ -491,7 +513,7 @@ export default function IntimaMap() {
       if (cancelled || !mapRef.current || !lib) return;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = filtered.map((p) =>
-        new lib.Marker({ element: markerElement(p, goToProfile) })
+        new lib.Marker({ element: markerElement(p, goToProfile), anchor: 'bottom' } as any)
           .setLngLat([p.lng, p.lat])
           .addTo(mapRef.current as MLMap),
       );

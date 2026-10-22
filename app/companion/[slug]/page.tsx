@@ -1081,7 +1081,7 @@ export default function ModelDetailPage() {
           totalSlides === 0 ? (
             <p className="py-8 text-center text-sm text-neutral-400">No posts yet.</p>
           ) : (
-            <div className="grid grid-cols-3 gap-1">
+            <div data-protect className="grid grid-cols-3 gap-1">
               {slides.map((slide, i) => (
                 <button
                   key={i}
@@ -1195,7 +1195,7 @@ export default function ModelDetailPage() {
             <X aria-hidden className="h-5 w-5" />
           </button>
           </Tooltip>
-          <div className="relative max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
+          <div data-protect className="relative max-h-full w-full max-w-lg p-4" onClick={(e) => e.stopPropagation()}>
             <PhotoWatermark username={provider.username} variant="edge" />
             {slides[lightbox].kind === 'photo' ? (
               <img src={slides[lightbox].src} alt="" className="max-h-[80vh] w-full rounded-2xl object-contain" draggable={false} />

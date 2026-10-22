@@ -143,6 +143,26 @@
   }
 }
 
+/* Map pins: companions stand on the ground (Snap Map treatment).
+   The figure gently bobs; its ground shadow breathes against it. */
+@keyframes pin-bob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-3px); }
+}
+@keyframes pin-shadow {
+  from { transform: scaleX(1); opacity: 0.85; }
+  to { transform: scaleX(0.8); opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intima-pin * { animation: none !important; }
+}
+
+/* Protected media (screenshot deterrents): no long-press callout,
+   no image dragging out of the app. The PrivacyVeil handles the
+   rest (context menu, app-switcher cover). */
+[data-protect] { -webkit-touch-callout: none; }
+[data-protect] img { -webkit-user-drag: none; user-select: none; }
+
 @layer utilities {
   .animate-sheet-up {
     animation: sheet-up 0.34s cubic-bezier(0.32, 0.72, 0, 1);

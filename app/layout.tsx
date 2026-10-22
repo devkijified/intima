@@ -8,6 +8,7 @@ import RefCapture from '@/components/RefCapture'
 import { CallProvider } from '@/components/calls/CallProvider'
 import { DockProvider } from '@/components/dock/FloatingDock'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { PrivacyVeil } from '@/components/privacy/PrivacyVeil'
 import { UpdatePrompt } from '@/components/pwa/UpdatePrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 import { ToastHost } from '@/components/shared/ToastHost'
@@ -82,6 +83,7 @@ export default function RootLayout({
           <CallProvider>
             <DockProvider>{children}</DockProvider>
           </CallProvider>
+          <PrivacyVeil />
           <InstallPrompt />
           <UpdatePrompt />
           <ConnectionMonitor />

@@ -394,6 +394,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
       />
       {/* Bottom sheet */}
       <div
+        data-protect
         className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-[28px] bg-white shadow-sheet animate-sheet-up sm:mx-auto sm:max-w-lg"
         role="dialog"
         aria-modal="true"
