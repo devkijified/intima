@@ -37,6 +37,9 @@ import { ngnForCoins } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 import { useCities } from '@/lib/citiesLive'
+import { coordsFor } from '@/lib/cities'
+import { getSetting } from '@/lib/settings/platformSettings'
+import { DEFAULT_VIBES, MAX_VIBES, customVibeProblem } from '@/lib/vibes'
 
 /** Screening questions companions ask again and again. One tap adds one to her list. */
 const COMMON_QUESTIONS = [
@@ -48,16 +51,6 @@ const COMMON_QUESTIONS = [
   'Anything you want me to know before we meet?',
 ] as const
 
-/** Approximate city centers for area-level pins. [lat, lng]. */
-const CITY_COORDS: Record<string, [number, number]> = {
-  Lagos: [6.5244, 3.3792],
-  Abuja: [9.0579, 7.4951],
-  'Port Harcourt': [4.7714, 6.9962],
-  Ibadan: [7.3775, 3.947],
-  Kano: [12.0022, 8.5167],
-  Enugu: [6.4584, 7.4951],
-}
-
 interface ProviderForm {
   displayName: string
   avatarUrl: string
@@ -66,6 +59,7 @@ interface ProviderForm {
   rateOvernight: string
   rateWeekend: string
   services: string[]
+  vibes: string[]
   ratesNegotiable: boolean
   whatsappNumber: string
   bio: string
@@ -84,6 +78,7 @@ const EMPTY_FORM: ProviderForm = {
   rateOvernight: '',
   rateWeekend: '',
   services: [],
+  vibes: [],
   ratesNegotiable: true,
     whatsappNumber: '',
   bio: '',
@@ -106,7 +101,7 @@ function parseSubPrice(v: string): number | null {
 }
 
 export default function ProfilePage() {
-  const { cities: CITIES } = useCities()
+  const { cities: CITIES, coordOverrides } = useCities()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [bioWarning, setBioWarning] = useState('')
@@ -137,7 +132,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
+          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -160,6 +155,7 @@ export default function ProfilePage() {
           rateOvernight: profile?.rate_overnight_ngn?.toString() ?? '',
           rateWeekend: profile?.rate_weekend_ngn?.toString() ?? '',
           services: profile?.services ?? [],
+          vibes: (profile as { vibes?: string[] } | null)?.vibes ?? [],
           ratesNegotiable: profile?.rates_negotiable ?? true,
     whatsappNumber: profile?.whatsapp_number ?? '',
     bio: profile?.bio ?? '',
@@ -231,8 +227,26 @@ export default function ProfilePage() {
     setIntakeNote('')
   }
 
+  // ---- Admin presets: services and vibes maintained in Admin ----
+  const [presetServices, setPresetServices] = useState<string[]>([])
+  const [presetVibes, setPresetVibes] = useState<string[]>(DEFAULT_VIBES)
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      const [ps, pv] = await Promise.all([
+        getSetting<unknown>('preset_services', []),
+        getSetting<unknown>('preset_vibes', null),
+      ])
+      if (!live) return
+      if (Array.isArray(ps)) setPresetServices(ps.filter((x): x is string => typeof x === 'string'))
+      if (Array.isArray(pv) && pv.length > 0) setPresetVibes(pv.filter((x): x is string => typeof x === 'string'))
+    })()
+    return () => { live = false }
+  }, [])
+  const presetServiceIds = new Set(presetServices.map((label) => makeCustomServiceId(label)))
+
   // ---- Custom services: her own words, stored as "custom:<text>" ----
-  const customEntries = form.services.filter(isCustomService)
+  const customEntries = form.services.filter((e) => isCustomService(e) && !presetServiceIds.has(e))
 
   const addCustomService = () => {
     const text = customServiceInput.trim()
@@ -258,6 +272,37 @@ export default function ProfilePage() {
   const removeCustomService = (entry: string) =>
     setForm((f) => ({ ...f, services: f.services.filter((s) => s !== entry) }))
 
+  // ---- Vibes: preset tags or her own words, capped ----
+  const [customVibeInput, setCustomVibeInput] = useState('')
+  const [customVibeMsg, setCustomVibeMsg] = useState('')
+  const toggleVibe = (v: string) => {
+    setForm((f) => {
+      if (f.vibes.includes(v)) return { ...f, vibes: f.vibes.filter((x) => x !== v) }
+      if (f.vibes.length >= MAX_VIBES) return f
+      return { ...f, vibes: [...f.vibes, v] }
+    })
+    setCustomVibeMsg('')
+  }
+  const addCustomVibe = () => {
+    const text = customVibeInput.trim()
+    if (!text) return
+    const scan = scanForLeaks(text)
+    if (!scan.clean) { setCustomVibeMsg(leakWarning(scan.leaks)); return }
+    const problem = customVibeProblem(text)
+    if (problem) { setCustomVibeMsg(problem); return }
+    if (form.vibes.some((v) => v.toLowerCase() === text.toLowerCase())) {
+      setCustomVibeMsg('That vibe is already on your list.')
+      return
+    }
+    if (form.vibes.length >= MAX_VIBES) {
+      setCustomVibeMsg(`You can show up to ${MAX_VIBES} vibes. Remove one first.`)
+      return
+    }
+    setForm((f) => ({ ...f, vibes: [...f.vibes, text] }))
+    setCustomVibeInput('')
+    setCustomVibeMsg('')
+  }
+
   const saveProvider = async () => {
     if (!userId) return
     // Fence: display names render on every card, pin, and chat. Scan both.
@@ -276,7 +321,7 @@ export default function ProfilePage() {
     setSaving(true)
     setError(null)
     try {
-      const [lat, lng] = form.city ? CITY_COORDS[form.city] ?? [6.5244, 3.3792] : [6.5244, 3.3792]
+      const [lat, lng] = coordsFor(form.city || 'Lagos', coordOverrides)
       const gallery = form.galleryUrls.filter(Boolean)
 
       const { error: pErr } = await supabase.from('profiles').upsert(
@@ -289,6 +334,7 @@ export default function ProfilePage() {
           rate_overnight_ngn: parseRate(form.rateOvernight),
           rate_weekend_ngn: parseRate(form.rateWeekend),
           services: form.services,
+          vibes: form.vibes,
           rates_negotiable: form.ratesNegotiable,
           whatsapp_number: form.whatsappNumber.trim() || null,
           bio: form.bio.trim() || null,
@@ -705,6 +751,110 @@ export default function ProfilePage() {
               {customServiceMsg && (
                 <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {customServiceMsg}
+                </p>
+              )}
+            </div>
+            {presetServices.length > 0 && (
+              <div className="mt-5 border-t border-neutral-100 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                  More options
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {presetServices.map((label) => {
+                    const id = makeCustomServiceId(label)
+                    const active = form.services.includes(id)
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => toggleService(id)}
+                        className={`inline-flex min-h-[44px] items-center rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                          active
+                            ? 'border-[#AC244D] bg-[#AC244D] text-white'
+                            : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            <div className="mt-5 border-t border-neutral-100 pt-4">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                Your vibes
+              </p>
+              <p className="mb-3 text-xs text-neutral-500">
+                Pick the tags that sound like you. They show as gold chips on your profile and in
+                your map card.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {presetVibes.map((v) => {
+                  const active = form.vibes.includes(v)
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => toggleVibe(v)}
+                      className={`inline-flex min-h-[44px] items-center rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                        active
+                          ? 'border-[#C9A84C] bg-[#C9A84C] text-charcoal'
+                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              {form.vibes.filter((v) => !presetVibes.includes(v)).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {form.vibes.filter((v) => !presetVibes.includes(v)).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => toggleVibe(v)}
+                      aria-label={`Remove ${v}`}
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#C9A84C] bg-[#C9A84C]/10 px-3.5 py-1.5 text-sm font-medium text-neutral-800 transition-all active:scale-95"
+                    >
+                      {v}
+                      <X className="h-3.5 w-3.5 text-neutral-500" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex gap-2">
+                <div className="flex-1">
+                  <input
+                    className={inputCls}
+                    value={customVibeInput}
+                    onChange={(e) => setCustomVibeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addCustomVibe()
+                      }
+                    }}
+                    placeholder="Or add your own vibe"
+                    aria-label="Add your own vibe"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={addCustomVibe}
+                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[#AC244D] px-4 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-95"
+                >
+                  <Plus className="h-4 w-4" /> Add
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-neutral-400">
+                {form.vibes.length} of {MAX_VIBES} vibes. Never add phone numbers or social
+                handles. Clients reach you through Intima.
+              </p>
+              {customVibeMsg && (
+                <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {customVibeMsg}
                 </p>
               )}
             </div>
