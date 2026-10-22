@@ -1,5 +1,7 @@
 'use client'
 
+import { formatCompactCount } from '@/lib/utils/helpers'
+
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -163,7 +165,7 @@ export default function ComicReaderPage() {
             {ep.synopsis && (
               <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-white/70">{ep.synopsis}</p>
             )}
-            <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-white/40">{ep.panel_urls.length} pages</p>
+            <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-white/40">{ep.panel_urls.length} pages · {formatCompactCount(ep.view_count ?? 0)} views</p>
           </div>
         </div>
       )}

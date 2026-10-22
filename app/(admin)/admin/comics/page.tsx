@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { BookOpen, Plus, Send, Trash2, Eye, CheckCircle2, ArrowLeft } from '@/lib/icons'
+import { formatCompactCount } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 interface Comic {
@@ -15,7 +16,7 @@ interface Comic {
 }
 
 type PagePreview =
-  | { kind: 'series'; title: string; storyStatus: string | null; relay?: boolean; chapters: Array<{ no: number; url: string; label: string }> }
+  | { kind: 'series'; title: string; storyStatus: string | null; relay?: boolean; coverUrl?: string | null; chapters: Array<{ no: number; url: string; label: string }> }
   | { kind: 'episode'; title: string; storyStatus: string | null; relay?: boolean; images: Array<{ url: string; keep: boolean; reason: string | null }> }
 
 interface Episode {
@@ -192,6 +193,19 @@ export default function AdminComicsPage() {
         const picked = pagePreview.chapters.filter((c) => chapterKeep[c.no])
         const log: string[] = []
         let okCount = 0
+        try {
+          const cres = await fetch('/api/admin/comics/import', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set-cover', comicId, seriesUrl: linkUrl.trim() }),
+          })
+          const cd = await cres.json().catch(() => ({}))
+          if (cres.ok && cd.alreadySet) log.push('This comic already has a cover, so the series page cover was skipped.')
+          else if (cres.ok) log.push('Cover pulled from the series page and saved to this comic.')
+          else log.push('No cover could be pulled from the series page. The import continues without one.')
+        } catch {
+          log.push('No cover could be pulled from the series page. The import continues without one.')
+        }
+        setImportLog([...log])
         for (const ch of picked) {
           log.push(`Importing ${ch.no}. ${ch.label}…`)
           setImportLog([...log])
@@ -302,7 +316,7 @@ export default function AdminComicsPage() {
           { label: 'Completions', value: totals.completed },
         ].map((s) => (
           <div key={s.label} className="card-luxe p-3 text-center sm:p-4">
-            <p className="font-display text-2xl font-semibold text-charcoal sm:text-3xl">{s.value.toLocaleString()}</p>
+            <p className="font-display text-2xl font-semibold text-charcoal sm:text-3xl">{formatCompactCount(s.value)}</p>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">{s.label}</p>
           </div>
         ))}
@@ -448,6 +462,12 @@ export default function AdminComicsPage() {
         {pagePreview && pagePreview.kind === 'series' && (
           <div className="mt-4 space-y-2">
             <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            {pagePreview.coverUrl && (
+              <div className="flex items-center gap-3">
+                <img src={pagePreview.coverUrl} alt="" className="h-20 w-14 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
+                <p className="text-xs text-neutral-500">Cover found on the series page. It saves to the comic automatically when the import starts, through our CDN.</p>
+              </div>
+            )}
             {pagePreview.relay && (
               <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
             )}
@@ -521,9 +541,9 @@ export default function AdminComicsPage() {
                   : <span className="text-[11px] font-medium text-neutral-400">Draft</span>}
               </p>
               <p className="mt-1 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
-                <span className="inline-flex items-center gap-1"><Eye aria-hidden className="h-3 w-3" /> {e.view_count.toLocaleString()} reads</span>
-                <span>{(stats[e.id]?.readers ?? 0).toLocaleString()} unique</span>
-                <span>{(stats[e.id]?.completed ?? 0).toLocaleString()} finished</span>
+                <span className="inline-flex items-center gap-1"><Eye aria-hidden className="h-3 w-3" /> {formatCompactCount(e.view_count)} reads</span>
+                <span>{formatCompactCount(stats[e.id]?.readers ?? 0)} unique</span>
+                <span>{formatCompactCount(stats[e.id]?.completed ?? 0)} finished</span>
               </p>
             </div>
             {e.status === 'draft' ? (

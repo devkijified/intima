@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { fetchFeed } from '@/lib/comics/rss';
 import { getComicFeeds, saveComicFeeds, importFeedItem, serviceDb } from '@/lib/comics/import';
 import {
-  fetchPageHtmlWithFallback, extractPanels, discoverChapters, detectStoryStatus, pageTitle,
+  fetchPageHtmlWithFallback, extractPanels, discoverChapters, detectStoryStatus, pageTitle, extractSeriesCover,
 } from '@/lib/comics/pageImport';
 import { toCdnUrl, isPublicHttpUrl } from '@/lib/comics/cdn';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
@@ -77,6 +77,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, episode: ep });
     }
 
+    if (action === 'set-cover') {
+      const comicId = String(body.comicId ?? '');
+      const seriesUrl = String(body.seriesUrl ?? '').trim();
+      if (!comicId || !seriesUrl.startsWith('http')) {
+        return NextResponse.json({ error: 'A comic and a series page address are both needed' }, { status: 400 });
+      }
+      const svc = serviceDb();
+      const { data: comic } = await svc.from('comics').select('id, cover_url').eq('id', comicId).maybeSingle();
+      if (!comic) return NextResponse.json({ error: 'Comic not found' }, { status: 404 });
+      if (comic.cover_url) {
+        return NextResponse.json({ ok: true, alreadySet: true, coverUrl: comic.cover_url });
+      }
+      const { html } = await fetchPageHtmlWithFallback(seriesUrl);
+      const cover = extractSeriesCover(html, seriesUrl);
+      if (!cover) {
+        return NextResponse.json({ error: 'No cover picture could be found on that series page' }, { status: 422 });
+      }
+      if (!isPublicHttpUrl(cover)) {
+        return NextResponse.json({ error: 'That cover address is not usable' }, { status: 422 });
+      }
+      const stored = toCdnUrl(cover);
+      const { error } = await svc.from('comics').update({ cover_url: stored }).eq('id', comicId);
+      if (error) return NextResponse.json({ error: 'The cover could not be saved' }, { status: 500 });
+      return NextResponse.json({ ok: true, coverUrl: stored });
+    }
+
     if (action === 'page-preview') {
       const url = String(body.url ?? '').trim();
       if (!url.startsWith('http')) return NextResponse.json({ error: 'Valid page URL required' }, { status: 400 });
@@ -89,6 +115,7 @@ export async function POST(req: NextRequest) {
           title: pageTitle(html, url),
           storyStatus,
           relay,
+          coverUrl: extractSeriesCover(html, url),
           chapters: chapters.slice(0, 60),
         });
       }

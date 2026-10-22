@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, BookOpen, ChevronRight, Eye, Play } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface ComicSeries {
   id: string
@@ -38,6 +39,7 @@ export default function ComicSeriesPage() {
   const [comic, setComic] = useState<ComicSeries | null>(null)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [notFound, setNotFound] = useState(false)
+  const [stats, setStats] = useState<{ total: number; monthly: number } | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -59,6 +61,11 @@ export default function ComicSeriesPage() {
       if (!c) { setNotFound(true); return }
       setComic(c as ComicSeries)
       setEpisodes((eps ?? []) as Episode[])
+      const { data: rows } = await supabase.rpc('comic_stats')
+      if (live && Array.isArray(rows)) {
+        const row = (rows as any[]).find((r) => r.comic_id === id)
+        if (row) setStats({ total: Number(row.total_views ?? 0), monthly: Number(row.monthly_views ?? 0) })
+      }
     })()
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,6 +114,20 @@ export default function ComicSeriesPage() {
           {comic?.synopsis && (
             <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-white/80">{comic.synopsis}</p>
           )}
+          <p className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-white/85">
+            <span className="inline-flex items-center gap-1">
+              <Eye aria-hidden className="h-3.5 w-3.5" />
+              {formatCompactCount(stats?.total ?? episodes.reduce((sum, e) => sum + (e.view_count ?? 0), 0))} views
+            </span>
+            {stats && (
+              <>
+                <span aria-hidden className="text-white/40">·</span>
+                <span>{formatCompactCount(stats.monthly)} this month</span>
+              </>
+            )}
+            <span aria-hidden className="text-white/40">·</span>
+            <span>{episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}</span>
+          </p>
         </div>
       </div>
 
@@ -150,7 +171,7 @@ export default function ComicSeriesPage() {
                   </span>
                   <span className="mt-0.5 block truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">{ep.title}</span>
                   <span className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
-                    <Eye aria-hidden className="h-3 w-3" /> {ep.view_count.toLocaleString()} reads
+                    <Eye aria-hidden className="h-3 w-3" /> {formatCompactCount(ep.view_count)} views
                   </span>
                 </span>
                 <ChevronRight aria-hidden className="h-5 w-5 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5" />

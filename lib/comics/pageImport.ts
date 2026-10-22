@@ -243,3 +243,45 @@ export async function fetchPageHtmlWithFallback(
     }
   }
 }
+
+/**
+ * The series cover: the poster's address on a series page. Comic
+ * sites put it in the page's social meta (og:image) or as the one
+ * image carrying a WordPress poster size in its filename (the
+ * -193x278 style suffix). Falls back to the first image that is not
+ * obvious site decoration. Returns an absolute source URL, or null.
+ */
+export function extractSeriesCover(html: string, pageUrl: string): string | null {
+  const meta = html.match(/<meta[^>]+(?:property|name)\s*=\s*"(?:og:image|twitter:image)"[^>]+content\s*=\s*"([^"]+)"/i)?.[1]
+    ?? html.match(/<meta[^>]+content\s*=\s*"([^"]+)"[^>]+(?:property|name)\s*=\s*"(?:og:image|twitter:image)"/i)?.[1];
+  if (meta) {
+    try {
+      const abs = new URL(decodeEntities(meta.trim()), pageUrl).toString();
+      if (IMAGE_EXT.test(abs)) return abs;
+    } catch { /* fall through to the image scan */ }
+  }
+  const imgs: string[] = [];
+  const imgRe = /<img\b[^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = imgRe.exec(html)) !== null) {
+    const tag = m[0];
+    const attr = (name: string) => {
+      const mm = tag.match(new RegExp(`${name}\\s*=\\s*"([^"]+)"`, 'i'))
+        ?? tag.match(new RegExp(`${name}\\s*=\\s*'([^']+)'`, 'i'));
+      return mm ? decodeEntities(mm[1]).trim() : null;
+    };
+    let raw = attr('src');
+    const lazy = attr('data-src') ?? attr('data-lazy-src') ?? attr('data-original');
+    if (lazy && (!raw || /blank|loading|placeholder|spacer|1x1/i.test(raw))) raw = lazy;
+    const srcset = attr('srcset') ?? attr('data-srcset');
+    if (srcset) raw = bestFromSrcset(srcset) ?? raw;
+    if (!raw || raw.startsWith('data:')) continue;
+    let abs: string;
+    try { abs = new URL(raw, pageUrl).toString(); } catch { continue; }
+    if (!/\.(jpe?g|png|webp)(\?.*)?$/i.test(abs)) continue;
+    if (STRAY_PATH.test(abs)) continue;
+    if (!imgs.includes(abs)) imgs.push(abs);
+  }
+  const poster = imgs.find((u) => /-\d{2,4}x\d{2,4}\.(jpe?g|png|webp)$/i.test(u.split('?')[0]));
+  return poster ?? imgs[0] ?? null;
+}

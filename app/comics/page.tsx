@@ -4,7 +4,8 @@ import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, ChevronRight } from '@/lib/icons'
+import { BookOpen, ChevronRight, Eye } from '@/lib/icons'
+import { formatCompactCount } from '@/lib/utils/helpers'
 
 
 interface ComicSeries {
@@ -17,6 +18,7 @@ interface ComicSeries {
   latestNo: number
   latestAt: string | null
   totalReads: number
+  monthlyViews: number
 }
 
 const isFresh = (at: string | null) =>
@@ -33,7 +35,7 @@ export default function ComicsPage() {
   const supabase = createClient()
 
   const load = async () => {
-    const [{ data: comics }, { data: eps }] = await Promise.all([
+    const [{ data: comics }, { data: eps }, { data: stats }] = await Promise.all([
       supabase.from('comics')
         .select('id, title, synopsis, cover_url, story_status')
         .eq('status', 'published')
@@ -42,7 +44,11 @@ export default function ComicsPage() {
         .select('id, comic_id, episode_no, cover_url, published_at, view_count')
         .eq('status', 'published')
         .order('episode_no', { ascending: false }),
+      supabase.rpc('comic_stats'),
     ])
+    const statsByComic = new Map<string, { total: number; monthly: number }>(
+      ((stats ?? []) as any[]).map((r) => [r.comic_id, { total: Number(r.total_views ?? 0), monthly: Number(r.monthly_views ?? 0) }])
+    )
     const byComic = new Map<string, { count: number; latestNo: number; latestAt: string | null; cover: string | null; reads: number }>()
     for (const e of (eps ?? []) as any[]) {
       if (!e.comic_id) continue
@@ -67,7 +73,8 @@ export default function ComicsPage() {
         episodeCount: roll?.count ?? 0,
         latestNo: roll?.latestNo ?? 0,
         latestAt: roll?.latestAt ?? null,
-        totalReads: roll?.reads ?? 0,
+        totalReads: statsByComic.get(c.id)?.total ?? roll?.reads ?? 0,
+        monthlyViews: statsByComic.get(c.id)?.monthly ?? 0,
       }
     }).filter((s) => s.episodeCount > 0)
     // Freshest series first: the rack leads with what just dropped.
@@ -135,6 +142,9 @@ export default function ComicsPage() {
                   <p className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-white/85">
                     <BookOpen aria-hidden className="h-3.5 w-3.5" />
                     {featured.episodeCount} {featured.episodeCount === 1 ? 'episode' : 'episodes'}
+                    <span aria-hidden className="text-white/40">·</span>
+                    <Eye aria-hidden className="h-3.5 w-3.5" />
+                    {formatCompactCount(featured.totalReads)} views
                     <ChevronRight aria-hidden className="h-3.5 w-3.5" />
                   </p>
                 </div>
@@ -167,6 +177,8 @@ export default function ComicsPage() {
                   </p>
                   <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
                     <BookOpen aria-hidden className="h-3 w-3" /> {s.episodeCount} {s.episodeCount === 1 ? 'episode' : 'episodes'}
+                    <span aria-hidden className="text-neutral-300">·</span>
+                    <Eye aria-hidden className="h-3 w-3" /> {formatCompactCount(s.totalReads)} views
                   </p>
                 </div>
               </Link>
