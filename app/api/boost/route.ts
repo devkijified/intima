@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 
-const BOOST_COST_COINS = 500; // 30 minutes, top of map
+const BOOST_COST_FALLBACK = 500; // 30 minutes, top of map
+
+/** The live boost price from platform settings (Admin, Settings). */
+async function boostCostCoins(svc: { from: (t: string) => any }): Promise<number> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  try {
+    const { data } = await svc.from('platform_settings').select('value').eq('key', 'boost_cost_coins').maybeSingle();
+    const v = Number((data as { value?: unknown } | null)?.value);
+    if (Number.isFinite(v) && v > 0) return Math.round(v);
+  } catch { /* fall through */ }
+  return BOOST_COST_FALLBACK;
+}
 const BOOST_MINUTES = 30;
 
 /** POST /api/boost: companions buy top-of-map placement with coins. */
@@ -22,6 +32,7 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: 'Companions only' }, { status: 403 });
   }
 
+  const BOOST_COST_COINS = await boostCostCoins(svc);
   const { error: spendErr } = await svc.rpc('spend_coins', {
     p_user_id: user.id,
     p_amount: BOOST_COST_COINS,

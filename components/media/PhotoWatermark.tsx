@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils/helpers';
 import { watermarkText } from '@/lib/site';
+import { getSetting } from '@/lib/settings/platformSettings';
 
 /**
  * Content watermark in the Fansly pattern: the site's own link
@@ -31,7 +32,16 @@ export function PhotoWatermark({
 }) {
   const [text, setText] = useState(() => watermarkText(username));
   useEffect(() => {
-    setText(watermarkText(username));
+    let live = true;
+    // The owner can set the exact watermark line in Admin, Settings
+    // (watermark_text). Empty means: use the live domain, joined
+    // with her username, as before.
+    getSetting<string>('watermark_text', '').then((custom) => {
+      if (!live) return;
+      const base = typeof custom === 'string' ? custom.trim() : '';
+      setText(base ? (username ? `${base}/${username}` : base) : watermarkText(username));
+    });
+    return () => { live = false; };
   }, [username]);
 
   if (variant === 'edge') {

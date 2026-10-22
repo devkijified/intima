@@ -9,6 +9,7 @@ import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 import {
   refundTransaction,
   refundAmountNgn,
+  getRefundPct,
   listRefundsForTransaction,
   refundStateForGatewayStatus,
 } from '@/lib/payments/paystack';
@@ -232,18 +233,19 @@ export async function attemptRefundDetailed(
   if (!request.payment_ref || request.refund_state === 'refunded') {
     return { state: request.refund_state ?? 'pending', error: null };
   }
-  // Coins refunds are instant: 85% of the fee returns to the
+  // Coins refunds are instant: the refund_pct share of the fee returns to the
   // wallet it came from. credit_coins is idempotent on its ref, so
   // a retry after a crash can never pay twice.
   if (request.payment_rail === 'coins') {
     const fee = await boardFeeNgn(svc);
-    const refundCoins = Math.round(Math.ceil(fee / 10) * 0.85);
+    const pct = await getRefundPct(svc);
+    const refundCoins = Math.round(Math.ceil(fee / 10) * (pct / 100));
     const { error } = await svc.rpc('credit_coins', {
       p_user_id: request.client_id,
       p_amount: refundCoins,
       p_kind: 'board_fee',
       p_ref: `board-refund-${request.id}`,
-      p_meta: { board_request_id: request.id, pct: 85 },
+      p_meta: { board_request_id: request.id, pct },
     });
     if (error) {
       return { state: 'failed', error: 'The coin refund did not go through' };
@@ -262,7 +264,7 @@ export async function attemptRefundDetailed(
       .eq('id', request.id);
     return { state: 'pending', error: null };
   }
-  // Board refunds return 85% of the fee; the platform keeps
+  // Board refunds return the refund_pct share of the fee; the platform keeps
   // 15% for processing (see REFUND_PCT in lib/payments/paystack).
   const fee = await boardFeeNgn(svc);
   const paymentRef = request.payment_ref;
@@ -283,7 +285,7 @@ export async function attemptRefundDetailed(
     return { state, error: null };
   }
   try {
-    const result = await refundTransaction(paymentRef, refundAmountNgn(fee) * 100);
+    const result = await refundTransaction(paymentRef, refundAmountNgn(fee, await getRefundPct(svc)) * 100);
     const state =
       result.status === 'success' ? 'refunded' : result.status === 'pending' ? 'pending' : 'failed';
     await svc
@@ -338,14 +340,15 @@ export async function expireIfDue(
   const row = updated as BoardRequestRow;
   const refund = await attemptRefund(svc, row);
   const fee = await boardFeeNgn(svc);
+  const pct = await getRefundPct(svc);
   await notifyUsers({
     userIds: [row.client_id],
     type: 'board_expired',
     title: 'Your request expired',
     body:
       refund === 'refunded'
-        ? `No companion picked up your request in time. 85% of your connection fee (₦${refundAmountNgn(fee).toLocaleString('en-NG')}) has been refunded.`
-        : `No companion picked up your request in time. Your refund of 85% of the connection fee (₦${refundAmountNgn(fee).toLocaleString('en-NG')}) is being processed.`,
+        ? `No companion picked up your request in time. ${pct}% of your connection fee (₦${refundAmountNgn(fee, pct).toLocaleString('en-NG')}) has been refunded.`
+        : `No companion picked up your request in time. Your refund of ${pct}% of the connection fee (₦${refundAmountNgn(fee, pct).toLocaleString('en-NG')}) is being processed.`,
     link: '/board',
   }).catch(() => {});
   return { ...row, refund_state: refund };

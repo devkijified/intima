@@ -21,6 +21,16 @@ const SETTING_HELP: Record<string, string> = {
     'The platform share of fan club subscriptions, as a percent. The companion keeps the rest. It applies at the next charge or renewal.',
   cashout_min_coins:
     'The smallest number of coins a companion can cash out. Requests below this are refused, so raising it can strand small balances.',
+  boost_cost_coins:
+    'What a 30 minute boost costs a companion, in coins. The boost screen and the charge both read this. Applies to the next boost bought.',
+  referral_reward_companion_coins:
+    'Coins a companion earns when a friend who joined through her link opens their first paid connection. Applies to rewards granted after you save.',
+  referral_reward_client_coins:
+    'Coins a client earns when a friend who joined through their link opens their first paid connection. Applies to rewards granted after you save.',
+  watermark_text:
+    'The line printed across companion photos and videos, with her username joined to it. Leave it empty to print the live domain automatically. It applies to new views as pages load.',
+  refund_pct:
+    'The percentage of a fee refunded when a refund is due on the request board or a fee dispute. The platform keeps the rest. It applies to refunds made after you save.',
   usd_ngn_rate:
     'The naira rate used when dollar amounts are shown or converted. A wrong rate misstates prices anywhere dollars appear.',
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getSetting } from '@/lib/settings/platformSettings'
 import { COIN_PACKAGES } from '@/lib/coins/packages'
 import { Coins, Loader2, Plus, History } from '@/lib/icons'
 import { coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
@@ -26,11 +27,18 @@ export default function CoinsPage() {
   const [balance, setBalance] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [referralCoins, setReferralCoins] = useState(0)
+  const [rewardCompanion, setRewardCompanion] = useState(500)
+  const [rewardClient, setRewardClient] = useState(100)
   const [referralCount, setReferralCount] = useState(0)
   const [topups, setTopups] = useState<Topup[]>([])
   const [buying, setBuying] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [methods, setMethods] = useState<{ card: boolean; transfer: boolean }>({ card: false, transfer: false })
+
+  useEffect(() => {
+    getSetting<number>('referral_reward_companion_coins', 500).then((v) => { if (typeof v === 'number') setRewardCompanion(v) }).catch(() => {})
+    getSetting<number>('referral_reward_client_coins', 100).then((v) => { if (typeof v === 'number') setRewardClient(v) }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Card and bank transfer checkout appear only once Paystack is live.
@@ -163,7 +171,7 @@ export default function CoinsPage() {
       <div className="mt-4 rounded-3xl border border-neutral-200/70 bg-white px-5 py-4">
         <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-widest text-neutral-400">
           Referral rewards
-          <HelpTip text="Share your link. When a friend joins through it and opens their first paid connection, you earn: 500 coins as a companion, 100 coins as a client." />
+          <HelpTip text={`Share your link. When a friend joins through it and opens their first paid connection, you earn: ${rewardCompanion} coins as a companion, ${rewardClient} coins as a client.`} />
         </p>
         {loading ? (
           <div className="mt-2 space-y-2">

@@ -148,12 +148,30 @@ export async function settleCoinTopup(
   return { credited: true };
 }
 
-/** Intima refunds this share of a payment; the rest is kept for processing. */
+/** Fallback refund share, used only when the refund_pct setting
+ * cannot be read. The live value lives in platform_settings
+ * (Admin, Settings) so the owner can change it without a deploy. */
 export const REFUND_PCT = 85;
 
-/** The refund due on an amount, in naira: REFUND_PCT of it. */
-export function refundAmountNgn(amountNgn: number): number {
-  return Math.round((amountNgn * REFUND_PCT) / 100);
+/** The refund due on an amount, in naira: pct of it (default REFUND_PCT). */
+export function refundAmountNgn(amountNgn: number, pct: number = REFUND_PCT): number {
+  return Math.round((amountNgn * pct) / 100);
+}
+
+/** The live refund percentage from platform settings. */
+export async function getRefundPct(
+  svc: { from: (t: string) => any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<number> {
+  try {
+    const { data } = await svc
+      .from('platform_settings')
+      .select('value')
+      .eq('key', 'refund_pct')
+      .maybeSingle();
+    const v = Number((data as { value?: unknown } | null)?.value);
+    if (Number.isFinite(v) && v >= 0 && v <= 100) return v;
+  } catch { /* fall through to the default */ }
+  return REFUND_PCT;
 }
 
 /**

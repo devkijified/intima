@@ -137,7 +137,20 @@ export async function maybeGrantReferralReward(
       .maybeSingle();
     if (existingReward) return;
 
-    const coins = referrer.role === 'model' ? 500 : 100;
+    // Reward amounts are owner settings (Admin, Settings); the
+    // literals are only the fallback when a row cannot be read.
+    const { data: rewardRows } = await svc
+      .from('platform_settings')
+      .select('key, value')
+      .in('key', ['referral_reward_companion_coins', 'referral_reward_client_coins']);
+    const rewardFor = (key: string, fallback: number) => {
+      const row = (rewardRows ?? []).find((r: { key: string }) => r.key === key) as { value?: unknown } | undefined;
+      const v = Number(row?.value);
+      return Number.isFinite(v) && v >= 0 ? Math.round(v) : fallback;
+    };
+    const coins = referrer.role === 'model'
+      ? rewardFor('referral_reward_companion_coins', 500)
+      : rewardFor('referral_reward_client_coins', 100);
 
     const { error: rewardErr } = await svc.from('referral_rewards').insert({
       referrer_id: referrer.id,

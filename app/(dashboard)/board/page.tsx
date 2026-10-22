@@ -9,6 +9,7 @@ import { showToast } from '@/lib/toast'
 import { createClient } from '@/lib/supabase/client'
 import { formatCompactPrice } from '@/lib/utils/helpers'
 import { useCities } from '@/lib/citiesLive'
+import { getConnectionFeeNgn, getSetting } from '@/lib/settings/platformSettings'
 import { SERVICE_TYPE_KEYS, SERVICE_TYPE_LABELS } from '@/lib/connections/serviceType'
 import { BOARD_TIMINGS, BOARD_TIMING_LABELS } from '@/lib/board/shared'
 
@@ -89,6 +90,19 @@ export default function BoardPage() {
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
+  // Money values come from platform settings, never literals: the
+  // admin can change the fee or the refund share without a deploy.
+  const [feeNgn, setFeeNgn] = useState<number | null>(null)
+  const [refundPct, setRefundPct] = useState(85)
+
+  useEffect(() => {
+    getConnectionFeeNgn().then(setFeeNgn).catch(() => {})
+    getSetting<number>('refund_pct', 85).then((v) => { if (typeof v === 'number') setRefundPct(v) }).catch(() => {})
+  }, [])
+
+  const feeCoins = feeNgn !== null ? Math.ceil(feeNgn / 10) : null
+  const feeLabel = feeNgn !== null ? `₦${feeNgn.toLocaleString('en-NG')}` : ''
+  const refundLabel = feeNgn !== null ? `₦${Math.round((feeNgn * refundPct) / 100).toLocaleString('en-NG')}` : ''
 
   // Post form
   const [city, setCity] = useState<string>('Lagos')
@@ -206,7 +220,7 @@ export default function BoardPage() {
       }
       showToast(
         json?.refund_state === 'refunded'
-          ? 'Request cancelled. 85% of your fee (₦4,250) has been refunded.'
+          ? `Request cancelled. ${refundPct}% of your fee (${refundLabel}) has been refunded.`
           : 'Request cancelled.'
       )
       await load()
@@ -330,7 +344,7 @@ export default function BoardPage() {
         <div>
           <h1 className="t-page-title flex items-center gap-2 font-display font-semibold text-charcoal">
             Request board
-            <HelpTip text="Post what you want and your offer. Verified companions in your city respond, and you pick who to connect with. If nobody fills your request in 48 hours, 85% of the connection fee (₦4,250 of ₦5,000) is refunded and 15% is kept for processing." />
+            <HelpTip text={`Post what you want and your offer. Verified companions in your city respond, and you pick who to connect with. If nobody fills your request in 48 hours, ${refundPct}% of the connection fee (${refundLabel} of ${feeLabel}) is refunded and ${100 - refundPct}% is kept for processing.`} />
           </h1>
           <p className="t-body mt-1 text-neutral-500">
             {isModel
@@ -410,10 +424,10 @@ export default function BoardPage() {
             </div>
             <div className="rounded-2xl bg-primary/5 px-4 py-3">
               <p className="flex items-center gap-1.5 text-sm text-charcoal">
-                The connection fee is ₦5,000, paid now.
+                The connection fee is {feeLabel || 'shown at payment'}, paid now.
                 <HelpTip text="The fee holds your request on the board for 48 hours. If nobody fills it, or you cancel before it is filled, the fee comes back to you through the same payment method." />
               </p>
-              <p className="mt-0.5 text-xs text-neutral-500">85% of the fee is refunded if your request is not filled in 48 hours.</p>
+              <p className="mt-0.5 text-xs text-neutral-500">{refundPct}% of the fee is refunded if your request is not filled in 48 hours.</p>
             </div>
             {formError && <p className="text-sm text-red-500">{formError}</p>}
             <button
@@ -458,16 +472,16 @@ export default function BoardPage() {
 
                 {r.status === 'awaiting_payment' && (
                   <div className="mt-4 space-y-2">
-                    {walletBalance !== null && walletBalance >= 500 && (
+                    {walletBalance !== null && feeCoins !== null && walletBalance >= feeCoins && (
                       <button onClick={() => payWithWallet(r.id)} disabled={busy === `pay-${r.id}`} className="flex min-h-[48px] w-full items-center justify-center rounded-xl bg-charcoal px-6 py-3 text-sm font-semibold text-white disabled:opacity-60">
-                        Pay ₦5,000 from your wallet (500 coins)
+                        Pay {feeLabel} from your wallet ({feeCoins} coins)
                       </button>
                     )}
                     <button onClick={() => pay(r.id)} disabled={busy === `pay-${r.id}`} className="btn-luxe flex min-h-[48px] w-full items-center justify-center px-6 py-3 text-sm disabled:opacity-60">
-                      Pay ₦5,000 with card
+                      Pay {feeLabel} with card
                     </button>
                     <button onClick={() => pay(r.id, 'bank_transfer')} disabled={busy === `pay-${r.id}`} className="flex min-h-[48px] w-full items-center justify-center rounded-xl border border-primary/30 px-6 py-3 text-sm font-medium text-primary disabled:opacity-60">
-                      Pay ₦5,000 with bank transfer
+                      Pay {feeLabel} with bank transfer
                     </button>
                     <button onClick={() => cancel(r.id)} disabled={busy === `cancel-${r.id}`} className="min-h-[44px] w-full py-2 text-sm font-medium text-neutral-400 hover:text-charcoal">
                       Cancel request
@@ -588,13 +602,13 @@ export default function BoardPage() {
                 {r.status === 'expired' && (
                   <p className="mt-3 text-sm text-neutral-600">
                     {r.refund_state === 'refunded'
-                      ? 'Expired with no pick. 85% of your fee (₦4,250) has been refunded.'
-                      : 'Expired with no pick. Your refund (85% of the fee, ₦4,250) is being processed.'}
+                      ? `Expired with no pick. ${refundPct}% of your fee (${refundLabel}) has been refunded.`
+                      : `Expired with no pick. Your refund (${refundPct}% of the fee, ${refundLabel}) is being processed.`}
                   </p>
                 )}
                 {r.status === 'cancelled' && (
                   <p className="mt-3 text-sm text-neutral-500">
-                    Cancelled.{r.refund_state === 'refunded' ? ' 85% of your fee (₦4,250) has been refunded.' : r.refund_state ? ' Your refund (85% of the fee) is being processed.' : ''}
+                    Cancelled.{r.refund_state === 'refunded' ? ` ${refundPct}% of your fee (${refundLabel}) has been refunded.` : r.refund_state ? ` Your refund (${refundPct}% of the fee) is being processed.` : ''}
                   </p>
                 )}
               </article>

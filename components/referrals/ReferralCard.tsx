@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { companionShareLink, referralLink, shareLink } from '@/lib/links';
+import { getSetting } from '@/lib/settings/platformSettings';
 import { coinsWithNgn } from '@/lib/utils/helpers';
 import { showToast } from '@/lib/toast';
 import { Check, Copy, Share2 } from '@/lib/icons';
@@ -28,6 +29,13 @@ export function ReferralCard() {
   const [friends, setFriends] = useState<FriendRow[]>([]);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [rewardCompanion, setRewardCompanion] = useState(500);
+  const [rewardClient, setRewardClient] = useState(100);
+
+  useEffect(() => {
+    getSetting<number>('referral_reward_companion_coins', 500).then((v) => { if (typeof v === 'number') setRewardCompanion(v); }).catch(() => {});
+    getSetting<number>('referral_reward_client_coins', 100).then((v) => { if (typeof v === 'number') setRewardClient(v); }).catch(() => {});
+  }, []);
   const supabase = createClient();
 
   useEffect(() => {
@@ -154,7 +162,7 @@ export function ReferralCard() {
       </div>
       <p className="mt-2 text-xs leading-relaxed text-neutral-500">
         You earn when a friend joins with your link and opens their first paid connection:{' '}
-        {coinsWithNgn(500)} if you are a companion, {coinsWithNgn(100)} as a client.
+        {coinsWithNgn(rewardCompanion)} if you are a companion, {coinsWithNgn(rewardClient)} as a client.
       </p>
       {friends.length > 0 && (
         <div className="mt-3 space-y-1.5">
