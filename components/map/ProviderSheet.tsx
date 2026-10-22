@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from '@/lib/icons';
+import { BadgeCheck, Bell, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Heart, LayoutGrid, ListChecks, MapPin, Phone, Play, Star, Tag, Video, X } from '@/lib/icons';
 import { RateCard } from '@/components/rates/RateCard';
 import { HelpTip } from '@/components/ui/Tooltip';
 import { ServiceChips } from '@/components/services/ServiceChips';
@@ -236,6 +236,60 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
     setFavBusy(false);
   };
 
+  // Follow: the same broadcast_follows system as the companion page,
+  // so the sheet and the profile never disagree. Guests are routed
+  // to signup, exactly like favorites.
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!provider) return;
+    setIsFollowing(false);
+    setFollowerCount(null);
+    if (!provider.userId) return;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: fc } = await supabase.rpc('follower_count', { pid: provider.userId });
+        if (typeof fc === 'number') setFollowerCount(fc);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase.from('broadcast_follows')
+          .select('provider_id').eq('provider_id', provider.userId).eq('follower_id', user.id).maybeSingle();
+        setIsFollowing(!!data);
+      } catch { /* guests and offline just see Follow */ }
+    })();
+  }, [provider?.id]);
+
+  const toggleFollow = async () => {
+    if (!provider?.userId || followBusy) return;
+    setFollowBusy(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = '/signup?next=/';
+        return;
+      }
+      if (user.id === provider.userId) return;
+      if (isFollowing) {
+        const { error } = await supabase.from('broadcast_follows')
+          .delete().eq('provider_id', provider.userId).eq('follower_id', user.id);
+        if (error) { flashCallNote('That did not go through. Try again.'); return; }
+        setIsFollowing(false);
+        setFollowerCount((c) => (c === null ? c : Math.max(0, c - 1)));
+      } else {
+        const { error } = await supabase.from('broadcast_follows')
+          .insert({ provider_id: provider.userId, follower_id: user.id });
+        if (error && error.code !== '23505') { flashCallNote('That did not go through. Try again.'); return; }
+        setIsFollowing(true);
+        if (!error) setFollowerCount((c) => (c === null ? c : c + 1));
+      }
+    } catch { flashCallNote('That did not go through. Try again.'); }
+    setFollowBusy(false);
+  };
+
   // Load reviews: real rows for DB providers, deterministic mocks for previews.
   // Also bumps the view counter best-effort (traction stat).
   useEffect(() => {
@@ -466,6 +520,19 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
               >
                 <Heart className={'h-4 w-4 ' + (isFav ? 'fill-primary text-primary' : 'text-neutral-400')} />
               </button>
+              {provider.userId && (
+                <button
+                  onClick={toggleFollow}
+                  disabled={followBusy}
+                  className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all active:scale-95 ${isFollowing ? 'bg-charcoal text-white' : 'bg-[#AC244D]/10 text-[#AC244D] ring-1 ring-[#AC244D]/25'}`}
+                >
+                  <Bell className="h-4 w-4" />
+                  {isFollowing ? 'Following' : 'Follow'}
+                  {followerCount !== null && followerCount > 0 && (
+                    <span className={isFollowing ? 'text-white/70' : 'text-[#AC244D]/70'}>{followerCount}</span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 

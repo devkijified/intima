@@ -400,6 +400,14 @@
   .stagger > *:nth-child(7) { animation-delay: 0.26s; }
   .stagger > *:nth-child(8) { animation-delay: 0.30s; }
 
+  /* Cheap offscreen cards in long grids: the browser skips layout
+     and paint for cards outside the viewport, which keeps scrolling
+     smooth on phones. */
+  .cv-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 340px;
+  }
+
   /* Hide scrollbars on horizontal scrollers without killing scroll. */
   .no-scrollbar {
     -ms-overflow-style: none;

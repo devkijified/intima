@@ -25,7 +25,7 @@ export function ProviderListCard({ provider, onSelect, travelNote }: ProviderLis
   const recency = formatRecency(provider.lastActiveAt);
 
   return (
-    <li>
+    <li className="cv-card">
       <button
         onClick={() => onSelect(provider)}
         className={'group flex w-full flex-col overflow-hidden rounded-[24px] bg-white text-left shadow-soft ring-1 transition-all duration-200 active:scale-[0.98] ' +
@@ -37,7 +37,8 @@ export function ProviderListCard({ provider, onSelect, travelNote }: ProviderLis
             src={provider.avatar}
             alt={provider.displayName}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04] animate-fade-in"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
           {/* Top veil keeps the badges legible on bright photos. */}
           <div className="photo-veil-top pointer-events-none absolute inset-x-0 top-0 h-16" />

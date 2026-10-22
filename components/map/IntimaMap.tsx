@@ -891,7 +891,7 @@ export default function IntimaMap() {
 
       {/* First-class list view. Also the graceful fallback when tiles fail. */}
       {showList && (
-        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[124px]">
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[124px] [touch-action:pan-y] [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch]">
           {mapFailed && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
               <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
@@ -917,13 +917,29 @@ export default function IntimaMap() {
               </div>
             </div>
           )}
-          <div className="mb-3 flex items-baseline justify-between px-1">
-            <h2 className="font-display text-[22px] font-semibold tracking-tight text-charcoal">
-              Companions
-            </h2>
+          <div className="mb-3 px-1">
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-display text-[22px] font-semibold tracking-tight text-charcoal">
+                Companions
+              </h2>
+              {providersReady && (
+                <span className="rounded-full bg-[#AC244D]/10 px-3 py-1.5 text-xs font-semibold text-[#AC244D]">
+                  {filtered.length} nearby
+                </span>
+              )}
+            </div>
             {providersReady && (
-              <p className="text-xs font-medium text-neutral-500">
-                {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+                <span>
+                  {filtered.length} {filtered.length === 1 ? 'companion' : 'companions'} nearby
+                  {filters.city ? ` in ${filters.city}` : ''}
+                </span>
+                <span className="flex items-center gap-1">
+                  <BadgeCheck aria-hidden className="h-3 w-3" /> Verified
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-green-500" /> Available now
+                </span>
               </p>
             )}
           </div>
@@ -934,7 +950,7 @@ export default function IntimaMap() {
               ))}
             </ul>
           ) : filtered.length > 0 ? (
-            <ul className="stagger grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <ul className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {filtered.map((p) => (
                 <ProviderListCard key={p.id} provider={p} onSelect={goToProfile} travelNote={travelNoteFor(p)} />
               ))}
