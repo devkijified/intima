@@ -121,7 +121,7 @@ export default function VerificationPage() {
       setStatus('pending')
       setDone(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong uploading. Please try again.')
+      setError('Something went wrong uploading. Please check your connection and try again.')
     }
     setBusy(false)
   }

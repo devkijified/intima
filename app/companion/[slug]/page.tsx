@@ -236,6 +236,7 @@ export default function ModelDetailPage() {
   const [isFav, setIsFav] = useState(false)
   const [favBusy, setFavBusy] = useState(false)
   const [following, setFollowing] = useState(false)
+  const [followerCount, setFollowerCount] = useState<number | null>(null)
   const [tours, setTours] = useState<{ city: string; start_date: string; end_date: string }[]>([])
   const [followBusy, setFollowBusy] = useState(false)
 
@@ -387,7 +388,18 @@ export default function ModelDetailPage() {
           .eq('provider_id', id)
           .maybeSingle()
         if (live) setIsFav(!!fav)
+        const { data: fol } = await supabase
+          .from('broadcast_follows')
+          .select('provider_id')
+          .eq('provider_id', id)
+          .eq('follower_id', user.id)
+          .maybeSingle()
+        if (live) setFollowing(!!fol)
       }
+      // Public follower count (security-definer RPC, migration 069:
+      // the follows table itself only ever shows a visitor her own row).
+      const { data: fc } = await supabase.rpc('follower_count', { pid: id })
+      if (live && typeof fc === 'number') setFollowerCount(fc)
 
       if (!live) return
 
@@ -531,12 +543,23 @@ export default function ModelDetailPage() {
     if (!user) { showToast('Log in to follow'); window.location.href = '/login?next=/companion/' + encodeURIComponent(params.slug); return }
     setFollowBusy(true)
     if (following) {
-      await supabase.from('broadcast_follows').delete().eq('provider_id', provider?.id).eq('follower_id', user.id)
-      setFollowing(false)
+      const { error } = await supabase.from('broadcast_follows').delete().eq('provider_id', provider?.id).eq('follower_id', user.id)
+      if (error) {
+        showToast('Could not unfollow. Please try again')
+      } else {
+        setFollowing(false)
+        setFollowerCount((c) => (c === null ? c : Math.max(0, c - 1)))
+      }
     } else {
-      await supabase.from('broadcast_follows').insert({ provider_id: provider?.id, follower_id: user.id })
-      setFollowing(true)
-      showToast('Following. You will be notified when she goes live')
+      const { error } = await supabase.from('broadcast_follows').insert({ provider_id: provider?.id, follower_id: user.id })
+      if (error && error.code !== '23505') {
+        showToast('Could not follow. Please try again')
+      } else {
+        // 23505 means the follow was already saved; the state now matches.
+        setFollowing(true)
+        if (!error) setFollowerCount((c) => (c === null ? c : c + 1))
+        showToast('Following. You will be notified when she goes live')
+      }
     }
     setFollowBusy(false)
   }
@@ -923,6 +946,11 @@ export default function ModelDetailPage() {
           )}
           {viewerId !== provider.id && (
             <HelpTip text="Following is free. It only sends you a notification when this companion goes live, and it is separate from the paid fan club." />
+          )}
+          {followerCount !== null && followerCount > 0 && (
+            <span className="text-xs font-medium text-neutral-500">
+              {followerCount.toLocaleString()} {followerCount === 1 ? 'follower' : 'followers'}
+            </span>
           )}
           <Tooltip label="Share her page">
           <button

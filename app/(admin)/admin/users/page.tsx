@@ -14,13 +14,16 @@ interface UserRow {
   username: string | null
   role: string
   is_verified: boolean
+  is_hidden: boolean
   created_at: string
 }
 
 /**
- * Admin > Users. Real list with search, verification state, and the
- * ability to mark a user as suspended (verification_status = rejected).
- * Suspension removes them from public surfaces that filter on status.
+ * Admin > Users. Real list with search, verification state, and
+ * suspend/restore. Suspension flips profiles.is_hidden (and the
+ * map presence with it): the account disappears from public
+ * surfaces while its verification record stays exactly as it was,
+ * so restoring brings the person back whole.
  */
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([])
@@ -34,7 +37,7 @@ export default function AdminUsersPage() {
     setLoading(true)
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, username, role, is_verified, created_at')
+      .select('id, display_name, username, role, is_verified, is_hidden, created_at')
       .order('created_at', { ascending: false })
       .limit(200)
     setUsers((data ?? []) as UserRow[])
@@ -58,7 +61,8 @@ export default function AdminUsersPage() {
   async function doSuspend(u: UserRow) {
     setSuspendTarget(null)
     setActing(u.id)
-    await supabase.from('profiles').update({ verification_status: 'rejected' }).eq('id', u.id)
+    await supabase.from('profiles').update({ is_hidden: true }).eq('id', u.id)
+    await supabase.from('provider_presence').update({ show_on_map: false }).eq('provider_id', u.id)
     await supabase.from('admin_audit_logs').insert({
       action: 'user_suspended',
       target_id: u.id,
@@ -70,7 +74,13 @@ export default function AdminUsersPage() {
 
   async function restore(u: UserRow) {
     setActing(u.id)
-    await supabase.from('profiles').update({ verification_status: 'unverified' }).eq('id', u.id)
+    await supabase.from('profiles').update({ is_hidden: false }).eq('id', u.id)
+    await supabase.from('provider_presence').update({ show_on_map: true }).eq('provider_id', u.id)
+    await supabase.from('admin_audit_logs').insert({
+      action: 'user_restored',
+      target_id: u.id,
+      details: `Restored user ${u.display_name ?? u.id}`,
+    })
     setActing(null)
     load()
   }
@@ -106,19 +116,32 @@ export default function AdminUsersPage() {
                     </p>
                     <p className="text-xs text-neutral-500">
                       {u.username ? `@${u.username}` : ''} · {u.role} · joined {new Date(u.created_at).toLocaleDateString()}
+                      {u.is_hidden && <span className="ml-2 font-semibold text-amber-600">SUSPENDED</span>}
                     </p>
                   </div>
                   {u.role !== 'super_admin' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={acting === u.id}
-                      onClick={() => toggleSuspend(u)}
-                      aria-label="Suspend user"
-                      className="text-red-600"
-                    >
-                      <UserX aria-hidden className="h-3.5 w-3.5" />
-                    </Button>
+                    u.is_hidden ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={acting === u.id}
+                        onClick={() => restore(u)}
+                        aria-label="Restore user"
+                      >
+                        <ShieldCheck aria-hidden className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={acting === u.id}
+                        onClick={() => toggleSuspend(u)}
+                        aria-label="Suspend user"
+                        className="text-red-600"
+                      >
+                        <UserX aria-hidden className="h-3.5 w-3.5" />
+                      </Button>
+                    )
                   )}
                 </div>
               ))}
@@ -127,7 +150,7 @@ export default function AdminUsersPage() {
         </CardContent>
       </Card>
       <p className="text-xs text-neutral-400">
-        Suspension marks verification as rejected, which hides the user from public listings.
+        Suspension hides the user from public listings. Their verification record is untouched, so restoring brings them back exactly as they were.
       </p>
       <ConfirmDialog
         open={suspendTarget !== null}

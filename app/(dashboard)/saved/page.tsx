@@ -17,6 +17,7 @@ interface SavedProvider {
 
 export default function SavedPage() {
   const [saved, setSaved] = useState<SavedProvider[]>([])
+  const [followingList, setFollowingList] = useState<SavedProvider[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -51,10 +52,35 @@ export default function SavedPage() {
         rating: agg ? Math.round((agg.sum / agg.n) * 10) / 10 : null,
       }
     }))
+    // Companions this member follows for go-live alerts.
+    const { data: fols } = await supabase.from('broadcast_follows')
+      .select('provider_id').eq('follower_id', user.id)
+    const folIds = (fols ?? []).map((f: any) => f.provider_id)
+    if (folIds.length > 0) {
+      const { data: folProfs } = await supabase.from('profiles')
+        .select('id, display_name, avatar_url, username').in('id', folIds)
+      setFollowingList((folProfs ?? []).map((p: any) => ({
+        provider_id: p.id,
+        display_name: p.display_name,
+        avatar_url: p.avatar_url,
+        city: cityById.get(p.id) ?? null,
+        username: p.username ?? null,
+        rating: null,
+      })))
+    } else {
+      setFollowingList([])
+    }
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  const unfollow = async (providerId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('broadcast_follows').delete().eq('provider_id', providerId).eq('follower_id', user.id)
+    setFollowingList((s) => s.filter((x) => x.provider_id !== providerId))
+  }
 
   const remove = async (providerId: string) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -111,6 +137,42 @@ export default function SavedPage() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mt-10 font-display text-2xl font-semibold text-charcoal">Following</h2>
+      <p className="mt-1 text-sm text-neutral-500">
+        You get a notification the moment any of them goes live. Following is free and
+        separate from the fan club.
+      </p>
+      {followingList.length === 0 ? (
+        <div className="mt-5 rounded-3xl border border-neutral-200/80 bg-white p-8 text-center">
+          <p className="font-medium text-charcoal">You are not following anyone yet</p>
+          <p className="mt-1 text-sm text-neutral-500">Tap Follow on any companion profile and she will appear here.</p>
+        </div>
+      ) : (
+        <div className="mt-5 space-y-2.5">
+          {followingList.map((p) => (
+            <div key={p.provider_id} className="flex items-center gap-3 rounded-3xl bg-white p-3 ring-1 ring-black/[0.045] shadow-soft">
+              <Link href={p.username ? `/companion/${p.username}` : `/companion/${p.provider_id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                {p.avatar_url ? (
+                  <img src={p.avatar_url} alt={p.display_name ?? ''} className="h-12 w-12 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cream">
+                    <Heart className="h-5 w-5 text-neutral-300" />
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-charcoal">{p.display_name ?? 'Companion'}</span>
+                  {p.city && <span className="flex items-center gap-1 text-xs text-neutral-500"><MapPin aria-hidden className="h-3 w-3" />{p.city}</span>}
+                </span>
+              </Link>
+              <button onClick={() => unfollow(p.provider_id)}
+                className="inline-flex min-h-[44px] shrink-0 items-center rounded-full bg-cream px-4 text-xs font-semibold text-charcoal ring-1 ring-black/[0.06] active:scale-95">
+                Following
+              </button>
             </div>
           ))}
         </div>

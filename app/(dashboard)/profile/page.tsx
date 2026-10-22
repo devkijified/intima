@@ -366,7 +366,7 @@ export default function ProfilePage() {
       setSavedTick(true)
       setTimeout(() => setSavedTick(false), 2500)
     } catch (e: any) {
-      setError(e.message || 'Failed to save profile')
+      setError('Something went wrong saving your profile. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -395,7 +395,7 @@ export default function ProfilePage() {
       setSavedTick(true)
       setTimeout(() => setSavedTick(false), 2500)
     } catch (e: any) {
-      setError(e.message || 'Failed to save profile')
+      setError('Something went wrong saving your profile. Please try again.')
     } finally {
       setSaving(false)
     }

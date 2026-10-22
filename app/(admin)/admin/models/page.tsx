@@ -17,6 +17,7 @@ interface ModelRow {
   is_verified: boolean
   rate_short_time_ngn: number | null
   show_on_map: boolean | null
+  is_hidden: boolean
 }
 
 /**
@@ -28,13 +29,14 @@ export default function AdminModelsPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
+  const [msg, setMsg] = useState('')
   const supabase = createClient()
 
   async function load() {
     setLoading(true)
     const { data } = await supabase
       .from('profiles')
-      .select('id, display_name, username, avatar_url, is_verified, rate_short_time_ngn')
+      .select('id, display_name, username, avatar_url, is_verified, is_hidden, rate_short_time_ngn')
       .eq('role', 'model')
       .order('created_at', { ascending: false })
       .limit(200)
@@ -61,20 +63,46 @@ export default function AdminModelsPage() {
       || (m.city ?? '').toLowerCase().includes(q)
   })
 
+  // Hidden means: profile flag down AND presence off the map. The
+  // flag lives on profiles (is_hidden), so it works even when a
+  // companion has no presence row yet; presence is still flipped
+  // when a row exists so both records agree.
+  const isHidden = (m: ModelRow) => m.is_hidden === true || m.show_on_map === false
+
   async function toggleMap(m: ModelRow) {
     setActing(m.id)
+    setMsg('')
+    const hiding = !isHidden(m)
+    const { error: pErr } = await supabase
+      .from('profiles')
+      .update({ is_hidden: hiding })
+      .eq('id', m.id)
+    if (pErr) {
+      setMsg('That change did not save. Please try again.')
+      setActing(null)
+      return
+    }
     const { data: existing } = await supabase
       .from('provider_presence')
       .select('provider_id')
       .eq('provider_id', m.id)
       .maybeSingle()
     if (existing) {
-      await supabase.from('provider_presence').update({ show_on_map: !m.show_on_map }).eq('provider_id', m.id)
+      const { error: presErr } = await supabase
+        .from('provider_presence')
+        .update({ show_on_map: !hiding })
+        .eq('provider_id', m.id)
+      if (presErr) {
+        setMsg('Her profile flag changed but the map pin did not follow. Reload and try the toggle again.')
+        setActing(null)
+        load()
+        return
+      }
     }
     await supabase.from('admin_audit_logs').insert({
-      action: m.show_on_map ? 'model_hidden_from_map' : 'model_shown_on_map',
+      action: hiding ? 'model_hidden_from_map' : 'model_shown_on_map',
       target_id: m.id,
-      details: `${m.show_on_map ? 'Hid' : 'Showed'} ${m.display_name ?? m.id} on map`,
+      details: `${hiding ? 'Hid' : 'Showed'} ${m.display_name ?? m.id} on map`,
     })
     setActing(null)
     load()
@@ -94,6 +122,7 @@ export default function AdminModelsPage() {
           />
         </div>
       </div>
+      {msg && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{msg}</p>}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -118,6 +147,8 @@ export default function AdminModelsPage() {
                     </p>
                     <p className="text-xs text-neutral-500">
                       {m.city ?? 'No city'}{m.rate_short_time_ngn ? ` · ₦${m.rate_short_time_ngn.toLocaleString()}` : ''}
+                      {isHidden(m) && <span className="ml-2 font-semibold text-amber-600">HIDDEN FROM MAP</span>}
+                      {m.show_on_map === null && !m.is_hidden && <span className="ml-2 text-neutral-400">No presence yet</span>}
                     </p>
                   </div>
                   <Link
@@ -131,10 +162,10 @@ export default function AdminModelsPage() {
                     variant="outline"
                     disabled={acting === m.id}
                     onClick={() => toggleMap(m)}
-                    title={m.show_on_map ? 'Hide from map' : 'Show on map'}
-                    aria-label={m.show_on_map ? 'Hide from map' : 'Show on map'}
+                    title={isHidden(m) ? 'Show on map' : 'Hide from map'}
+                    aria-label={isHidden(m) ? 'Show on map' : 'Hide from map'}
                   >
-                    {m.show_on_map ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    {isHidden(m) ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
               ))}

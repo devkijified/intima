@@ -104,7 +104,7 @@ export default function AdminSettingsPage() {
         nextValue = raw
       }
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Invalid value')
+      setNotice('That value is not valid for this setting.')
       return
     }
 
@@ -138,7 +138,7 @@ export default function AdminSettingsPage() {
       )
       setNotice(`Saved ${row.key}.`)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Save failed')
+      setNotice('Save failed. Please check the value and try again.')
     } finally {
       setSaving(null)
     }

@@ -91,7 +91,7 @@ export default function AdminReportsPage() {
       await load()
       setNotice(`Report ${status}.`)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Action failed')
+      setNotice('That action did not go through. Please try again.')
     } finally {
       setActing(null)
     }
@@ -165,7 +165,7 @@ export default function AdminReportsPage() {
               <p className="text-sm text-gray-600 mb-1">
                 Reported:{' '}
                 <span className="font-medium text-charcoal">
-                  {row.reported?.display_name || row.reported?.full_name || 'Unknown provider'}
+                  {row.reported?.display_name || row.reported?.full_name || 'Unknown companion'}
                 </span>
                 {' '}by{' '}
                 <span className="font-medium text-charcoal">

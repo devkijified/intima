@@ -127,7 +127,7 @@ export async function POST(
       .update({ status: 'failed' })
       .eq('reference', reference);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Gateway error' },
+      { error: 'We could not start that payment. Please try again.' },
       { status: 502 }
     );
   }

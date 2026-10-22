@@ -253,7 +253,7 @@ export default function SetupWizardPage() {
       }
       return true
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save. Please try again.')
+      setError('Could not save. Please check your connection and try again.')
       return false
     } finally {
       setSaving(false)

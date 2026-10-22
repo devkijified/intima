@@ -71,6 +71,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Import failed' }, { status: 502 });
+    return NextResponse.json({ error: 'That feed could not be read. Check the address and try again.' }, { status: 502 });
   }
 }

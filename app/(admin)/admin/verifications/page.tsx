@@ -188,7 +188,7 @@ export default function AdminVerificationsPage() {
           <Card key={row.id}>
             <CardHeader>
               <CardTitle className="text-base">
-                {row.profiles?.display_name || row.profiles?.full_name || 'Unnamed provider'}
+                {row.profiles?.display_name || row.profiles?.full_name || 'Unnamed companion'}
                 <span className="ml-2 text-xs font-normal text-gray-500">
                   submitted {new Date(row.submitted_at).toLocaleString()}
                 </span>
