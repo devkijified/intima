@@ -54,7 +54,26 @@ export function InstallPrompt() {
 
     let promptSeen = false;
     let manualTimer: ReturnType<typeof setTimeout> | undefined;
-    const showTimer = setTimeout(() => setOpen(true), 5000);
+    // Never open on top of an active user. This pop is a full-screen
+    // layer: while it is up, a scroll gesture that starts on its
+    // backdrop goes nowhere, which reads exactly like the page froze
+    // (the owner hit this on the companion list: it scrolled once,
+    // the pop landed, and nothing scrolled again). So the pop only
+    // opens after the user has been completely idle for a few
+    // seconds, and any touch on the backdrop dismisses it at once.
+    let lastActivity = Date.now();
+    const markActivity = () => { lastActivity = Date.now(); };
+    const activityEvents = ['pointerdown', 'touchstart', 'wheel', 'scroll', 'keydown'] as const;
+    activityEvents.forEach((ev) => window.addEventListener(ev, markActivity, { passive: true }));
+    let idleChecker: ReturnType<typeof setInterval> | undefined;
+    const showTimer = setTimeout(() => {
+      idleChecker = setInterval(() => {
+        if (Date.now() - lastActivity > 4000) {
+          setOpen(true);
+          if (idleChecker) clearInterval(idleChecker);
+        }
+      }, 800);
+    }, 5000);
 
     const onPrompt = (e: Event) => {
       e.preventDefault();
@@ -88,7 +107,9 @@ export function InstallPrompt() {
     return () => {
       window.removeEventListener('beforeinstallprompt', onPrompt);
       window.removeEventListener('appinstalled', onInstalled);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, markActivity));
       clearTimeout(showTimer);
+      if (idleChecker) clearInterval(idleChecker);
       if (manualTimer) clearTimeout(manualTimer);
     };
   }, []);
@@ -135,6 +156,7 @@ export function InstallPrompt() {
       <button
         aria-label="Close"
         onClick={later}
+        onPointerDown={later}
         className="absolute inset-0 h-full w-full cursor-default bg-black/50"
       />
       <div className="relative w-full max-w-md rounded-t-[28px] bg-white p-6 pb-[max(2rem,env(safe-area-inset-bottom))] text-charcoal shadow-2xl sm:rounded-[28px]">
