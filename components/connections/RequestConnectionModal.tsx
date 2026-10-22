@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, ShieldCheck, Phone, Video, MessageCircle, Loader2, CheckCircle2, AlertTriangle } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
-import { getConnectionFeeNgn } from '@/lib/settings/platformSettings'
+import { getConnectionFeeNgn, getSetting } from '@/lib/settings/platformSettings'
 import { getPaymentProvider, newPaymentReference } from '@/lib/payments/provider'
 import { formatPrice, formatCompactPrice, getInitials } from '@/lib/utils/helpers'
 import { isCustomService, resolveServices } from '@/lib/services'
@@ -66,6 +66,20 @@ export function RequestConnectionModal({
   /** inDrive-style: client proposes a rate when she is open to offers. */
   const [proposedRate, setProposedRate] = useState('')
   const [similar, setSimilar] = useState<SimilarProvider[]>([])
+  /** The reference of a real gateway fee already paid in this
+      session (pay-first): once set, an unavailable companion no
+      longer strands the booking; the fee can be applied to a
+      pick below or refunded, all without paying again. */
+  const [paidRef, setPaidRef] = useState<string | null>(null)
+  /** True when the summary is spending the held fee instead of
+      taking a new payment. */
+  const [applyMode, setApplyMode] = useState(false)
+  const [applyBusy, setApplyBusy] = useState(false)
+  const [refundPct, setRefundPct] = useState(85)
+  const [refundBusy, setRefundBusy] = useState(false)
+  const [refundOutcome, setRefundOutcome] = useState<
+    'refunded' | 'refund_pending' | 'refund_failed' | null
+  >(null)
   const [activeId, setActiveId] = useState(providerId)
   const [activeName, setActiveName] = useState(providerName)
   const [activeAvatar, setActiveAvatar] = useState<string | null>(providerAvatarUrl ?? null)
@@ -272,7 +286,10 @@ export function RequestConnectionModal({
   const offerDelta =
     baseRate !== null && effectiveOffer !== null ? effectiveOffer - baseRate : 0
 
-  /** Switch the modal to a recommended companion (fee already paid). */
+  /** Switch the modal to a recommended companion. With a fee
+      already paid (pay-first), the summary reopens in apply mode:
+      her questions and offer load as usual, and one tap spends
+      the held fee on her instead of paying a second time. */
   function onPickSimilar(sp: SimilarProvider) {
     setProfileLoaded(false)
     setActiveId(sp.providerId)
@@ -281,6 +298,7 @@ export function RequestConnectionModal({
     setSimilar([])
     setProposedRate('')
     setIntakeAnswers([])
+    if (paidRef) setApplyMode(true)
     setStep('summary')
   }
 
@@ -288,6 +306,11 @@ export function RequestConnectionModal({
     let cancelled = false
     getConnectionFeeNgn().then((value) => {
       if (!cancelled) setFee(value)
+    })
+    getSetting<number>('refund_pct', 85).then((value) => {
+      if (!cancelled && typeof value === 'number' && value >= 0 && value <= 100) {
+        setRefundPct(value)
+      }
     })
     return () => {
       cancelled = true
@@ -342,13 +365,30 @@ export function RequestConnectionModal({
       }
       void user
 
-      // Availability check after payment: if she is offline, recommend similar providers.
+      // Availability check after payment (pay-first): if she is
+      // offline, the fee becomes a held fee and similar available
+      // companions are recommended instead of a connection opening
+      // against someone who cannot take it up.
       const { data: presence } = await supabase
         .from('provider_presence')
         .select('is_available, city')
         .eq('provider_id', activeId)
         .maybeSingle()
       if (presence && presence.is_available === false) {
+        // The mock rail's references are not server payments, so
+        // they carry no held fee; real gateway references do.
+        setPaidRef(paymentRef.startsWith('INTIMA_') ? null : paymentRef)
+        setRefundOutcome(null)
+        if (!paymentRef.startsWith('INTIMA_')) {
+          // Stamp the hold server-side (and notify him) so the
+          // fee stays recoverable from the held-fee page even if
+          // he closes this modal and never comes back to it.
+          void fetch('/api/connections/fee', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payment_ref: paymentRef }),
+          }).catch(() => {})
+        }
         const picks = await findSimilar(activeId, presence.city ?? null)
         setSimilar(picks)
         setStep('unavailable')
@@ -381,6 +421,17 @@ export function RequestConnectionModal({
       })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
+        // She went offline between the check above and the server
+        // call: the server held the fee instead of opening the
+        // connection. Land on the same switch-or-refund step.
+        if (data?.feeHeld) {
+          setPaidRef(paymentRef.startsWith('INTIMA_') ? null : paymentRef)
+          setRefundOutcome(null)
+          const picks = await findSimilar(activeId, null)
+          setSimilar(picks)
+          setStep('unavailable')
+          return
+        }
         throw new Error(data?.error ?? 'Could not create the connection. Please try again.')
       }
 
@@ -450,6 +501,89 @@ export function RequestConnectionModal({
       setStep('error')
     } finally {
       setWalletBusy(false)
+    }
+  }
+
+  /**
+   * Apply mode: spend the held fee (already paid) on the companion
+   * the summary now shows. Her requirements, questions and the
+   * offer are re-checked server-side for her specifically; the
+   * fee itself never moves again.
+   */
+  async function handleApplyFee() {
+    if (!paidRef) return
+    setApplyBusy(true)
+    setError('')
+    try {
+      const offerToSend = !ratesNegotiable
+        ? null
+        : typedOfferValid
+          ? typedOffer
+          : baseRate
+      const res = await fetch('/api/connections/apply-fee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_ref: paidRef,
+          provider_id: activeId,
+          proposed_rate_ngn: offerToSend,
+          service_type: selectedOption?.serviceType ?? undefined,
+          intakeAnswers:
+            intakeQuestions.length > 0
+              ? intakeQuestions.map((q, i) => ({ q, a: (intakeAnswers[i] ?? '').trim() }))
+              : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        // She went offline after the pick: the fee stays held and
+        // we land back on the switch-or-refund step for her.
+        if (data?.feeHeld) {
+          const picks = await findSimilar(activeId, null)
+          setSimilar(picks)
+          setApplyMode(false)
+          setStep('unavailable')
+          return
+        }
+        throw new Error(data?.error ?? 'Could not apply your fee. Please try again.')
+      }
+      setStep('success')
+      onConnected()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setStep('error')
+    } finally {
+      setApplyBusy(false)
+    }
+  }
+
+  /**
+   * The other exit from a held fee: refund refundPct of it through
+   * the rail it was paid on. Once a refund is under way the fee is
+   * spent, so the held state clears and any further pick goes
+   * through the normal payment flow again.
+   */
+  async function handleFeeRefund() {
+    if (!paidRef) return
+    setRefundBusy(true)
+    try {
+      const res = await fetch('/api/connections/fee-refund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_ref: paidRef }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setRefundOutcome('refund_failed')
+        return
+      }
+      setRefundOutcome(data?.state === 'refunded' ? 'refunded' : 'refund_pending')
+      setPaidRef(null)
+      setApplyMode(false)
+    } catch {
+      setRefundOutcome('refund_failed')
+    } finally {
+      setRefundBusy(false)
     }
   }
 
@@ -648,6 +782,19 @@ export function RequestConnectionModal({
                 </li>
               </ul>
             </div>
+
+            {applyMode && paidRef && (
+              <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <p className="flex items-center gap-1 text-sm font-semibold text-emerald-900">
+                  Your connection fee is already paid
+                  <HelpTip text="You paid this fee a moment ago for a companion who turned out to be unavailable, so it is being held for you. Applying it here opens your connection with this companion instead, with no second payment and no second charge." />
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-emerald-800">
+                  Answer her questions below, set your offer, then apply the fee. She
+                  keeps 100% of her own rate, exactly as with any connection.
+                </p>
+              </div>
+            )}
 
             {wantOptions.length > 0 && (
               <div className="mb-5">
@@ -849,6 +996,31 @@ export function RequestConnectionModal({
               </div>
             )}
 
+            {applyMode && paidRef ? (
+              <>
+                <button
+                  onClick={handleApplyFee}
+                  disabled={applyBusy || !profileLoaded || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
+                  className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-3.5 rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {applyBusy
+                    ? 'Applying your fee...'
+                    : !profileLoaded
+                      ? 'Loading her questions...'
+                      : eligibility && !eligibility.eligible
+                        ? 'Requirements not met yet'
+                        : !intakeComplete
+                          ? 'Answer her questions first'
+                          : `Apply my paid fee to ${activeName}`}
+                </button>
+                <p className="mt-2 text-center text-xs leading-relaxed text-gray-500">
+                  No second payment. If you change your mind instead, the fee stays
+                  held for 48 hours from when you paid, and the refund option stays
+                  open until you use it.
+                </p>
+              </>
+            ) : (
+              <>
             {fee !== null && walletBalance !== null && walletBalance >= Math.ceil(fee / 10) && (
               <>
                 <button
@@ -913,6 +1085,8 @@ export function RequestConnectionModal({
             <p className="text-xs text-gray-400 text-center mt-3">
               One active connection per provider. Refunds follow the published policy.
             </p>
+              </>
+            )}
           </>
         )}
 
@@ -947,7 +1121,9 @@ export function RequestConnectionModal({
             <div className="text-center">
               <h3 className="text-lg font-bold text-charcoal">{activeName} is not available right now</h3>
               <p className="text-sm text-gray-600 mt-1">
-                Your payment is safe. Pick an available companion below and your connection switches to her instantly.
+                {paidRef || refundOutcome
+                  ? 'Your fee is paid and held safely. Pick an available companion below and the fee switches to her, with no second payment.'
+                  : 'You have not been charged. Pick an available companion below to continue.'}
               </p>
             </div>
             {similar.length === 0 ? (
@@ -983,6 +1159,48 @@ export function RequestConnectionModal({
                 ))}
               </div>
             )}
+            {refundOutcome === 'refunded' || refundOutcome === 'refund_pending' ? (
+              <div className="rounded-2xl bg-cream p-4 text-center">
+                <p className="text-sm font-medium text-charcoal">
+                  {refundOutcome === 'refunded'
+                    ? `Your refund of ${fee !== null ? formatPrice(Math.round((fee * refundPct) / 100)) : ''} is on its way`
+                    : `Your refund of ${fee !== null ? formatPrice(Math.round((fee * refundPct) / 100)) : ''} is being processed`}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                  It goes back through the way you paid. The companions above are
+                  still here if you change your mind and pay again.
+                </p>
+              </div>
+            ) : paidRef ? (
+              <div className="rounded-2xl bg-cream p-4">
+                <p className="flex items-center gap-1 text-sm font-medium text-charcoal">
+                  Rather take the money back?
+                  <HelpTip text={`A held fee refunds at ${refundPct}%, the published refund policy: the platform keeps the rest as a processing share. If you do nothing, the hold ends 48 hours after you paid and the same refund is sent automatically.`} />
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                  {fee !== null
+                    ? `You get ${formatPrice(Math.round((fee * refundPct) / 100))} of your ${formatPrice(fee)} fee back, through the way you paid.`
+                    : 'The refund goes back through the way you paid.'}
+                </p>
+                <button
+                  onClick={handleFeeRefund}
+                  disabled={refundBusy || fee === null}
+                  className="mt-3 w-full border border-gray-300 bg-white text-gray-700 font-medium py-3 rounded-2xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {refundBusy
+                    ? 'Sending your refund...'
+                    : fee !== null
+                      ? `Refund ${formatPrice(Math.round((fee * refundPct) / 100))} to me`
+                      : 'Refund me'}
+                </button>
+                {refundOutcome === 'refund_failed' && (
+                  <p className="mt-2 text-xs text-red-500" role="alert">
+                    That refund did not go through. Your fee is still held and safe:
+                    try again, or pick a companion above instead.
+                  </p>
+                )}
+              </div>
+            ) : null}
             <button
               onClick={onClose}
               className="w-full border border-gray-300 text-gray-600 font-medium py-3 rounded-2xl hover:bg-gray-50 transition-colors"

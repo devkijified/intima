@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { notifyUsers } from '@/lib/push-server';
 import { sweepBoard } from '@/lib/board/board';
+import {
+  listOpenHolds,
+  isProviderUnavailable,
+  feeConsumed,
+  sweepHeldFees,
+} from '@/lib/payments/heldFee';
+import { settleConnectionFeePayment } from '@/lib/payments/settleConnection';
 
 /**
  * GET /api/cron/disputes
@@ -76,5 +83,24 @@ export async function GET(req: NextRequest) {
   // not the only path.
   const board = await sweepBoard(svc).catch(() => null);
 
-  return NextResponse.json({ released, board });
+  // Held connection fees ride along too (migration 078). First,
+  // a held fee whose original companion is available again gets
+  // one more run through the normal settler: if her screening
+  // answers are on the payment row and the client still qualifies,
+  // the connection he paid for simply opens, exactly as the
+  // webhook would have opened it had she been available then.
+  // Then the fee sweep expires holds whose window has closed into
+  // refund_pct refunds and retries stuck refunds.
+  let heldCompleted = 0;
+  const holds = await listOpenHolds(svc, 20).catch(() => []);
+  for (const held of holds) {
+    if (!held.targetProviderId) continue;
+    if (await feeConsumed(svc, held.reference)) continue;
+    if (await isProviderUnavailable(svc, held.targetProviderId)) continue;
+    const outcome = await settleConnectionFeePayment(svc, held.rail, held.reference);
+    if (outcome.outcome === 'created') heldCompleted++;
+  }
+  const heldFees = await sweepHeldFees(svc).catch(() => null);
+
+  return NextResponse.json({ released, board, heldCompleted, heldFees });
 }

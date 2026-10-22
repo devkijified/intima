@@ -6,6 +6,13 @@ import {
 } from '@/lib/connections/eligibility';
 import { isServiceType } from '@/lib/connections/serviceType';
 import { notifyUsers } from '@/lib/push-server';
+import {
+  loadHeldFee,
+  isProviderUnavailable,
+  materializeHold,
+  stampApplied,
+  type HeldFee,
+} from '@/lib/payments/heldFee';
 
 /**
  * Webhook-side completion of a connection fee.
@@ -36,6 +43,13 @@ import { notifyUsers } from '@/lib/push-server';
  * 'skipped' reason instead of creating anything twice. Failures
  * are swallowed into the outcome so a settler hiccup can never
  * fail the webhook response itself.
+ *
+ * Pay-first (migration 078, lib/payments/heldFee): settlement is
+ * where the commitment point sits, so availability is decided
+ * here too. An unavailable target, a client who does not meet her
+ * requirements, or missing screening answers no longer strand the
+ * fee: the payment is stamped as held and the client is told he
+ * can apply it elsewhere or take the refund_pct refund.
  */
 
 export interface IntakeAnswer {
@@ -307,6 +321,36 @@ async function settle(
   const fee = Number(setting?.value ?? 5000);
   if (amountNgn !== fee) return { outcome: 'skipped', reason: 'amount_mismatch' };
 
+  // Pay-first (migration 078): the settled fee is a held fee until
+  // a connection consumes it. A fee already on the refund path
+  // must never open a connection from a late duplicate webhook.
+  const heldFee = await loadHeldFee(svc, reference);
+  if (heldFee && heldFee.disposition !== 'open') {
+    return { outcome: 'skipped', reason: 'fee_not_open' };
+  }
+  const feeForHold: HeldFee =
+    heldFee ?? {
+      rail,
+      reference,
+      userId,
+      amountNgn,
+      targetProviderId: providerId,
+      appliedProviderId: null,
+      disposition: 'open',
+      feeHeldAt: null,
+      feeExpiresAt: null,
+      settledAt: null,
+    };
+
+  // Availability is checked after payment, by design: when she is
+  // not available, no connection opens against an offline
+  // companion. The fee stays held instead: the client can apply
+  // it to someone available, or take the refund_pct refund.
+  if (await isProviderUnavailable(svc, providerId)) {
+    await materializeHold(svc, feeForHold).catch(() => {});
+    return { outcome: 'skipped', reason: 'target_unavailable' };
+  }
+
   // Eligibility is re-checked, never assumed from the payment: her
   // requirements bind a webhook-created connection exactly as they
   // bind the interactive one.
@@ -321,7 +365,13 @@ async function settle(
       createdAt = null;
     }
     const result = await evaluateEligibility(svc, userId, createdAt, reqs);
-    if (!result.eligible) return { outcome: 'skipped', reason: 'not_eligible' };
+    if (!result.eligible) {
+      // Paid but cannot open for her: the fee is held, not
+      // stranded. He can apply it to a companion he does qualify
+      // for, or take the refund.
+      await materializeHold(svc, feeForHold).catch(() => {});
+      return { outcome: 'skipped', reason: 'not_eligible' };
+    }
   }
 
   // Screening answers: if she asks questions, stored answers are
@@ -334,6 +384,10 @@ async function settle(
   let intakeAnswers: IntakeAnswer[] | null = null;
   if (questions.length > 0) {
     if (!stored || stored.length < questions.length) {
+      // Paid, but her questions were never answered on this rail:
+      // hold the fee so the client can finish the booking (or
+      // switch, or refund) instead of stranding the money.
+      await materializeHold(svc, feeForHold).catch(() => {});
       return { outcome: 'skipped', reason: 'answers_missing' };
     }
     intakeAnswers = questions.map((q, i) => ({ q, a: stored[i].a }));
@@ -371,6 +425,10 @@ async function settle(
     console.error('webhook connection insert failed', reference, error?.message);
     return { outcome: 'skipped', reason: 'insert_failed' };
   }
+
+  // The fee is consumed: the payment row now states who it
+  // finally connected.
+  await stampApplied(svc, feeForHold, providerId).catch(() => {});
 
   // Genuinely new connection: the only path that can pay a referral.
   await maybeGrantReferralReward(svc, userId, inserted.id);

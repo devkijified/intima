@@ -26,7 +26,7 @@ import { IntimaLoader } from '@/components/shared/IntimaLoader'
  *   done         connected (including alreadyConnected).
  */
 
-type State = 'working' | 'waiting' | 'done' | 'notCompleted' | 'questions' | 'paidFailed' | 'boardLive'
+type State = 'working' | 'waiting' | 'done' | 'notCompleted' | 'questions' | 'paidFailed' | 'boardLive' | 'held'
 
 /** Paystack statuses that mean "money still in flight" (bank transfers). */
 const PENDING_STATUSES = ['pending', 'processing', 'ongoing', 'queued']
@@ -72,7 +72,7 @@ export default function PaymentsCallbackPage() {
     targetId: string,
     intakeAnswers: unknown,
     serviceType: string | null
-  ): Promise<{ ok: boolean; alreadyConnected: boolean; error: string | null }> {
+  ): Promise<{ ok: boolean; alreadyConnected: boolean; feeHeld: boolean; error: string | null }> {
     const res = await fetch('/api/connections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,6 +87,7 @@ export default function PaymentsCallbackPage() {
     return {
       ok: res.ok,
       alreadyConnected: data?.alreadyConnected === true,
+      feeHeld: data?.feeHeld === true,
       error: typeof data?.error === 'string' ? data.error : null,
     }
   }
@@ -191,6 +192,26 @@ export default function PaymentsCallbackPage() {
         if (!live) return
         if (result.ok || result.alreadyConnected) {
           await finishConnected(targetId)
+          return
+        }
+        if (result.feeHeld) {
+          // Paid, but she is not available right now (pay-first):
+          // the fee is held, not lost. The held-fee page carries
+          // the switch and refund options from here.
+          const supabase = createClient()
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', targetId)
+            .maybeSingle()
+          if (!live) return
+          const name =
+            (prof as { display_name?: string | null } | null)?.display_name ?? 'Your companion'
+          setProviderName(name)
+          setState('held')
+          setMessage(
+            `${name} is not available right now, so no connection was opened. Your fee is held safely: apply it to another available companion, or take a refund instead.`
+          )
           return
         }
         if (result.error === SCREENING_ERROR) {
@@ -315,6 +336,15 @@ export default function PaymentsCallbackPage() {
           <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Your request is live</h1>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
           <Link href="/board" className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Open the board</Link>
+        </>
+      )}
+      {state === 'held' && (
+        <>
+          <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+          <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">Payment confirmed, fee held</h1>
+          <p className="mt-1 text-sm leading-relaxed text-neutral-500">{message}</p>
+          <Link href={`/connections/fee?ref=${encodeURIComponent(reference ?? '')}`} className="btn-luxe mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Apply the fee or take a refund</Link>
+          <Link href="/" className="mt-3 text-sm font-medium text-primary">Back to the map</Link>
         </>
       )}
       {state === 'questions' && (

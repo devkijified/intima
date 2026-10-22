@@ -70,6 +70,17 @@ export async function POST(req: NextRequest) {
         })
         .eq('payment_ref', txRef)
         .in('refund_state', ['pending', 'failed']);
+      // The same outcome closes a held connection fee's refund
+      // (migration 078): guarded to rows still waiting on one, so
+      // a board refund never touches a fee row and vice versa.
+      await svc
+        .from('card_payments')
+        .update({
+          fee_disposition: event.event === 'refund.processed' ? 'refunded' : 'refund_failed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('reference', txRef)
+        .in('fee_disposition', ['refund_pending', 'refund_failed']);
     }
     return NextResponse.json({ ok: true, settled: 'refund' });
   }

@@ -15,6 +15,12 @@ import {
   type IntakeAnswer,
 } from '@/lib/payments/settleConnection';
 import { isServiceType } from '@/lib/connections/serviceType';
+import {
+  loadHeldFee,
+  isProviderUnavailable,
+  materializeHold,
+  stampApplied,
+} from '@/lib/payments/heldFee';
 
 function service() {
   return createServiceClient(
@@ -179,6 +185,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, alreadyConnected: true, id: existing.id });
   }
 
+  // Pay-first availability gate (migration 078): the fee buys a
+  // connection with a companion who is actually available. Her
+  // presence row is the authority, the same definition the
+  // request modal uses. The check runs before any money logic:
+  // the wallet rail must not spend against an offline companion,
+  // and a gateway fee that already settled is held, never spent
+  // on a connection she cannot take up.
+  const targetUnavailable = await isProviderUnavailable(svc, body.provider_id);
+  if (payWithCoins && targetUnavailable) {
+    return NextResponse.json(
+      {
+        error:
+          'She is not available right now, so no connection was opened and your wallet has not been charged. Pick a companion who is available and try again.',
+      },
+      { status: 409 }
+    );
+  }
+
   // Payment proof, before anything is created: the reference must
   // resolve to a settled card_payments or crypto_payments row for
   // this caller, this companion, and the current fee, and must not
@@ -195,6 +219,41 @@ export async function POST(req: NextRequest) {
     });
     if (!proof.ok) {
       return NextResponse.json({ error: proof.error }, { status: proof.status });
+    }
+    // The fee's own lifecycle binds too: a fee already claimed by
+    // an apply (or sitting on the refund path) must not open a
+    // second connection from this call while the other completes.
+    const heldFee = await loadHeldFee(svc, body.payment_ref!);
+    if (heldFee && heldFee.disposition === 'applied') {
+      return NextResponse.json(
+        { error: 'This payment has already been used for a connection.' },
+        { status: 409 }
+      );
+    }
+    if (heldFee && heldFee.disposition !== 'open') {
+      return NextResponse.json(
+        {
+          error:
+            'This fee is already being refunded, so it can no longer open a connection. If the refund has not landed in a few days, contact support.',
+        },
+        { status: 409 }
+      );
+    }
+    if (targetUnavailable) {
+      // The fee is real and settled, but she cannot take it up:
+      // stamp it held so the client can apply it to an available
+      // companion or take the refund_pct refund, and say so in the
+      // response (feeHeld) so the caller can route him there.
+      if (heldFee) await materializeHold(svc, heldFee).catch(() => {});
+      return NextResponse.json(
+        {
+          error:
+            'She is not available right now, so no connection was opened. Your fee is held safely: apply it to another available companion, or take a refund.',
+          feeHeld: true,
+          payment_ref: body.payment_ref,
+        },
+        { status: 409 }
+      );
     }
   }
 
@@ -283,6 +342,17 @@ export async function POST(req: NextRequest) {
       }
     }
     return NextResponse.json({ error: 'Could not create the connection' }, { status: 500 });
+  }
+
+  // A gateway fee is now consumed: stamp the payment row applied
+  // so its lifecycle states who it finally connected. Best effort;
+  // the connection itself is the primary record. Coins have no
+  // payment row (the ledger spend is the record), so they skip it.
+  if (!payWithCoins) {
+    const heldFee = await loadHeldFee(svc, paymentRef);
+    if (heldFee) {
+      await stampApplied(svc, heldFee, body.provider_id).catch(() => {});
+    }
   }
 
   // Genuinely new connection: the only path that can pay a referral.
