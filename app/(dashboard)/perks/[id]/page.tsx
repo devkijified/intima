@@ -18,6 +18,7 @@ interface Entry {
   providerUsername: string | null;
   providerAvatar: string | null;
   imageUrl: string;
+  mediaType?: string;
   caption: string;
   votes: number;
   createdAt: string;
@@ -39,6 +40,29 @@ interface Detail {
   myVoteEntryId: string | null;
   signedIn: boolean;
   myId: string | null;
+}
+
+/** Read a video file's duration on-device, or null when unreadable. */
+function videoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      v.onloadedmetadata = () => {
+        const d = v.duration;
+        URL.revokeObjectURL(url);
+        resolve(Number.isFinite(d) ? d : null);
+      };
+      v.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      v.src = url;
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 export default function ContestPage() {
@@ -126,16 +150,41 @@ export default function ContestPage() {
     setEnterMsg('');
     try {
       const supabase = createClient();
-      const file = await reencodeImage(picked);
-      const path = `${data.myId}/entry-${Date.now()}.jpg`;
+      const isVideo = picked.type.startsWith('video/');
+      let path: string;
+      let uploadBody: Blob;
+      let contentType: string;
+      if (isVideo) {
+        if (picked.size > 50 * 1024 * 1024) {
+          throw new Error('That video is too large. Please keep it under 50MB.');
+        }
+        const seconds = await videoDuration(picked);
+        if (seconds !== null && seconds > 65) {
+          throw new Error('Videos can be at most 60 seconds. Please trim it and try again.');
+        }
+        const ext = (picked.name.split('.').pop() ?? 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+        path = `${data.myId}/entry-${Date.now()}.${ext}`;
+        uploadBody = picked;
+        contentType = picked.type || 'video/mp4';
+      } else {
+        const file = await reencodeImage(picked);
+        path = `${data.myId}/entry-${Date.now()}.jpg`;
+        uploadBody = file;
+        contentType = 'image/jpeg';
+      }
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
-        .upload(path, file, { contentType: 'image/jpeg', upsert: false });
-      if (upErr) throw new Error('Photo upload failed. Please try again.');
+        .upload(path, uploadBody, { contentType, upsert: false });
+      if (upErr) throw new Error('Upload failed. Please try again.');
       const res = await fetch('/api/perks/enter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contestId, storagePath: path, caption: caption.trim() }),
+        body: JSON.stringify({
+          contestId,
+          storagePath: path,
+          caption: caption.trim(),
+          mediaType: isVideo ? 'video' : 'photo',
+        }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -226,9 +275,9 @@ export default function ContestPage() {
         <div className="card-luxe mt-4 p-4">
           <p className="text-sm font-semibold text-charcoal">Enter this contest</p>
           <p className="mt-1 text-xs text-neutral-500">
-            Companions only, one photo each. Photos are cleaned of location data
-            before they upload, and every entry is checked by our team before it
-            can be voted on.
+            Companions only, one entry each: a photo, or a video up to 60 seconds.
+            Photos are cleaned of location data before they upload, and every
+            entry is checked by our team before it can be voted on.
           </p>
           <input
             value={caption}
@@ -245,14 +294,14 @@ export default function ContestPage() {
               className="btn-soft flex min-h-[44px] items-center gap-2 px-4 py-2.5 text-[13px] disabled:opacity-50"
             >
               <Camera aria-hidden className="h-4 w-4" />
-              {picked ? 'Change photo' : 'Choose photo'}
+              {picked ? 'Change media' : 'Choose photo or video'}
             </button>
             {picked && <span className="min-w-0 flex-1 truncate text-xs text-neutral-500">{picked.name}</span>}
           </div>
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             className="hidden"
             onChange={(e) => setPicked(e.target.files?.[0] ?? null)}
           />
@@ -282,7 +331,7 @@ export default function ContestPage() {
 
       {data.entries.length === 0 ? (
         <p className="py-10 text-center text-sm text-neutral-400">
-          No entries yet. Be the first photo up.
+          No entries yet. Be the first entry up.
         </p>
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -292,7 +341,11 @@ export default function ContestPage() {
             return (
               <div key={e.id} id={`entry-${e.id}`} className="card-luxe overflow-hidden rounded-3xl">
                 <div className="relative aspect-[3/4] bg-neutral-100">
-                  <img src={e.imageUrl} alt={e.caption || e.providerName} className="h-full w-full object-cover" draggable={false} />
+                  {e.mediaType === 'video' ? (
+                    <video src={e.imageUrl} controls playsInline preload="metadata" className="h-full w-full object-cover" />
+                  ) : (
+                    <img src={e.imageUrl} alt={e.caption || e.providerName} className="h-full w-full object-cover" draggable={false} />
+                  )}
                   <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
                     {e.votes} {e.votes === 1 ? 'vote' : 'votes'}
                   </span>

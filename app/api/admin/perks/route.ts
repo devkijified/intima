@@ -56,7 +56,7 @@ export async function GET() {
 
   const { data: pending } = await db
     .from('contest_entries')
-    .select('id, contest_id, provider_id, image_path, caption, created_at')
+    .select('id, contest_id, provider_id, image_path, media_type, caption, created_at')
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
     .limit(50);
@@ -82,6 +82,7 @@ export async function GET() {
       providerName: names.get(e.provider_id)?.name ?? 'Companion',
       providerUsername: names.get(e.provider_id)?.username ?? null,
       imageUrl: `${base}/storage/v1/object/public/contest-entries/${e.image_path}`,
+      mediaType: (e as { media_type?: string }).media_type ?? 'photo',
       caption: e.caption,
       createdAt: e.created_at,
     })),
@@ -125,6 +126,35 @@ export async function POST(req: NextRequest) {
       .select('id')
       .single();
     if (error) return NextResponse.json({ error: 'Could not create the contest' }, { status: 500 });
+
+    // Tell everyone a new contest exists: companions can enter,
+    // clients can vote. Best effort; the contest is already saved.
+    try {
+      const { data: people } = await db.from('profiles').select('id, role');
+      const companionIds = (people ?? []).filter((r: any) => r.role === 'model').map((r: any) => r.id);
+      const clientIds = (people ?? []).filter((r: any) => r.role !== 'model' && r.role !== 'admin' && r.role !== 'super_admin').map((r: any) => r.id);
+      const when = endsAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      if (companionIds.length > 0) {
+        await notifyUsers({
+          userIds: companionIds,
+          type: 'contest_new',
+          title: `New contest: ${title}`,
+          body: `A new Perks contest is open. Enter with a photo or a short video before ${when} for your share of the prize.`,
+          link: `/perks/${data.id}`,
+        });
+      }
+      if (clientIds.length > 0) {
+        await notifyUsers({
+          userIds: clientIds,
+          type: 'contest_new',
+          title: `New contest: ${title}`,
+          body: 'A new Perks contest just opened. Meet the entries and vote for your favourite.',
+          link: `/perks/${data.id}`,
+        });
+      }
+    } catch {
+      /* alerts are best effort; the contest stands */
+    }
     return NextResponse.json({ contestId: data.id });
   }
 

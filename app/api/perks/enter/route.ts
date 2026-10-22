@@ -5,8 +5,10 @@ import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 import { contestPhase } from '@/lib/perks/rules';
 
 /**
- * POST /api/perks/enter { contestId, storagePath, caption? }
- * A companion enters a live contest with one photo she already
+ * POST /api/perks/enter { contestId, storagePath, caption?, mediaType? }
+ * A companion enters a live contest with one photo or one short
+ * video (60 seconds max, checked on her device before upload)
+ * she already
  * uploaded to her own folder in the contest-entries bucket. The
  * entry starts as pending: a human approves it before it can be
  * seen or voted on, same standard as Fans Only posts.
@@ -32,11 +34,22 @@ export async function POST(req: NextRequest) {
   const contestId = typeof body.contestId === 'string' ? body.contestId : '';
   const storagePath = typeof body.storagePath === 'string' ? body.storagePath : '';
   const caption = typeof body.caption === 'string' ? body.caption.trim().slice(0, 300) : '';
+  const mediaType = body.mediaType === 'video' ? 'video' : 'photo';
   if (!contestId || !storagePath) {
     return NextResponse.json({ error: 'contestId and storagePath required' }, { status: 400 });
   }
   if (!storagePath.startsWith(`${user.id}/`)) {
-    return NextResponse.json({ error: 'That photo is not in your uploads' }, { status: 403 });
+    return NextResponse.json({ error: 'That file is not in your uploads' }, { status: 403 });
+  }
+  const lowerPath = storagePath.toLowerCase();
+  const extOk = mediaType === 'video'
+    ? /\.(mp4|mov|webm)$/.test(lowerPath)
+    : /\.(jpg|jpeg)$/.test(lowerPath);
+  if (!extOk) {
+    return NextResponse.json(
+      { error: mediaType === 'video' ? 'Videos must be MP4, MOV or WebM files.' : 'Photos must be JPG files.' },
+      { status: 400 },
+    );
   }
   if (caption) {
     const scan = scanForLeaks(caption);
@@ -82,6 +95,7 @@ export async function POST(req: NextRequest) {
       contest_id: contestId,
       provider_id: user.id,
       image_path: storagePath,
+      media_type: mediaType,
       caption,
       status: 'pending',
     })

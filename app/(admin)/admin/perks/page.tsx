@@ -24,6 +24,7 @@ interface PendingEntry {
   providerName: string
   providerUsername: string | null
   imageUrl: string
+  mediaType?: string
   caption: string
   createdAt: string
 }
@@ -169,7 +170,11 @@ export default function AdminPerksPage() {
           {pending.map((e) => (
             <div key={e.id} className="card-luxe p-4">
               <div className="relative h-56 overflow-hidden rounded-2xl bg-neutral-100">
-                <img src={e.imageUrl} alt="" className="h-full w-full object-contain" />
+                {e.mediaType === 'video' ? (
+                  <video src={e.imageUrl} controls playsInline preload="metadata" className="h-full w-full object-contain" />
+                ) : (
+                  <img src={e.imageUrl} alt="" className="h-full w-full object-contain" />
+                )}
               </div>
               <p className="mt-3 text-sm font-semibold text-charcoal">
                 {e.providerName}

@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
   const { data: entries } = await db
     .from('contest_entries')
-    .select('id, provider_id, image_path, caption, created_at')
+    .select('id, provider_id, image_path, media_type, caption, created_at')
     .eq('contest_id', contestId)
     .eq('status', 'approved')
     .order('created_at', { ascending: true });
@@ -144,6 +144,7 @@ export async function GET(req: NextRequest) {
       providerUsername: names.get(e.provider_id)?.username ?? null,
       providerAvatar: names.get(e.provider_id)?.avatar ?? null,
       imageUrl: `${base}/storage/v1/object/public/${BUCKET}/${e.image_path}`,
+      mediaType: (e as { media_type?: string }).media_type ?? 'photo',
       caption: e.caption,
       votes: votes.get(e.id) ?? 0,
       createdAt: e.created_at,
