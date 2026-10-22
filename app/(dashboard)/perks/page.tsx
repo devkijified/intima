@@ -4,7 +4,7 @@ import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Trophy } from '@/lib/icons';
-import { coinsWithNgn } from '@/lib/utils/helpers';
+import { coinsWithNgn, formatCompactCount } from '@/lib/utils/helpers';
 
 interface ContestCard {
   id: string;
@@ -62,7 +62,7 @@ export default function PerksPage() {
       </div>
 
       <p className="mt-4 rounded-2xl bg-cream p-3 text-sm text-neutral-600">
-        Companions enter with a photo. Everybody votes. Winners take the prize
+        Companions enter with a photo or a short video. Everybody votes. Winners take the prize
         in coins, and the smart move is sharing your entry link: every voter
         you pull in raises your count and grows the house.
       </p>
@@ -107,7 +107,7 @@ export default function PerksPage() {
               <span className="font-semibold text-charcoal">
                 Prize: {coinsWithNgn(c.prizeCoins)}
               </span>
-              <span>{c.entryCount} {c.entryCount === 1 ? 'entry' : 'entries'}</span>
+              <span>{formatCompactCount(c.entryCount)} {c.entryCount === 1 ? 'entry' : 'entries'}</span>
               <span>
                 {when(c.startsAt)} to {when(c.endsAt)}
               </span>

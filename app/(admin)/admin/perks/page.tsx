@@ -175,6 +175,9 @@ export default function AdminPerksPage() {
                 ) : (
                   <img src={e.imageUrl} alt="" className="h-full w-full object-contain" />
                 )}
+                <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${e.mediaType === 'video' ? 'bg-[#AC244D]' : 'bg-black/55'}`}>
+                  {e.mediaType === 'video' ? 'VIDEO' : 'PHOTO'}
+                </span>
               </div>
               <p className="mt-3 text-sm font-semibold text-charcoal">
                 {e.providerName}

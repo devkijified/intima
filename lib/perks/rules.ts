@@ -2,7 +2,8 @@
  * Perks contests: shared phase + prize math.
  *
  * A contest has one live window (starts_at..ends_at): companions
- * enter with one photo and members vote inside the same window. That
+ * enter with one photo or one short video and members vote inside
+ * the same window. That
  * is deliberate: contestants share their entry link while voting is
  * live, which is what pulls new people in. Entries are human
  * approved before they can be seen or voted on.

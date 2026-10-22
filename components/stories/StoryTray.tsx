@@ -12,6 +12,8 @@ interface TrayProvider {
   provider_avatar: string | null;
   stories: Story[];
   hasUnseen: boolean;
+  /** Index of her first unseen story (0 when all seen or signed out). */
+  firstUnseenIndex: number;
 }
 
 /**
@@ -81,29 +83,33 @@ export function StoryTray() {
           .eq('id', pid)
           .single();
         let hasUnseen = true;
+        let seenIds = new Set<string>();
         if (user) {
           const { data: seen } = await supabase
             .from('story_views')
             .select('story_id')
             .eq('viewer_id', user.id)
             .in('story_id', list.map((s) => s.id));
-          const seenIds = new Set((seen ?? []).map((s) => s.story_id));
+          seenIds = new Set((seen ?? []).map((s) => s.story_id));
           hasUnseen = list.some((s) => !seenIds.has(s.id));
         }
+        const sorted = list.sort(
+          (a, b) => +new Date(a.created_at) - +new Date(b.created_at),
+        );
+        const firstUnseen = sorted.findIndex((s) => !seenIds.has(s.id));
         result.push({
           provider_id: pid,
           provider_name: prof?.display_name ?? 'Member',
           provider_avatar: prof?.avatar_url ?? null,
-          stories: list
-            .sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at))
-            .map((s) => ({
-              ...s,
-              media_type: s.media_type as 'photo' | 'video',
-              provider_name: prof?.display_name ?? 'Member',
-              provider_avatar: prof?.avatar_url ?? null,
-              provider_username: prof?.username ?? null,
-            })),
+          stories: sorted.map((s) => ({
+            ...s,
+            media_type: s.media_type as 'photo' | 'video',
+            provider_name: prof?.display_name ?? 'Member',
+            provider_avatar: prof?.avatar_url ?? null,
+            provider_username: prof?.username ?? null,
+          })),
           hasUnseen,
+          firstUnseenIndex: firstUnseen >= 0 ? firstUnseen : 0,
         });
       }
       // Unseen first.
@@ -116,13 +122,21 @@ export function StoryTray() {
   if (groups.length === 0) return null;
 
   const openViewer = (g: TrayProvider) => {
+    // Flatten in tray order and start at the CLICKED companion's
+    // first unseen story. The offset counts only the companions
+    // BEFORE her in the tray: counting everyone else (the old bug)
+    // landed the viewer on a different companion entirely.
     const all: Story[] = [];
-    const startIndex = groups.reduce((acc, grp) => {
-      if (grp.provider_id === g.provider_id) return acc;
-      return acc + grp.stories.length;
-    }, 0);
-    for (const grp of groups) all.push(...grp.stories);
-    setViewer({ stories: all, index: startIndex });
+    let startIndex = 0;
+    for (const grp of groups) {
+      if (grp.provider_id === g.provider_id) {
+        startIndex = all.length + Math.min(g.firstUnseenIndex, grp.stories.length - 1);
+        all.push(...grp.stories);
+      } else {
+        all.push(...grp.stories);
+      }
+    }
+    setViewer({ stories: all, index: Math.max(0, startIndex) });
   };
 
   return (

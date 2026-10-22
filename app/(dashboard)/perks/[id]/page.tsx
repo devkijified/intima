@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Camera, Heart, Loader2, Share2, Trophy } from '@/lib/icons';
-import { coinsWithNgn } from '@/lib/utils/helpers';
+import { coinsWithNgn, formatCompactCount } from '@/lib/utils/helpers';
 import { createClient } from '@/lib/supabase/client';
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip';
 import { reencodeImage } from '@/lib/uploads/reencode';
@@ -154,14 +154,19 @@ export default function ContestPage() {
       let path: string;
       let uploadBody: Blob;
       let contentType: string;
+      let durationSeconds: number | null = null;
       if (isVideo) {
         if (picked.size > 50 * 1024 * 1024) {
           throw new Error('That video is too large. Please keep it under 50MB.');
         }
         const seconds = await videoDuration(picked);
-        if (seconds !== null && seconds > 65) {
+        if (seconds === null) {
+          throw new Error('We could not read that video. Please try a different file.');
+        }
+        if (seconds > 65) {
           throw new Error('Videos can be at most 60 seconds. Please trim it and try again.');
         }
+        durationSeconds = Math.round(seconds);
         const ext = (picked.name.split('.').pop() ?? 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
         path = `${data.myId}/entry-${Date.now()}.${ext}`;
         uploadBody = picked;
@@ -184,6 +189,7 @@ export default function ContestPage() {
           storagePath: path,
           caption: caption.trim(),
           mediaType: isVideo ? 'video' : 'photo',
+          durationSeconds: isVideo ? durationSeconds : undefined,
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -264,7 +270,7 @@ export default function ContestPage() {
               <li key={e.id} className="flex items-center gap-2 text-sm">
                 <span className="w-6 font-display font-semibold text-primary">{i + 1}.</span>
                 <span className="flex-1 truncate text-charcoal">{e.providerName}</span>
-                <span className="text-neutral-500">{e.votes} {e.votes === 1 ? 'vote' : 'votes'}</span>
+                <span className="text-neutral-500">{formatCompactCount(e.votes)} {e.votes === 1 ? 'vote' : 'votes'}</span>
               </li>
             ))}
           </ol>
@@ -273,7 +279,10 @@ export default function ContestPage() {
 
       {data.signedIn && !data.myEntry && live && (
         <div className="card-luxe mt-4 p-4">
-          <p className="text-sm font-semibold text-charcoal">Enter this contest</p>
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-charcoal">
+            Enter this contest
+            <HelpTip text="One entry per companion: a photo, or a video up to 60 seconds and 50MB. Our team checks every entry before it can be voted on, and the winners are paid in coins straight to their wallet." />
+          </p>
           <p className="mt-1 text-xs text-neutral-500">
             Companions only, one entry each: a photo, or a video up to 60 seconds.
             Photos are cleaned of location data before they upload, and every
@@ -347,7 +356,7 @@ export default function ContestPage() {
                     <img src={e.imageUrl} alt={e.caption || e.providerName} className="h-full w-full object-cover" draggable={false} />
                   )}
                   <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
-                    {e.votes} {e.votes === 1 ? 'vote' : 'votes'}
+                    {formatCompactCount(e.votes)} {e.votes === 1 ? 'vote' : 'votes'}
                   </span>
                 </div>
                 <div className="p-3">

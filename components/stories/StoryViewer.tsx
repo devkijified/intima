@@ -5,6 +5,7 @@ import { X, ChevronLeft, ChevronRight, Eye } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
+import { formatCompactCount } from '@/lib/utils/helpers';
 
 export interface Story {
   id: string;
@@ -54,7 +55,10 @@ export function StoryViewer({
   const [viewCount, setViewCount] = useState<number | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const touchX = useRef<number | null>(null);
+  const pointerX = useRef<number | null>(null);
+  // Stamp of the last swipe: the tap zones ignore the click a
+  // browser synthesises right after a swipe ends on them.
+  const lastSwipeAt = useRef(0);
   const story = stories[index];
 
   // Group boundaries: runs of consecutive stories per companion.
@@ -218,21 +222,37 @@ export function StoryViewer({
       </div>
 
       {/* Media: fills the frame like WhatsApp Status. Tap zones go
-          story to story, horizontal swipes jump between companions,
-          press and hold pauses. */}
+          story to story (crossing into the next companion at her
+          last story), horizontal swipes jump straight between
+          companions, press and hold pauses. One pointer path covers
+          touch and mouse drags alike. */}
       <div
         className="relative h-full w-full"
-        onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
-        onTouchEnd={(e) => {
-          if (touchX.current === null) return;
-          const dx = (e.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
-          touchX.current = null;
-          if (dx <= -60) nextCompanion();
-          else if (dx >= 60) prevCompanion();
+        onPointerDown={(e) => {
+          setPaused(true);
+          pointerX.current = e.clientX;
         }}
-        onPointerDown={() => setPaused(true)}
-        onPointerUp={() => setPaused(false)}
-        onPointerLeave={() => setPaused(false)}
+        onPointerUp={(e) => {
+          setPaused(false);
+          if (pointerX.current === null) return;
+          const dx = e.clientX - pointerX.current;
+          pointerX.current = null;
+          if (dx <= -60) {
+            lastSwipeAt.current = Date.now();
+            nextCompanion();
+          } else if (dx >= 60) {
+            lastSwipeAt.current = Date.now();
+            prevCompanion();
+          }
+        }}
+        onPointerLeave={() => {
+          setPaused(false);
+          pointerX.current = null;
+        }}
+        onPointerCancel={() => {
+          setPaused(false);
+          pointerX.current = null;
+        }}
       >
         {story.media_type === 'photo' ? (
           <img src={story.media_url} alt="" className="h-full w-full object-cover" draggable={false} />
@@ -248,8 +268,16 @@ export function StoryViewer({
           />
         )}
         <PhotoWatermark username={story.provider_username} variant="edge" />
-        <button aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3" />
-        <button aria-label="Next" onClick={next} className="absolute inset-y-0 right-0 z-10 w-1/3" />
+        <button
+          aria-label="Previous"
+          onClick={() => { if (Date.now() - lastSwipeAt.current >= 400) prev(); }}
+          className="absolute inset-y-0 left-0 z-10 w-1/3"
+        />
+        <button
+          aria-label="Next"
+          onClick={() => { if (Date.now() - lastSwipeAt.current >= 400) next(); }}
+          className="absolute inset-y-0 right-0 z-10 w-1/3"
+        />
       </div>
 
       {/* Caption + views + CTA */}
@@ -261,7 +289,7 @@ export function StoryViewer({
         )}
         {viewCount !== null && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-white/60">
-            <Eye className="h-3.5 w-3.5" /> {viewCount} views
+            <Eye className="h-3.5 w-3.5" /> {formatCompactCount(viewCount)} views
           </p>
         )}
         {showCta && (

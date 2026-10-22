@@ -17,13 +17,14 @@ import {
   Loader2,
   Map as MapIcon,
   MapPin,
-  MessageCircle,
+  BookOpen,
   Radio,
   SearchX,
   SlidersHorizontal,
   X,
 } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
+import { formatCompactCount } from '@/lib/utils/helpers';
 import { useCities } from '@/lib/citiesLive';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
 import { ComicRibbon } from '@/components/comics/ComicRibbon';
@@ -858,7 +859,7 @@ export default function IntimaMap() {
         >
           <div className="flex items-center gap-2 px-4 pb-1.5">
             <span className="glass-dark rounded-full px-3 py-1.5 text-xs font-semibold text-white">
-              {filtered.length} {filtered.length === 1 ? 'companion' : 'companions'} nearby
+              {formatCompactCount(filtered.length)} {filtered.length === 1 ? 'companion' : 'companions'} nearby
             </span>
             <span className="glass-dark flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] text-white/85">
               <BadgeCheck aria-hidden className="h-3 w-3" /> Verified
@@ -904,7 +905,7 @@ export default function IntimaMap() {
               { href: '/dashboard', label: 'Home', Icon: LayoutDashboard, pop: false, active: false },
               { href: '/live', label: 'Live', Icon: Radio, pop: false, active: false },
               { href: '/', label: 'Map', Icon: MapIcon, pop: true, active: true },
-              { href: '/messages', label: 'Messages', Icon: MessageCircle, pop: false, active: false },
+              { href: '/comics', label: 'Comics', Icon: BookOpen, pop: false, active: false },
               { href: '/dashboard', label: 'More', Icon: LayoutGrid, pop: false, active: false },
             ].map(({ href, label, Icon, pop, active }) => (
               <Link
@@ -929,7 +930,7 @@ export default function IntimaMap() {
 
       {/* First-class list view. Also the graceful fallback when tiles fail. */}
       {showList && (
-        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[124px] [touch-action:pan-y] [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch]">
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[176px] [touch-action:pan-y] [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch]">
           {mapFailed && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
               <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
@@ -962,14 +963,14 @@ export default function IntimaMap() {
               </h2>
               {providersReady && (
                 <span className="rounded-full bg-[#AC244D]/10 px-3 py-1.5 text-xs font-semibold text-[#AC244D]">
-                  {filtered.length} nearby
+                  {formatCompactCount(filtered.length)} nearby
                 </span>
               )}
             </div>
             {providersReady && (
               <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
                 <span>
-                  {filtered.length} {filtered.length === 1 ? 'companion' : 'companions'} nearby
+                  {formatCompactCount(filtered.length)} {filtered.length === 1 ? 'companion' : 'companions'} nearby
                   {filters.city ? ` in ${filters.city}` : ''}
                 </span>
                 <span className="flex items-center gap-1">

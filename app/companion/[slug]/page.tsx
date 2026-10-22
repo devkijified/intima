@@ -243,6 +243,7 @@ export default function ModelDetailPage() {
 
   // Stories + live.
   const [stories, setStories] = useState<Story[]>([])
+  const [storyStartIndex, setStoryStartIndex] = useState(0)
   const [showStories, setShowStories] = useState(false)
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null)
 
@@ -481,6 +482,20 @@ export default function ModelDetailPage() {
           )
         }
       }
+      // The ring opens the viewer at HER first unseen story, not
+      // always her oldest one.
+      let firstUnseen = 0
+      if (user && visibleStoryRows.length > 0) {
+        const { data: seenRows } = await supabase
+          .from('story_views')
+          .select('story_id')
+          .eq('viewer_id', user.id)
+          .in('story_id', visibleStoryRows.map((s) => s.id))
+        const seenIds = new Set((seenRows ?? []).map((r) => r.story_id as string))
+        const idx = visibleStoryRows.findIndex((s) => !seenIds.has(s.id))
+        firstUnseen = idx >= 0 ? idx : 0
+      }
+      if (live) setStoryStartIndex(firstUnseen)
       setStories(
         visibleStoryRows.map((s) => ({
           id: s.id,
@@ -1184,7 +1199,7 @@ export default function ModelDetailPage() {
 
       {/* Story viewer */}
       {showStories && stories.length > 0 && (
-        <StoryViewer stories={stories} initialIndex={0} onClose={() => setShowStories(false)} />
+        <StoryViewer stories={stories} initialIndex={storyStartIndex} onClose={() => setShowStories(false)} />
       )}
 
       {/* Lightbox */}

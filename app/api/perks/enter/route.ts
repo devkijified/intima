@@ -5,14 +5,21 @@ import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 import { contestPhase } from '@/lib/perks/rules';
 
 /**
- * POST /api/perks/enter { contestId, storagePath, caption?, mediaType? }
+ * POST /api/perks/enter { contestId, storagePath, caption?,
+ *   mediaType?, durationSeconds? }
  * A companion enters a live contest with one photo or one short
- * video (60 seconds max, checked on her device before upload)
- * she already
- * uploaded to her own folder in the contest-entries bucket. The
+ * video she already uploaded to her own folder in the
+ * contest-entries bucket. Video rules mirror the private snaps
+ * standard: her device reads the duration and the server refuses
+ * a video without a believable one (over 60 seconds is refused),
+ * and the uploaded object itself is size-checked here (50MB max),
+ * so the caps hold even if a client skips its own checks. The
  * entry starts as pending: a human approves it before it can be
  * seen or voted on, same standard as Fans Only posts.
  */
+
+const MAX_VIDEO_SECONDS = 65; // 60 second rule plus encoding grace
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 function svc() {
   return createServiceClient(
@@ -51,6 +58,27 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  // Video duration: the client reads it from the file; a video
+  // without a believable duration is refused here, not left for
+  // the review queue (the private snaps rule).
+  let durationSeconds: number | null = null;
+  if (mediaType === 'video') {
+    const raw = body.durationSeconds;
+    durationSeconds =
+      typeof raw === 'number' && Number.isFinite(raw) ? Math.round(raw) : null;
+    if (durationSeconds === null || durationSeconds < 1) {
+      return NextResponse.json(
+        { error: 'We could not read that video. Please pick it again.' },
+        { status: 400 },
+      );
+    }
+    if (durationSeconds > MAX_VIDEO_SECONDS) {
+      return NextResponse.json(
+        { error: 'Videos can be at most 60 seconds. Please trim it and try again.' },
+        { status: 400 },
+      );
+    }
+  }
   if (caption) {
     const scan = scanForLeaks(caption);
     if (!scan.clean) {
@@ -87,6 +115,29 @@ export async function POST(req: NextRequest) {
   }
   if (contestPhase(contest) !== 'live') {
     return NextResponse.json({ error: 'This contest is not open for entries right now' }, { status: 400 });
+  }
+
+  // Size cap, checked against the uploaded object itself. When the
+  // object metadata cannot be read the entry is not blocked on it;
+  // the bucket and the client still bound what can arrive.
+  if (mediaType === 'video') {
+    try {
+      const folder = storagePath.slice(0, storagePath.lastIndexOf('/'));
+      const base = storagePath.slice(storagePath.lastIndexOf('/') + 1);
+      const { data: objs } = await db.storage
+        .from('contest-entries')
+        .list(folder, { search: base, limit: 1 });
+      const size = (objs?.[0]?.metadata as { size?: number } | undefined)?.size;
+      if (typeof size === 'number' && size > MAX_VIDEO_BYTES) {
+        await db.storage.from('contest-entries').remove([storagePath]).catch(() => {});
+        return NextResponse.json(
+          { error: 'That video is too large. Please keep it under 50MB.' },
+          { status: 400 },
+        );
+      }
+    } catch {
+      /* metadata read is best effort */
+    }
   }
 
   const { data: entry, error } = await db
