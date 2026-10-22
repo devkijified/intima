@@ -20,13 +20,16 @@ function svc() {
   );
 }
 
-/** GET /api/admin/comics: list with per-episode stats. */
+/** GET /api/admin/comics: series + episodes with per-episode stats. */
 export async function GET() {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   const db = svc();
+  const { data: series } = await db.from('comics')
+    .select('id, title, synopsis, cover_url, status, created_at')
+    .order('created_at', { ascending: true });
   const { data: eps } = await db.from('comic_episodes')
-    .select('id, episode_no, title, status, published_at, view_count, panel_urls, cover_url, synopsis')
+    .select('id, episode_no, title, status, published_at, view_count, panel_urls, cover_url, synopsis, comic_id')
     .order('episode_no', { ascending: false });
   const ids = (eps ?? []).map((e: any) => e.id);
   let stats: Record<string, { readers: number; completed: number }> = {};
@@ -40,14 +43,41 @@ export async function GET() {
       stats[r.episode_id] = s;
     }
   }
-  return NextResponse.json({ episodes: eps ?? [], stats });
+  return NextResponse.json({ comics: series ?? [], episodes: eps ?? [], stats });
 }
 
-/** POST /api/admin/comics: create draft. Body: { title, synopsis?, coverUrl?, panelUrls } */
+/**
+ * POST /api/admin/comics.
+ * Create an episode draft: { title, synopsis?, coverUrl?, panelUrls, comicId? }.
+ * Episode numbers run per series: a comic's episodes are 1, 2, 3...
+ * Create a series instead: { series: { title, synopsis?, coverUrl? } }.
+ */
 export async function POST(req: NextRequest) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
-  const { title, synopsis, coverUrl, panelUrls } = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => ({}));
+  const db = svc();
+
+  if (body?.series && typeof body.series === 'object') {
+    const st = typeof body.series.title === 'string' ? body.series.title.trim() : '';
+    if (!st) return NextResponse.json({ error: 'A comic needs a title' }, { status: 400 });
+    const scan = scanForLeaks(st + ' ' + (body.series.synopsis ?? ''));
+    if (!scan.clean) {
+      return NextResponse.json({ error: leakWarning(scan.leaks) }, { status: 422 });
+    }
+    const { data, error } = await db.from('comics').insert({
+      title: st,
+      synopsis: typeof body.series.synopsis === 'string' ? body.series.synopsis.trim() : '',
+      cover_url: typeof body.series.coverUrl === 'string' && body.series.coverUrl.trim()
+        ? body.series.coverUrl.trim()
+        : null,
+      status: 'published',
+    }).select('id, title').single();
+    if (error) throw error;
+    return NextResponse.json({ success: true, comic: data });
+  }
+
+  const { title, synopsis, coverUrl, panelUrls, comicId } = body;
   const t = typeof title === 'string' ? title.trim() : '';
   const panels = Array.isArray(panelUrls)
     ? panelUrls.map((u: any) => String(u).trim()).filter(Boolean)
@@ -59,9 +89,17 @@ export async function POST(req: NextRequest) {
   if (!scan.clean) {
     return NextResponse.json({ error: leakWarning(scan.leaks) }, { status: 422 });
   }
-  const db = svc();
-  const { data: max } = await db.from('comic_episodes')
-    .select('episode_no').order('episode_no', { ascending: false }).limit(1).maybeSingle();
+  // Episodes belong to a comic; with none named, use the first series.
+  let targetComicId: string | null = typeof comicId === 'string' && comicId ? comicId : null;
+  if (!targetComicId) {
+    const { data: first } = await db.from('comics')
+      .select('id').order('created_at', { ascending: true }).limit(1).maybeSingle();
+    targetComicId = first?.id ?? null;
+  }
+  let maxQuery = db.from('comic_episodes')
+    .select('episode_no').order('episode_no', { ascending: false }).limit(1);
+  if (targetComicId) maxQuery = maxQuery.eq('comic_id', targetComicId);
+  const { data: max } = await maxQuery.maybeSingle();
   const no = (max?.episode_no ?? 0) + 1;
   const { data, error } = await db.from('comic_episodes').insert({
     episode_no: no,
@@ -69,6 +107,7 @@ export async function POST(req: NextRequest) {
     synopsis: typeof synopsis === 'string' ? synopsis.trim() || null : null,
     cover_url: typeof coverUrl === 'string' && coverUrl.trim() ? coverUrl.trim() : panels[0],
     panel_urls: panels,
+    comic_id: targetComicId,
     status: 'draft',
   }).select('id, episode_no').single();
   if (error) throw error;

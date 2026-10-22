@@ -4,51 +4,93 @@ import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { BookOpen, Eye } from '@/lib/icons'
+import { BookOpen, ChevronRight } from '@/lib/icons'
 
-interface Episode {
+const Layers = BookOpen
+
+interface ComicSeries {
   id: string
-  episode_no: number
   title: string
-  synopsis: string | null
+  synopsis: string
   cover_url: string | null
-  published_at: string | null
-  view_count: number
+  episodeCount: number
+  latestNo: number
+  latestAt: string | null
+  totalReads: number
 }
 
-const isNew = (publishedAt: string | null) =>
-  publishedAt && Date.now() - new Date(publishedAt).getTime() < 7 * 24 * 3600 * 1000
+const isFresh = (at: string | null) =>
+  at !== null && Date.now() - new Date(at).getTime() < 7 * 24 * 3600 * 1000
 
-/** Comics: house-published episodes. Readers come back when new ones drop. */
+/**
+ * Comics shelf: pick a Comic first, then its episodes, like a
+ * magazine rack. Series data comes from the comics table; episode
+ * counts and freshness roll up from its published episodes.
+ */
 export default function ComicsPage() {
-  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [series, setSeries] = useState<ComicSeries[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  const loadEpisodes = async () => {
-    const { data } = await supabase.from('comic_episodes')
-      .select('id, episode_no, title, synopsis, cover_url, published_at, view_count')
-      .eq('status', 'published')
-      .order('episode_no', { ascending: false })
-      .limit(60)
-    setEpisodes((data ?? []) as Episode[])
+  const load = async () => {
+    const [{ data: comics }, { data: eps }] = await Promise.all([
+      supabase.from('comics')
+        .select('id, title, synopsis, cover_url')
+        .eq('status', 'published')
+        .order('created_at', { ascending: true }),
+      supabase.from('comic_episodes')
+        .select('id, comic_id, episode_no, cover_url, published_at, view_count')
+        .eq('status', 'published')
+        .order('episode_no', { ascending: false }),
+    ])
+    const byComic = new Map<string, { count: number; latestNo: number; latestAt: string | null; cover: string | null; reads: number }>()
+    for (const e of (eps ?? []) as any[]) {
+      if (!e.comic_id) continue
+      const cur = byComic.get(e.comic_id) ?? { count: 0, latestNo: 0, latestAt: null, cover: null, reads: 0 }
+      cur.count += 1
+      cur.reads += e.view_count ?? 0
+      if (e.episode_no > cur.latestNo) {
+        cur.latestNo = e.episode_no
+        cur.latestAt = e.published_at
+        cur.cover = e.cover_url
+      }
+      byComic.set(e.comic_id, cur)
+    }
+    const list: ComicSeries[] = ((comics ?? []) as any[]).map((c) => {
+      const roll = byComic.get(c.id)
+      return {
+        id: c.id,
+        title: c.title,
+        synopsis: c.synopsis ?? '',
+        cover_url: c.cover_url ?? roll?.cover ?? null,
+        episodeCount: roll?.count ?? 0,
+        latestNo: roll?.latestNo ?? 0,
+        latestAt: roll?.latestAt ?? null,
+        totalReads: roll?.reads ?? 0,
+      }
+    }).filter((s) => s.episodeCount > 0)
+    // Freshest series first: the rack leads with what just dropped.
+    list.sort((a, b) => +new Date(b.latestAt ?? 0) - +new Date(a.latestAt ?? 0))
+    setSeries(list)
     setLoading(false)
   }
 
   useEffect(() => {
-    loadEpisodes()
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const [featured, ...rest] = series
+
   return (
-    <PullToRefresh onRefresh={loadEpisodes} className="mx-auto max-w-3xl px-4 pb-28 pt-[max(1.5rem,env(safe-area-inset-top))] md:pb-10 animate-rise-in">
+    <PullToRefresh onRefresh={load} className="mx-auto max-w-3xl px-4 pb-28 pt-[max(1.5rem,env(safe-area-inset-top))] md:pb-10 animate-rise-in">
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-muted">
           <BookOpen className="h-5 w-5 text-primary" />
         </span>
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Intima Comics</h1>
-          <p className="text-sm text-neutral-500">New episodes drop regularly. Come back for more.</p>
+          <h1 className="t-display text-charcoal">Intima Comics</h1>
+          <p className="text-sm text-neutral-500">Pick a comic, then settle in. New episodes drop regularly.</p>
         </div>
       </div>
 
@@ -56,41 +98,72 @@ export default function ComicsPage() {
         <div className="mt-8 flex justify-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
-      ) : episodes.length === 0 ? (
+      ) : series.length === 0 ? (
         <div className="card-luxe mt-8 p-10 text-center">
           <BookOpen className="mx-auto h-10 w-10 text-neutral-300" />
-          <p className="mt-3 font-medium text-charcoal">No episodes yet</p>
-          <p className="mt-1 text-sm text-neutral-500">The first episode is on its way. Check back soon.</p>
+          <p className="mt-3 font-medium text-charcoal">No comics yet</p>
+          <p className="mt-1 text-sm text-neutral-500">The first story is on its way. Check back soon.</p>
         </div>
       ) : (
-        <div className="stagger mt-6 grid grid-cols-2 gap-3 sm:gap-4">
-          {episodes.map((ep) => (
-            <Link key={ep.id} href={`/comics/${ep.id}`} className="card-luxe group overflow-hidden transition-all duration-200 active:scale-[0.98] sm:hover:-translate-y-1 sm:hover:shadow-lift">
-              <div className="relative aspect-[4/5] overflow-hidden bg-cream">
-                {ep.cover_url ? (
-                  <img src={ep.cover_url} alt={ep.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] animate-fade-in" />
+        <>
+          {featured && (
+            <Link
+              href={`/comics/series/${featured.id}`}
+              className="group relative mt-6 block overflow-hidden rounded-[28px] shadow-lift ring-1 ring-black/[0.06] transition-all duration-200 active:scale-[0.99]"
+            >
+              <div className="relative aspect-[16/10] bg-charcoal sm:aspect-[16/8]">
+                {featured.cover_url ? (
+                  <img src={featured.cover_url} alt={featured.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <BookOpen className="h-10 w-10 text-neutral-300" />
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#2A1220] to-[#AC244D]">
+                    <BookOpen className="h-12 w-12 text-white/50" />
                   </div>
                 )}
-                <div className="photo-veil-top pointer-events-none absolute inset-x-0 top-0 h-16" />
-                <span className="glass-dark absolute left-2 top-2 rounded-full px-2.5 py-1 text-[11px] font-bold text-white">
-                  Ep {ep.episode_no}
-                </span>
-                {isNew(ep.published_at) && (
-                  <span className="badge-elite absolute right-2 top-2">NEW</span>
-                )}
-              </div>
-              <div className="p-3.5">
-                <p className="truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">{ep.title}</p>
-                <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
-                  <Eye aria-hidden className="h-3 w-3" /> {ep.view_count.toLocaleString()} reads
-                </p>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-5">
+                  <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-gold">
+                    {isFresh(featured.latestAt) ? 'New episode out now' : 'Featured comic'}
+                  </p>
+                  <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-white">{featured.title}</p>
+                  {featured.synopsis && (
+                    <p className="mt-1 line-clamp-2 max-w-lg text-sm text-white/75">{featured.synopsis}</p>
+                  )}
+                  <p className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-white/85">
+                    <BookOpen aria-hidden className="h-3.5 w-3.5" />
+                    {featured.episodeCount} {featured.episodeCount === 1 ? 'episode' : 'episodes'}
+                    <ChevronRight aria-hidden className="h-3.5 w-3.5" />
+                  </p>
+                </div>
               </div>
             </Link>
-          ))}
-        </div>
+          )}
+
+          <div className="stagger mt-5 grid grid-cols-2 gap-3 sm:gap-4">
+            {rest.map((s) => (
+              <Link key={s.id} href={`/comics/series/${s.id}`} className="card-luxe group overflow-hidden transition-all duration-200 active:scale-[0.98] sm:hover:-translate-y-1 sm:hover:shadow-lift">
+                <div className="relative aspect-[4/5] overflow-hidden bg-cream">
+                  {s.cover_url ? (
+                    <img src={s.cover_url} alt={s.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] animate-fade-in" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#2A1220] to-[#AC244D]">
+                      <BookOpen className="h-10 w-10 text-white/50" />
+                    </div>
+                  )}
+                  <div className="photo-veil-top pointer-events-none absolute inset-x-0 top-0 h-16" />
+                  {isFresh(s.latestAt) && (
+                    <span className="badge-elite absolute right-2 top-2">NEW</span>
+                  )}
+                </div>
+                <div className="p-3.5">
+                  <p className="truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">{s.title}</p>
+                  <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
+                    <BookOpen aria-hidden className="h-3 w-3" /> {s.episodeCount} {s.episodeCount === 1 ? 'episode' : 'episodes'}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
       )}
     </PullToRefresh>
   )
