@@ -6,7 +6,7 @@
  */
 
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { sendPushToUsers } from '@/lib/push-server';
+import { notifyUsers } from '@/lib/push-server';
 import { scanForLeaks } from '@/lib/moderation/contactCheck';
 import type { FeedItem } from './rss';
 
@@ -33,16 +33,27 @@ export async function saveComicFeeds(feeds: Array<{ id: string; name: string; ur
   await db.from('platform_settings').upsert({ key: 'comic_feeds', value: JSON.stringify(feeds) }, { onConflict: 'key' });
 }
 
-export async function pushNewEpisode(id: string, episodeNo: number, title: string) {
+/**
+ * Tell a series' followers that a new episode landed: an in-app
+ * notification plus a push each, and nobody else. This replaced the
+ * old blast to every push subscriber. Best effort by design: a
+ * fan-out failure never blocks publishing.
+ */
+export async function notifySeriesFollowers(comicId: string, episodeTitle: string) {
   try {
     const db = serviceDb();
-    const { data: subs } = await db.from('push_subscriptions').select('user_id');
-    const userIds = [...new Set(((subs ?? []) as { user_id: string }[]).map((s) => s.user_id))];
-    await sendPushToUsers(userIds, {
-      title: `New episode: ${title}`,
-      body: `Episode ${episodeNo} is live. Come read it now.`,
-      url: `/comics/${id}`,
-      tag: `comic-${id}`,
+    const [{ data: follows }, { data: comic }] = await Promise.all([
+      db.from('comic_follows').select('user_id').eq('comic_id', comicId),
+      db.from('comics').select('title').eq('id', comicId).maybeSingle(),
+    ]);
+    const userIds = [...new Set(((follows ?? []) as { user_id: string }[]).map((f) => f.user_id))];
+    if (userIds.length === 0) return;
+    await notifyUsers({
+      userIds,
+      type: 'comic_episode',
+      title: `New episode: ${comic?.title ?? 'Intima Comics'}`,
+      body: episodeTitle,
+      link: `/comics/series/${comicId}`,
     });
   } catch {
     /* best effort */
@@ -87,6 +98,8 @@ export async function importFeedItem(
     if (error.code === '23505') return null;
     throw error;
   }
-  if (publish) await pushNewEpisode(data.id, data.episode_no, item.title);
+  // Feed episodes belong to no series, so there are no followers to
+  // notify here. Series episodes notify their followers when an
+  // admin publishes them (admin comics route).
   return data;
 }

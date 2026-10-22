@@ -16,6 +16,7 @@ import {
   ArrowUp2 as SaxArrowUp2,
   Bank as SaxBank,
   Call as SaxCall,
+  CalendarTick as SaxCalendarTick,
   Camera as SaxCamera,
   Category as SaxCategory,
   Chart as SaxChart,
@@ -73,6 +74,7 @@ import {
   Sms as SaxSms,
   Star as SaxStar,
   Tag as SaxTag,
+  TaskSquare as SaxTaskSquare,
   Ticket as SaxTicket,
   TickCircle as SaxTickCircle,
   TickCircle as SaxCheckIcon,
@@ -143,6 +145,8 @@ export const ArrowLeft = wrap(SaxArrowLeft)
 export const ArrowRight = wrap(SaxArrowRight)
 export const ArrowUpRight = wrap(SaxArrowRight)
 export const Calendar = wrap(SaxNotepad2)
+export const CalendarCheck = wrap(SaxCalendarTick)
+export const ClipboardList = wrap(SaxTaskSquare)
 export const Banknote = wrap(SaxMoneys)
 export const Wallet = wrap(SaxWallet)
 export const Users = wrap(SaxProfile)

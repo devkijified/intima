@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, BookOpen, ChevronRight, Eye, Play } from '@/lib/icons'
-import { Tooltip } from '@/components/ui/Tooltip'
+import { ArrowLeft, Bell, BookOpen, ChevronRight, Eye, Play } from '@/lib/icons'
+import { HelpTip, Tooltip } from '@/components/ui/Tooltip'
+import { showToast } from '@/lib/toast'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface ComicSeries {
@@ -36,10 +37,14 @@ const isNew = (publishedAt: string | null) =>
 export default function ComicSeriesPage() {
   const params = useParams<{ id: string }>()
   const id = params.id
+  const router = useRouter()
   const [comic, setComic] = useState<ComicSeries | null>(null)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [notFound, setNotFound] = useState(false)
   const [stats, setStats] = useState<{ total: number; monthly: number } | null>(null)
+  const [signedIn, setSignedIn] = useState(false)
+  const [following, setFollowing] = useState(false)
+  const [followBusy, setFollowBusy] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -70,6 +75,51 @@ export default function ComicSeriesPage() {
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Follow state for the Notify me button. Opening the series also
+  // marks it seen, which clears this series' share of the nav
+  // badge. Best effort: the badge recounts on the next navigation.
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/comics/follow')
+        const json = await res.json().catch(() => ({}))
+        if (!live) return
+        setSignedIn(json.signedIn === true)
+        const isFollowing = Array.isArray(json.following) && json.following.includes(id)
+        setFollowing(isFollowing)
+        if (json.signedIn && isFollowing) {
+          fetch('/api/comics/follow', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comicId: id }),
+          }).catch(() => {})
+        }
+      } catch { /* the button simply stays in its off state */ }
+    })()
+    return () => { live = false }
+  }, [id])
+
+  async function toggleFollow() {
+    if (!signedIn) { router.push('/login'); return }
+    if (followBusy) return
+    setFollowBusy(true)
+    try {
+      const res = await fetch('/api/comics/follow', {
+        method: following ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comicId: id }),
+      })
+      if (!res.ok) throw new Error('follow failed')
+      setFollowing(!following)
+      showToast(following ? 'Notifications off for this series.' : 'We will notify you when a new episode lands.')
+    } catch {
+      showToast('Something went wrong. Please try again.')
+    } finally {
+      setFollowBusy(false)
+    }
+  }
 
   if (notFound) {
     return (
@@ -132,10 +182,28 @@ export default function ComicSeriesPage() {
       </div>
 
       <div className="px-4">
+        <div className="mt-5 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleFollow}
+            disabled={followBusy}
+            aria-pressed={following}
+            className={
+              'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all active:scale-95 disabled:opacity-60 ' +
+              (following
+                ? 'bg-[#C9A84C] text-charcoal'
+                : 'bg-white text-charcoal ring-1 ring-black/[0.08]')
+            }
+          >
+            <Bell aria-hidden className="h-4 w-4" />
+            {following ? 'Notifying' : 'Notify me'}
+          </button>
+          <HelpTip text="We will send you a push and a notification when a new episode of this series lands." />
+        </div>
         {first && (
           <Link
             href={`/comics/${first.id}`}
-            className="btn-luxe mt-5 inline-flex min-h-[50px] w-full items-center justify-center gap-2 px-6 py-3 text-[15px]"
+            className="btn-luxe mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 px-6 py-3 text-[15px]"
           >
             <Play aria-hidden className="h-4 w-4" />
             Start reading: Episode {first.episode_no}

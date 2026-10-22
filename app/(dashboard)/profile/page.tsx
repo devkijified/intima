@@ -119,6 +119,7 @@ export default function ProfilePage() {
   // Client-only fields
   const [clientName, setClientName] = useState('')
   const [clientAvatar, setClientAvatar] = useState('')
+  const [username, setUsername] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -135,11 +136,12 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, languages, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
+          'role, display_name, avatar_url, username, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, languages, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
         )
         .eq('id', user.id)
         .maybeSingle()
 
+      setUsername((profile as { username?: string | null } | null)?.username ?? null)
       const r = profile?.role ?? user.user_metadata?.role ?? 'client'
       setRole(r)
 
@@ -498,6 +500,9 @@ export default function ProfilePage() {
                   onChange={(e) => setForm({ ...form, displayName: e.target.value })}
                   placeholder="e.g. Adaeze"
                 />
+                {username && (
+                  <p className="mt-1.5 text-xs font-medium text-neutral-400">@{username}</p>
+                )}
               </div>
               <div>
                 <label className={labelCls}>Bio</label>
@@ -1081,6 +1086,9 @@ export default function ProfilePage() {
                 onChange={(e) => setClientName(e.target.value)}
                 placeholder="What should companions call you?"
               />
+              {username && (
+                <p className="mt-1.5 text-xs font-medium text-neutral-400">@{username}</p>
+              )}
             </div>
             <div>
               <label className={labelCls}>Your photo</label>

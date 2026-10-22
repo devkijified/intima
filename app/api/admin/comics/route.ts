@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { sendPushToUsers } from '@/lib/push-server';
+import { notifySeriesFollowers } from '@/lib/comics/import';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
 
 async function requireAdmin() {
@@ -147,7 +147,7 @@ export async function PATCH(req: NextRequest) {
   }
   const db = svc();
   const { data: ep } = await db.from('comic_episodes')
-    .select('id, episode_no, title, status').eq('id', id).maybeSingle();
+    .select('id, episode_no, title, status, comic_id').eq('id', id).maybeSingle();
   if (!ep) return NextResponse.json({ error: 'Episode not found' }, { status: 404 });
 
   if (action === 'publish') {
@@ -155,18 +155,10 @@ export async function PATCH(req: NextRequest) {
       status: 'published',
       published_at: new Date().toISOString(),
     }).eq('id', id);
-    // Fan out: every subscribed device hears about the new episode.
-    try {
-      const { data: subs } = await db.from('push_subscriptions').select('user_id');
-      const userIds = [...new Set(((subs ?? []) as any[]).map((s) => s.user_id))];
-      await sendPushToUsers(userIds, {
-        title: `New episode: ${ep.title}`,
-        body: `Episode ${ep.episode_no} is live. Come read it now.`,
-        url: `/comics/${id}`,
-        tag: `comic-${id}`,
-      });
-    } catch {
-      /* push is best effort; the episode is still published */
+    // Fan out to the series' followers only (notification + push).
+    // Best effort; the episode is published either way.
+    if (ep.comic_id) {
+      await notifySeriesFollowers(ep.comic_id, ep.title);
     }
   } else {
     await db.from('comic_episodes').update({ status: 'draft' }).eq('id', id);

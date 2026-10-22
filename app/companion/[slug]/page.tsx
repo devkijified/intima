@@ -743,6 +743,9 @@ export default function ModelDetailPage() {
             <HelpTip text="This badge means Intima checked the companion's government ID against a live selfie, so the person in the photos is the person you meet. A gold ring on the photo marks an Elite companion with a strong booking record." />
           )}
         </div>
+        {provider.username && (
+          <p className="text-[13px] font-medium text-neutral-400">@{provider.username}</p>
+        )}
         <p className="flex items-center gap-1 text-sm text-neutral-500">
           <MapPin aria-hidden className="h-3.5 w-3.5" />
           {provider.area}{provider.city ? `, ${provider.city}` : ''}

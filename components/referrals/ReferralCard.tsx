@@ -6,6 +6,7 @@ import { companionShareLink, referralLink, shareLink } from '@/lib/links';
 import { getSetting } from '@/lib/settings/platformSettings';
 import { coinsWithNgn } from '@/lib/utils/helpers';
 import { showToast } from '@/lib/toast';
+import { HelpTip } from '@/components/ui/Tooltip';
 import { Check, Copy, Share2 } from '@/lib/icons';
 
 interface FriendRow {
@@ -23,14 +24,20 @@ interface FriendRow {
  * for a client (lib/payments/settleConnection.ts). Self-contained:
  * fetches its own profile, rewards and referees.
  */
+type ClaimStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'claiming';
+
 export function ReferralCard() {
   const [link, setLink] = useState<string | null>(null);
   const [noUsername, setNoUsername] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const [friends, setFriends] = useState<FriendRow[]>([]);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [rewardCompanion, setRewardCompanion] = useState(500);
   const [rewardClient, setRewardClient] = useState(100);
+  const [claimName, setClaimName] = useState('');
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus>('idle');
+  const [claimReason, setClaimReason] = useState('');
 
   useEffect(() => {
     getSetting<number>('referral_reward_companion_coins', 500).then((v) => { if (typeof v === 'number') setRewardCompanion(v); }).catch(() => {});
@@ -49,6 +56,7 @@ export function ReferralCard() {
         .eq('id', user.id)
         .maybeSingle();
       const username = (profile as { username?: string } | null)?.username ?? null;
+      if (live) setRole((profile as { role?: string } | null)?.role ?? null);
       if (!username) {
         if (live) { setNoUsername(true); setLoading(false); }
         return;
@@ -94,6 +102,60 @@ export function ReferralCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Live availability check while the member types a username.
+  useEffect(() => {
+    if (!noUsername) return;
+    const name = claimName.trim().toLowerCase();
+    if (!name) { setClaimStatus('idle'); setClaimReason(''); return; }
+    setClaimStatus('checking');
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/profile/username?check=${encodeURIComponent(name)}`);
+        const json = await res.json().catch(() => ({}));
+        if (!live) return;
+        if (json.available) {
+          setClaimStatus('available');
+          setClaimReason('');
+        } else {
+          setClaimStatus('unavailable');
+          setClaimReason(json.reason ?? 'That username cannot be used. Try another.');
+        }
+      } catch {
+        if (!live) return;
+        setClaimStatus('unavailable');
+        setClaimReason('We could not check that username just now. Please try again.');
+      }
+    }, 400);
+    return () => { live = false; clearTimeout(t); };
+  }, [claimName, noUsername]);
+
+  async function claim() {
+    const name = claimName.trim().toLowerCase();
+    if (!name || claimStatus === 'claiming') return;
+    setClaimStatus('claiming');
+    try {
+      const res = await fetch('/api/profile/username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: name }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setClaimStatus('unavailable');
+        setClaimReason(json.error ?? 'Something went wrong. Please try again.');
+        return;
+      }
+      const claimed = (json.username as string) ?? name;
+      setLink(role === 'model' ? companionShareLink(claimed) : referralLink(claimed));
+      setNoUsername(false);
+      showToast('Username claimed. Your referral link is ready.');
+    } catch {
+      setClaimStatus('unavailable');
+      setClaimReason('Something went wrong. Please try again.');
+    }
+  }
+
   async function copy() {
     if (!link) return;
     try {
@@ -129,9 +191,46 @@ export function ReferralCard() {
 
   if (noUsername) {
     return (
-      <p className="text-sm text-neutral-500">
-        Your referral link needs a username. Yours is being set up; check back shortly.
-      </p>
+      <div>
+        <p className="flex items-center gap-1.5 text-sm font-medium text-charcoal">
+          Pick your username to unlock your referral link
+          <HelpTip text="Your username becomes your share link and your Intima profile handle. You pick it once, and it cannot be changed later, so choose one you like." />
+        </p>
+        <p className="mt-1 text-sm leading-relaxed text-neutral-500">
+          Your referral link needs a username. It also sits on your profile as your handle, like @adaeze.
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-cream px-4 ring-1 ring-black/[0.05] focus-within:ring-2 focus-within:ring-primary/40">
+            <span className="shrink-0 text-sm font-medium text-neutral-400">@</span>
+            <input
+              value={claimName}
+              onChange={(e) => setClaimName(e.target.value)}
+              placeholder="yourname"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={24}
+              aria-label="Your username"
+              className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm font-medium text-charcoal outline-none placeholder:text-neutral-400"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={claim}
+            disabled={claimStatus !== 'available'}
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {claimStatus === 'claiming' ? 'Claiming...' : 'Claim username'}
+          </button>
+        </div>
+        <p aria-live="polite" className="mt-2 min-h-[1.25rem] text-xs">
+          {claimStatus === 'checking' && <span className="text-neutral-400">Checking availability...</span>}
+          {claimStatus === 'available' && (
+            <span className="font-medium text-emerald-600">@{claimName.trim().toLowerCase()} is available.</span>
+          )}
+          {claimStatus === 'unavailable' && <span className="font-medium text-red-600">{claimReason}</span>}
+        </p>
+      </div>
     );
   }
 

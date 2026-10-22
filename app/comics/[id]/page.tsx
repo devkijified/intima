@@ -62,6 +62,13 @@ export default function ComicReaderPage() {
         const { data: comic } = await supabase.from('comics')
           .select('title').eq('id', (data as Episode).comic_id).maybeSingle()
         if (live && comic) setComicTitle((comic as { title: string }).title)
+        // Opening an episode marks its series seen, clearing the
+        // nav badge for it. No-ops for guests and non-followers.
+        fetch('/api/comics/follow', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comicId: (data as Episode).comic_id }),
+        }).catch(() => {})
       }
       // Track the open (deduped per viewer server-side).
       fetch('/api/comics/track', {
