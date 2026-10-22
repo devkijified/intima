@@ -10,7 +10,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 export const SITE_URL = 'https://intima-snowy.vercel.app';
 export const SITE_NAME = 'Intima';
 export const SITE_DESCRIPTION = 'The premier platform for verified companions.';
-export const SITE_TAGLINE = 'Where Elegance Meets Connection';
+export const SITE_TAGLINE = 'Welcome to Sincity (no one has to know)';
 
 /** Existing brand asset used for social cards until a dedicated OG image exists. */
 export const OG_IMAGE_PATH = '/og.png';

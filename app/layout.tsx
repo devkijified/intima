@@ -116,7 +116,7 @@ export default function RootLayout({
         <div id="app-splash">
           <div className="splash-mark">I</div>
           <div className="splash-word">INTIMA</div>
-          <div className="splash-tag">Where Elegance Meets Connection</div>
+          <div className="splash-tag">Welcome to Sincity (no one has to know)</div>
         </div>
         <SplashDismiss />
         <ErrorReporter />

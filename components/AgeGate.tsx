@@ -42,7 +42,7 @@ export function AgeGate({ children }: { children: React.ReactNode }) {
           <ShieldCheck aria-hidden className="w-8 h-8 text-primary" />
         </div>
         <h1 className="text-2xl font-bold text-charcoal">Intima</h1>
-        <p className="text-gray-500 mt-1 mb-6">Where Elegance Meets Connection</p>
+        <p className="text-gray-500 mt-1 mb-6">Welcome to Sincity (no one has to know)</p>
         <AgeVerificationModal isOpen onClose={() => {}} onVerify={handleVerify} />
       </div>
     )

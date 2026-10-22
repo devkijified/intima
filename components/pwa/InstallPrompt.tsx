@@ -175,7 +175,7 @@ export function InstallPrompt() {
             className="h-[72px] w-[72px] rounded-[20px] shadow-lg"
           />
           <h2 className="mt-4 font-display text-2xl font-semibold">Get the Intima app</h2>
-          <p className="mt-1 text-sm text-neutral-500">Where Elegance Meets Connection</p>
+          <p className="mt-1 text-sm text-neutral-500">Welcome to Sincity (no one has to know)</p>
         </div>
 
         {mode === 'native' && (

@@ -31,7 +31,7 @@ export default function AuthLayout({
             </Link>
             <div>
               <p className="font-display text-4xl font-medium leading-[1.15] text-white text-balance lg:text-5xl">
-                Where Elegance<br />Meets Connection
+                Welcome to<br />Sincity
               </p>
               <div className="mt-6 h-px w-16 bg-[#C9A84C]/70" />
               <div className="mt-6 space-y-3 text-sm text-white/75">
@@ -65,7 +65,7 @@ export default function AuthLayout({
             Intima<span className="text-[#C9A84C]">.</span>
           </Link>
           <p className="relative mt-1 font-display text-sm italic text-white/75">
-            Where Elegance Meets Connection
+            Welcome to Sincity (no one has to know)
           </p>
         </div>
 
