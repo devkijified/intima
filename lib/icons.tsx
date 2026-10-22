@@ -72,6 +72,7 @@ import {
   Sms as SaxSms,
   Star as SaxStar,
   Tag as SaxTag,
+  Ticket as SaxTicket,
   TickCircle as SaxTickCircle,
   TickCircle as SaxCheckIcon,
   TickSquare as SaxTickSquare,
@@ -124,6 +125,7 @@ export const PhoneOff = wrap(SaxCall)
 export const Mic = wrap(SaxMicrophone)
 export const MicOff = wrap(SaxMicrophoneSlash)
 export const MessageCircle = wrap(SaxMessage)
+export const Ticket = wrap(SaxTicket)
 export const MapPin = wrap(SaxSearchNormal1)
 export const LocationIcon = wrap(SaxSearchNormal1)
 export const Coins = wrap(SaxCoin)

@@ -9,7 +9,7 @@ import { LogOut, User, Calendar, LayoutDashboard, Compass, Wallet, Video, Shield
   Trophy,
   LayoutGrid,
   ListChecks,
-  Banknote, Bell } from '@/lib/icons'
+  Banknote, Bell, Ticket } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { getSetting } from '@/lib/settings/platformSettings'
@@ -92,6 +92,7 @@ export default function DashboardLayout({
     { href: '/board', icon: ListChecks, label: 'Board', active: pathname.startsWith('/board') },
     { href: '/coins', icon: Coins, label: 'Coins', active: pathname.startsWith('/coins') },
     { href: '/perks', icon: Trophy, label: 'Perks', active: pathname.startsWith('/perks') },
+    { href: '/tickets', icon: Ticket, label: 'Support tickets', active: pathname.startsWith('/tickets') },
     { href: '/saved', icon: Heart, label: 'Saved', active: pathname.startsWith('/saved') },
     { href: '/profile', icon: User, label: 'Profile', active: pathname.startsWith('/profile') },
     ...(isModel

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings,
   LogOut, Radio, Mail, BookOpen, ShieldAlert, AlertTriangle, Lock,
-  Trophy, Chart, ListChecks, Gift, Home, Tag,
+  Trophy, Chart, ListChecks, Gift, Home, Tag, Ticket,
 } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { createClient } from '@/lib/supabase/client'
@@ -27,6 +27,7 @@ const ADMIN_NAV = [
   { href: '/admin/gifts', label: 'Gift store', Icon: Gift },
   { href: '/admin/services', label: 'Services, vibes and cities', Icon: Tag },
   { href: '/admin/disputes', label: 'Fee disputes', Icon: ShieldAlert },
+  { href: '/admin/tickets', label: 'Support tickets', Icon: Ticket },
   { href: '/admin/email-setup', label: 'Email setup', Icon: Mail },
   { href: '/admin/settings', label: 'Settings', Icon: Settings },
 ]
