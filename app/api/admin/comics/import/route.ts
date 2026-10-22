@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { fetchFeed } from '@/lib/comics/rss';
 import { getComicFeeds, saveComicFeeds, importFeedItem, serviceDb } from '@/lib/comics/import';
 import {
-  fetchPageHtml, extractPanels, discoverChapters, detectStoryStatus, pageTitle,
+  fetchPageHtmlWithFallback, extractPanels, discoverChapters, detectStoryStatus, pageTitle,
 } from '@/lib/comics/pageImport';
 import { toCdnUrl, isPublicHttpUrl } from '@/lib/comics/cdn';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     if (action === 'page-preview') {
       const url = String(body.url ?? '').trim();
       if (!url.startsWith('http')) return NextResponse.json({ error: 'Valid page URL required' }, { status: 400 });
-      const html = await fetchPageHtml(url);
+      const { html, relay } = await fetchPageHtmlWithFallback(url);
       const storyStatus = detectStoryStatus(html);
       const chapters = discoverChapters(html, url);
       if (chapters.length >= 2) {
@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
           kind: 'series',
           title: pageTitle(html, url),
           storyStatus,
+          relay,
           chapters: chapters.slice(0, 60),
         });
       }
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
         kind: 'episode',
         title: pageTitle(html, url),
         storyStatus,
+        relay,
         images: images.slice(0, 160),
       });
     }
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `That page was already imported as Episode ${dup.episode_no}. Delete that draft first if you want to redo it.` }, { status: 409 });
       }
 
-      const html = await fetchPageHtml(url);
+      const { html } = await fetchPageHtmlWithFallback(url);
       const candidates = extractPanels(html, url);
       const keepList: string[] = Array.isArray(body.keep)
         ? body.keep.map((u: unknown) => String(u)) : [];

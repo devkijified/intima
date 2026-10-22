@@ -159,7 +159,12 @@ export function discoverChapters(html: string, seriesUrl: string): ChapterLink[]
     if (byNo.has(no)) return;
     const cleanText = decodeEntities(text.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
     const label = cleanText && !/^read (first|last)$/i.test(cleanText) && cleanText.length <= 90
-      ? cleanText.replace(/\s*\d+\s*[.]\s*/, ' ').trim()
+      ? cleanText
+          .replace(/\s*\d+\s*[.]\s*/, ' ')
+          .replace(/\[[^\]]*\]/g, '')
+          .replace(/\s+-\s+chapter\s+\d+.*$/i, '')
+          .replace(/\s+/g, ' ')
+          .trim()
       : prettifySlug(segment);
     byNo.set(no, { no, url: u.toString(), label: label || `Episode ${no}` });
   };
@@ -177,6 +182,7 @@ export function detectStoryStatus(html: string): 'ongoing' | 'completed' | null 
 export function pageTitle(html: string, fallbackUrl: string): string {
   const og = html.match(/<meta[^>]+property\s*=\s*"og:title"[^>]+content\s*=\s*"([^"]+)"/i)?.[1]
     ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+    ?? html.match(/^Title:\s*(.+)$/m)?.[1]
     ?? '';
   const cleaned = decodeEntities(og)
     .replace(/\[[^\]]*\]/g, '')
@@ -190,5 +196,50 @@ export function pageTitle(html: string, fallbackUrl: string): string {
     return prettifySlug(seg) || 'Untitled episode';
   } catch {
     return 'Untitled episode';
+  }
+}
+
+/**
+ * Reading relays (used when a site refuses our server's direct fetch)
+ * return markdown: images as ![alt](url), links as [text](url), and
+ * linked images as [![alt](img)](href). Rewrite those into the plain
+ * tags the extractors already understand.
+ */
+export function markdownToPseudoHtml(md: string): string {
+  return md
+    .replace(/\[!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\]\(([^)\s]+)\)/g,
+      '<a href="$3"><img src="$2" alt="$1"></a>')
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+      '<img src="$2" alt="$1">')
+    .replace(/\[(.+?)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+      '<a href="$2">$1</a>');
+}
+
+/**
+ * Fetch a page for import. Direct first; when the host refuses our
+ * server (a fast 403 from a bot wall is the usual shape), fall back
+ * to a public reading relay and normalize its markdown so the same
+ * extractors run. The relay only ever supplies page structure for
+ * discovery and extraction; panel images themselves always come
+ * from the source through our own CDN endpoint.
+ */
+export async function fetchPageHtmlWithFallback(
+  url: string
+): Promise<{ html: string; relay: boolean }> {
+  try {
+    return { html: await fetchPageHtml(url), relay: false };
+  } catch (directError) {
+    try {
+      const res = await fetch('https://r.jina.ai/' + url, {
+        headers: { 'User-Agent': PAGE_IMPORT_UA, Accept: 'text/plain' },
+        signal: AbortSignal.timeout(40000),
+      });
+      if (!res.ok) throw new Error(`Relay fetch failed with HTTP ${res.status}`);
+      const md = await res.text();
+      if (!md || md.length < 200) throw new Error('Relay returned an empty page');
+      return { html: markdownToPseudoHtml(md.slice(0, 6_000_000)), relay: true };
+    } catch {
+      throw directError;
+    }
   }
 }

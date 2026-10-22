@@ -15,8 +15,8 @@ interface Comic {
 }
 
 type PagePreview =
-  | { kind: 'series'; title: string; storyStatus: string | null; chapters: Array<{ no: number; url: string; label: string }> }
-  | { kind: 'episode'; title: string; storyStatus: string | null; images: Array<{ url: string; keep: boolean; reason: string | null }> }
+  | { kind: 'series'; title: string; storyStatus: string | null; relay?: boolean; chapters: Array<{ no: number; url: string; label: string }> }
+  | { kind: 'episode'; title: string; storyStatus: string | null; relay?: boolean; images: Array<{ url: string; keep: boolean; reason: string | null }> }
 
 interface Episode {
   id: string
@@ -448,6 +448,9 @@ export default function AdminComicsPage() {
         {pagePreview && pagePreview.kind === 'series' && (
           <div className="mt-4 space-y-2">
             <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            {pagePreview.relay && (
+              <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
+            )}
             <p className="text-xs text-neutral-500">
               {pagePreview.chapters.length} episodes found, in reading order.
               {pagePreview.storyStatus ? ` The source lists this comic as ${pagePreview.storyStatus === 'completed' ? 'Completed' : 'Ongoing'}; importing will set that here too.` : ''}
@@ -468,6 +471,9 @@ export default function AdminComicsPage() {
         {pagePreview && pagePreview.kind === 'episode' && (
           <div className="mt-4 space-y-3">
             <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            {pagePreview.relay && (
+              <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
+            )}
             <p className="text-xs text-neutral-500">
               {pagePreview.images.filter((i) => i.keep).length} panels found. Unticked pictures were judged to be site decoration; tick any of them if that call was wrong.
             </p>
