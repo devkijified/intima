@@ -12,8 +12,11 @@ import { watermarkText } from '@/lib/site';
  * origin (see lib/site), so a domain change renames every
  * watermark at once.
  *
- * variant "edge": a vertical line down the left edge, for full
- * media views (Fans Only lightbox, stories, gallery lightbox).
+ * variant "edge": one straight horizontal line across the lower
+ * bottom centre, for full media views (Fans Only lightbox,
+ * stories, gallery lightbox). It used to run vertically down the
+ * left edge; the owner asked for a straight watermark at the
+ * middle or lower bottom instead.
  * variant "corner": a small line at the bottom right, for thumbs
  * and cards. The parent must be positioned (relative).
  */
@@ -36,10 +39,10 @@ export function PhotoWatermark({
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 rotate-180 select-none whitespace-nowrap text-[11px] font-semibold lowercase tracking-[0.18em] text-white/70 [writing-mode:vertical-rl]',
+          'pointer-events-none absolute inset-x-0 bottom-[13%] z-10 select-none text-center text-xs font-semibold lowercase tracking-[0.22em] text-white/60',
           className,
         )}
-        style={{ textShadow: '0 1px 6px rgba(0,0,0,0.65)' }}
+        style={{ textShadow: '0 1px 8px rgba(0,0,0,0.7)' }}
       >
         {text}
       </span>

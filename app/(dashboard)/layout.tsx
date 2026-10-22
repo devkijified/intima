@@ -107,9 +107,9 @@ export default function DashboardLayout({
   const moreActive = moreOpen || sheetItems.some((i) => i.active)
 
   return (
-    <div className="min-h-dvh bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#FDF9F6] text-[#1A1A1A] font-sans selection:bg-[#AC244D]/20 selection:text-[#AC244D]">
       <header
-        className="border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md sticky top-0 z-50"
+        className="relative z-40 shrink-0 border-b border-neutral-200/85 bg-[#FDF9F6]/90 backdrop-blur-md"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3.5">
@@ -271,31 +271,40 @@ export default function DashboardLayout({
       <main
         className={
           /^\/live\/[^/]+/.test(pathname)
-            ? 'mx-auto max-w-7xl px-4 sm:px-6 py-8 pb-24 md:pb-8 lg:mx-0 lg:max-w-none lg:p-0'
-            : 'mx-auto max-w-7xl px-4 sm:px-6 py-8 pb-24 md:pb-8'
+            ? 'mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto px-4 py-8 sm:px-6 md:pb-8 lg:mx-0 lg:max-w-none lg:p-0'
+            : 'mx-auto min-h-0 w-full max-w-7xl flex-1 overflow-y-auto px-4 py-8 sm:px-6 md:pb-8'
         }
       >
         {children}
       </main>
 
       {/* Mobile bottom tab bar: the everyday tabs only. The rest
-          live in the More sheet below. */}
+          live in the More sheet below. The bar renders IN FLOW at
+          the bottom of a shell that never scrolls (the MamaShop
+          cure), so it is stationed to the bottom for good. The
+          middle Map button pops out of the bar, TikTok style. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden"
+        className="relative z-40 shrink-0 border-t border-neutral-200/80 bg-[#FDF9F6]/95 backdrop-blur-md md:hidden"
       >
         <div className="grid grid-cols-5 px-1 py-1.5">
           {[
             { href: '/dashboard', icon: LayoutDashboard, label: 'Home', active: pathname === '/dashboard' },
             { href: '/live', icon: Radio, label: 'Live', active: pathname.startsWith('/live') },
-            { href: '/', icon: MapIcon, label: 'Map', active: pathname === '/' },
+            { href: '/', icon: MapIcon, label: 'Map', active: pathname === '/', pop: true },
             { href: '/messages', icon: MessageCircle, label: 'Messages', active: pathname.startsWith('/messages') },
-          ].map(({ href, icon: Icon, label, active }) => (
+          ].map(({ href, icon: Icon, label, active, pop }) => (
             <Link
               key={href}
               href={href}
               className={'flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-colors ' + (active ? 'text-primary' : 'text-neutral-400')}
             >
-              <Icon className="h-5 w-5" />
+              {pop ? (
+                <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#AC244D] text-white shadow-[0_8px_20px_rgba(172,36,77,0.45)] ring-4 ring-[#FDF9F6]">
+                  <Icon className="h-6 w-6" />
+                </span>
+              ) : (
+                <Icon className="h-5 w-5" />
+              )}
               {label}
             </Link>
           ))}

@@ -179,7 +179,9 @@
   background: #0d0d12;
 }
 .map-raster-dark canvas {
-  filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(96%) saturate(70%);
+  /* Snap Map direction: flat dark slate land, roads muted to a
+     whisper instead of bright street lines everywhere. */
+  filter: invert(100%) hue-rotate(190deg) brightness(74%) contrast(88%) saturate(34%);
 }
 
 /* ---- In-app splash screen ---- */
@@ -307,16 +309,20 @@
      sections, cards and meta text match from screen to screen.
      Floors: body copy never under 14px, meta never under 11px. */
   .t-display {
-    @apply font-display text-[32px] font-semibold leading-[1.08] tracking-tight sm:text-4xl;
+    @apply font-display font-semibold leading-[1.08] tracking-tight;
+    font-size: clamp(26px, 7.2vw, 36px);
   }
   .t-page-title {
-    @apply font-display text-2xl font-semibold leading-tight tracking-tight;
+    @apply font-display font-semibold leading-tight tracking-tight;
+    font-size: clamp(20px, 5.6vw, 24px);
   }
   .t-sheet-title {
-    @apply font-display text-xl font-semibold leading-snug tracking-tight;
+    @apply font-display font-semibold leading-snug tracking-tight;
+    font-size: clamp(18px, 5vw, 20px);
   }
   .t-section-title {
-    @apply font-display text-lg font-semibold leading-snug tracking-tight;
+    @apply font-display font-semibold leading-snug tracking-tight;
+    font-size: clamp(16px, 4.6vw, 18px);
   }
   .t-card-title {
     @apply font-display text-base font-semibold leading-snug;
@@ -326,6 +332,20 @@
   }
   .t-meta {
     @apply text-[11px] leading-4;
+  }
+
+  /* Horizontally scrolling row (tab bars, chip rows): scrolls
+     sideways on mobile instead of overflowing or sticking, with
+     the scrollbar hidden. */
+  .scroll-row {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
   }
 
   /* Photo legibility veil: bottom gradient on card photos. */
@@ -546,4 +566,17 @@
   .giftfx-root .giftfx-chip {
     animation: giftfx-fade-pulse 1.6s ease-in-out both !important;
   }
+}
+
+/* Mobile heading caps (unlayered on purpose, so they win over the
+   ad-hoc utility sizes some pages still use): display headings
+   shrink on phones instead of bursting out of their cards, and
+   every heading may wrap a long word rather than overflow. */
+h1, h2, h3, h4 {
+  overflow-wrap: break-word;
+}
+@media (max-width: 640px) {
+  .text-5xl { font-size: 2rem; line-height: 2.35rem; }
+  .text-4xl { font-size: 1.72rem; line-height: 2.05rem; }
+  .text-3xl { font-size: 1.45rem; line-height: 1.8rem; }
 }

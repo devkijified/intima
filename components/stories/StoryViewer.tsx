@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Eye } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -22,22 +22,56 @@ interface StoryViewerProps {
   stories: Story[];
   initialIndex: number;
   onClose: () => void;
+  /** Tapping the header (avatar or name) opens her profile. */
+  onViewProfile?: (story: Story) => void;
+  /** CTA under the story: start a connection with this companion. */
+  onRequestConnection?: (story: Story) => void;
 }
 
 const SLIDE_MS = 5000;
 
 /**
  * WhatsApp Status-style fullscreen story viewer.
- * Tap right = next, tap left = previous, progress bars on top.
- * Photos auto-advance after 5s; videos play through once.
+ *
+ * The story list arrives grouped by companion. The progress bars
+ * show only the current companion's segments. Tap right = next
+ * story, tap left = previous story; at a companion's last story
+ * the next tap moves to the next companion, and a horizontal
+ * swipe jumps straight between companions. Press and hold pauses.
+ * The header opens her profile, and a CTA row sits under the
+ * media so a story can turn into a connection.
  */
-export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps) {
+export function StoryViewer({
+  stories,
+  initialIndex,
+  onClose,
+  onViewProfile,
+  onRequestConnection,
+}: StoryViewerProps) {
   const [index, setIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [viewCount, setViewCount] = useState<number | null>(null);
+  const [myId, setMyId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchX = useRef<number | null>(null);
   const story = stories[index];
+
+  // Group boundaries: runs of consecutive stories per companion.
+  const groups = useMemo(() => {
+    const out: { providerId: string; start: number; count: number }[] = [];
+    stories.forEach((s, i) => {
+      const last = out[out.length - 1];
+      if (last && last.providerId === s.provider_id) last.count += 1;
+      else out.push({ providerId: s.provider_id, start: i, count: 1 });
+    });
+    return out;
+  }, [stories]);
+  const groupIndex = groups.findIndex(
+    (g) => index >= g.start && index < g.start + g.count,
+  );
+  const group = groups[groupIndex];
+  const indexInGroup = group ? index - group.start : 0;
 
   const next = useCallback(() => {
     if (index < stories.length - 1) {
@@ -54,6 +88,37 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
       setProgress(0);
     }
   }, [index]);
+
+  const nextCompanion = useCallback(() => {
+    const g = groups[groupIndex + 1];
+    if (g) {
+      setIndex(g.start);
+      setProgress(0);
+    } else {
+      onClose();
+    }
+  }, [groups, groupIndex, onClose]);
+
+  const prevCompanion = useCallback(() => {
+    // Mid-group: a swipe back restarts the current companion first
+    // (WhatsApp behaviour); at her first story it jumps back one.
+    if (group && indexInGroup > 0) {
+      setIndex(group.start);
+      setProgress(0);
+      return;
+    }
+    const g = groups[groupIndex - 1];
+    if (g) {
+      setIndex(g.start);
+      setProgress(0);
+    }
+  }, [groups, groupIndex, group, indexInGroup]);
+
+  // Who am I (for hiding the CTA on my own stories) + view marking.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setMyId(data.user?.id ?? null));
+  }, []);
 
   // Mark as viewed + fetch view count.
   useEffect(() => {
@@ -77,57 +142,74 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
     return () => { live = false; };
   }, [story]);
 
-  // Auto-advance for photos.
+  // Auto-advance for photos, frozen while paused (press and hold).
   useEffect(() => {
-    if (!story || story.media_type === 'video') return;
-    const start = Date.now();
-    timer.current = setInterval(() => {
+    if (!story || story.media_type === 'video' || paused) return;
+    const start = Date.now() - progress * SLIDE_MS;
+    const t = setInterval(() => {
       const elapsed = Date.now() - start;
       setProgress(Math.min(1, elapsed / SLIDE_MS));
       if (elapsed >= SLIDE_MS) next();
     }, 50);
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-    };
-  }, [story, next]);
+    return () => clearInterval(t);
+    // progress is the resume offset, read once per run on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [story, next, paused]);
 
-  // Video: advance on ended, track progress.
+  // Video: pause with the hold state, advance on ended.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !story || story.media_type !== 'video') return;
+    if (paused) v.pause();
+    else void v.play().catch(() => {});
+  }, [paused, story]);
+
   const onVideoTime = () => {
     const v = videoRef.current;
     if (v && v.duration) setProgress(v.currentTime / v.duration);
   };
 
-  if (!story) return null;
+  if (!story || !group) return null;
+
+  const isMine = myId !== null && story.provider_id === myId;
+  const showCta = !isMine && (onViewProfile || onRequestConnection);
 
   return (
     <div className="fixed inset-0 z-[90] bg-black">
-      {/* Progress bars */}
-      <div className="absolute left-0 right-0 top-0 z-10 flex gap-1 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        {stories.map((s, i) => (
-          <div key={s.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/30">
+      {/* Progress bars: this companion's segments only. */}
+      <div className="absolute left-0 right-0 top-0 z-20 flex gap-1 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        {Array.from({ length: group.count }).map((_, i) => (
+          <div key={i} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/30">
             <div
               className="h-full rounded-full bg-white transition-none"
-              style={{ width: `${i < index ? 100 : i === index ? progress * 100 : 0}%` }}
+              style={{ width: `${i < indexInGroup ? 100 : i === indexInGroup ? progress * 100 : 0}%` }}
             />
           </div>
         ))}
       </div>
 
-      {/* Header */}
-      <div className="absolute left-0 right-0 top-8 z-10 flex items-center gap-3 px-4 pt-2">
-        {story.provider_avatar ? (
-          <img src={story.provider_avatar} alt="" className="h-9 w-9 rounded-full object-cover ring-2 ring-white/50" />
-        ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 font-display text-white">
-            {(story.provider_name[0] ?? '?').toUpperCase()}
+      {/* Header: avatar + name open her profile. */}
+      <div className="absolute left-0 right-0 top-8 z-20 flex items-center gap-3 px-4 pt-2">
+        <button
+          type="button"
+          onClick={() => onViewProfile?.(story)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-label={`View ${story.provider_name}'s profile`}
+        >
+          {story.provider_avatar ? (
+            <img src={story.provider_avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white/50" />
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 font-display text-white">
+              {(story.provider_name[0] ?? '?').toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{story.provider_name}</p>
+            <p className="text-xs text-white/60">
+              {new Date(story.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
           </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{story.provider_name}</p>
-          <p className="text-xs text-white/60">
-            {new Date(story.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
-        </div>
+        </button>
         <Tooltip label="Close">
         <button onClick={onClose} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
           <X className="h-5 w-5" />
@@ -135,10 +217,25 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
         </Tooltip>
       </div>
 
-      {/* Media with tap zones */}
-      <div className="relative h-full w-full">
+      {/* Media: fills the frame like WhatsApp Status. Tap zones go
+          story to story, horizontal swipes jump between companions,
+          press and hold pauses. */}
+      <div
+        className="relative h-full w-full"
+        onTouchStart={(e) => { touchX.current = e.touches[0]?.clientX ?? null; }}
+        onTouchEnd={(e) => {
+          if (touchX.current === null) return;
+          const dx = (e.changedTouches[0]?.clientX ?? touchX.current) - touchX.current;
+          touchX.current = null;
+          if (dx <= -60) nextCompanion();
+          else if (dx >= 60) prevCompanion();
+        }}
+        onPointerDown={() => setPaused(true)}
+        onPointerUp={() => setPaused(false)}
+        onPointerLeave={() => setPaused(false)}
+      >
         {story.media_type === 'photo' ? (
-          <img src={story.media_url} alt="" className="h-full w-full object-contain" draggable={false} />
+          <img src={story.media_url} alt="" className="h-full w-full object-cover" draggable={false} />
         ) : (
           <video
             ref={videoRef}
@@ -147,16 +244,16 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
             playsInline
             onTimeUpdate={onVideoTime}
             onEnded={next}
-            className="h-full w-full object-contain"
+            className="h-full w-full object-cover"
           />
         )}
         <PhotoWatermark username={story.provider_username} variant="edge" />
-        <button aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 w-1/3" />
-        <button aria-label="Next" onClick={next} className="absolute inset-y-0 right-0 w-1/3" />
+        <button aria-label="Previous" onClick={prev} className="absolute inset-y-0 left-0 z-10 w-1/3" />
+        <button aria-label="Next" onClick={next} className="absolute inset-y-0 right-0 z-10 w-1/3" />
       </div>
 
-      {/* Caption + views */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Caption + views + CTA */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {story.caption && (
           <p className="rounded-2xl bg-black/50 px-4 py-2.5 text-sm text-white backdrop-blur">
             {story.caption}
@@ -167,16 +264,38 @@ export function StoryViewer({ stories, initialIndex, onClose }: StoryViewerProps
             <Eye className="h-3.5 w-3.5" /> {viewCount} views
           </p>
         )}
+        {showCta && (
+          <div className="mt-3 flex gap-2">
+            {onViewProfile && (
+              <button
+                type="button"
+                onClick={() => onViewProfile(story)}
+                className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-white/15 px-4 text-sm font-semibold text-white backdrop-blur transition-all active:scale-[0.98]"
+              >
+                View profile
+              </button>
+            )}
+            {onRequestConnection && (
+              <button
+                type="button"
+                onClick={() => onRequestConnection(story)}
+                className="inline-flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-[#AC244D] px-4 text-sm font-semibold text-white shadow-lg transition-all active:scale-[0.98]"
+              >
+                Request connection
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Edge arrows for desktop */}
-      <Tooltip label="Previous story" wrapperClassName="absolute left-3 top-1/2 z-10 hidden -translate-y-1/2 md:block">
+      <Tooltip label="Previous story" wrapperClassName="absolute left-3 top-1/2 z-20 hidden -translate-y-1/2 md:block">
       <button onClick={prev} aria-label="Previous story"
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white">
         <ChevronLeft className="h-5 w-5" />
       </button>
       </Tooltip>
-      <Tooltip label="Next story" wrapperClassName="absolute right-3 top-1/2 z-10 hidden -translate-y-1/2 md:block">
+      <Tooltip label="Next story" wrapperClassName="absolute right-3 top-1/2 z-20 hidden -translate-y-1/2 md:block">
       <button onClick={next} aria-label="Next story"
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white">
         <ChevronRight className="h-5 w-5" />

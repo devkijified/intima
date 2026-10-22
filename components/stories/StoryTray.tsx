@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { StoryViewer, type Story } from './StoryViewer';
 import { Plus } from '@/lib/icons';
@@ -18,6 +19,7 @@ interface TrayProvider {
  * Gradient ring = unseen stories, gray = all seen. Tapping opens the viewer.
  */
 export function StoryTray() {
+  const router = useRouter();
   const [groups, setGroups] = useState<TrayProvider[]>([]);
   const [viewer, setViewer] = useState<{ stories: Story[]; index: number } | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
@@ -125,7 +127,7 @@ export function StoryTray() {
 
   return (
     <>
-      <div className="flex gap-3 overflow-x-auto px-4 py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-3 overflow-x-auto bg-gradient-to-b from-black/40 via-black/10 to-transparent px-4 pb-4 pt-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {groups.map((g) => (
           <button
             key={g.provider_id}
@@ -149,7 +151,7 @@ export function StoryTray() {
                 )}
               </span>
             </span>
-            <span className="w-full min-w-0 truncate text-center text-[11px] text-neutral-600">
+            <span className="w-full min-w-0 truncate text-center text-[11px] font-medium text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.8)]">
               {g.provider_id === myId ? 'You' : g.provider_name.split(' ')[0]}
             </span>
           </button>
@@ -160,6 +162,14 @@ export function StoryTray() {
           stories={viewer.stories}
           initialIndex={viewer.index}
           onClose={() => setViewer(null)}
+          onViewProfile={(s) => {
+            setViewer(null);
+            router.push(`/companion/${s.provider_id}`);
+          }}
+          onRequestConnection={(s) => {
+            setViewer(null);
+            router.push(`/companion/${s.provider_id}?connect=1`);
+          }}
         />
       )}
     </>

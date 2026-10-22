@@ -11,10 +11,14 @@ import {
   AlertTriangle,
   BadgeCheck,
   ChevronDown,
+  LayoutDashboard,
+  LayoutGrid,
   List,
   Loader2,
   Map as MapIcon,
   MapPin,
+  MessageCircle,
+  Radio,
   SearchX,
   SlidersHorizontal,
   X,
@@ -129,8 +133,17 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
   el.className = 'intima-pin';
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', `${escAttr(provider.displayName)} in ${escAttr(provider.area)}`);
+  const firstName = escAttr(provider.displayName.split(' ')[0] ?? provider.displayName);
   el.innerHTML =
     `<div style="position:relative;cursor:pointer;transition:transform .15s ease">` +
+    // Snap Map style heat glow behind the pin: warm burgundy halo,
+    // stronger for boosted or elite companions, so busy areas glow.
+    `<span style="position:absolute;left:50%;top:50%;width:128px;height:128px;transform:translate(-50%,-50%);border-radius:9999px;pointer-events:none;` +
+    `background:radial-gradient(circle, ${
+      provider.boosted || provider.trustTier === 'elite'
+        ? 'rgba(201,168,76,0.50)'
+        : 'rgba(172,36,77,0.42)'
+    } 0%, transparent 68%)"></span>` +
     // Photo pin, Instagram-story style: ring + soft shadow, photo fully
     // visible. Elite get a gold ring; boosted get a gold halo.
     `<img src="${escAttr(provider.avatar)}" alt="" loading="lazy" ` +
@@ -151,6 +164,11 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
         `background:#22c55e;border-radius:9999px;border:2.5px solid #fff;` +
         `box-shadow:0 0 0 3px rgba(34,197,94,.35)"></span>`
       : '') +
+    // Name label under the pin, Snap style: first name on a dark chip.
+    `<span style="position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);` +
+    `background:rgba(8,8,12,0.72);color:#fff;font-size:10px;font-weight:600;line-height:1;` +
+    `padding:4px 7px;border-radius:9999px;white-space:nowrap;backdrop-filter:blur(4px)">` +
+    `${firstName}</span>` +
     `</div>`;
   el.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -578,8 +596,7 @@ export default function IntimaMap() {
 
   return (
     <div
-      className="fixed left-0 right-0 top-0 w-full overflow-hidden bg-[#111118]"
-      style={{ height: 'calc(100dvh + 120px)', marginBottom: '-120px' }}
+      className="fixed left-0 right-0 top-0 h-dvh w-full overflow-hidden bg-[#111118]"
     >
       <div
         ref={containerRef}
@@ -771,40 +788,101 @@ export default function IntimaMap() {
               </span>
             )}
           </button>
-          {providersReady && (
-            <span className="ml-auto shrink-0 rounded-full bg-black/45 px-2.5 py-1 text-xs text-white/85 backdrop-blur-sm">
-              {filtered.length} nearby
-            </span>
-          )}
         </div>
       </div>
-      {/* Story tray: WhatsApp Status-style, below the header. */}
-      <div className="absolute left-0 right-0 top-[calc(68px+env(safe-area-inset-top))] z-30 sm:top-[calc(76px+env(safe-area-inset-top))]">
-        <StoryTray />
-      </div>
-
-      {/* New-episode retention pill, below the story tray. */}
-      <div className="absolute left-0 right-0 top-[calc(128px+env(safe-area-inset-top))] z-30 sm:top-[calc(136px+env(safe-area-inset-top))]">
-        <ComicRibbon />
-      </div>
+      {/* Story tray + comic ribbon: ONE stacked column under the
+          header (wordmark row + filter row), so they can never
+          overlap each other or the filter chips again. Map view
+          only; the list view has its own clean top. */}
+      {view === 'map' && (
+        <div className="absolute left-0 right-0 top-[calc(118px+env(safe-area-inset-top))] z-30 flex flex-col">
+          <StoryTray />
+          <ComicRibbon />
+        </div>
+      )}
 
       {/* Build tag: tiny, bottom-right. Tells us exactly what version is running. */}
       <div className="pointer-events-none absolute bottom-1 right-2 z-40 select-none text-[11px] text-white/25">
         {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev'}
       </div>
 
-      {/* Legend */}
-      {mapReady && !mapFailed && view === 'map' && (
-        <div className="glass-dark absolute left-3 z-10 rounded-2xl px-3.5 py-2.5 text-xs text-white/90 shadow-lift" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
-          <p className="flex items-center gap-2">
-            <BadgeCheck aria-hidden className="h-3.5 w-3.5" />
-            Verified
-          </p>
-          <p className="mt-1 flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-            Available now
-          </p>
+      {/* Nearby tray, Snap style: a visible companion count and a
+          scrollable row of who is around, above the bottom bar.
+          Tapping a face opens the same profile path as her pin. */}
+      {view === 'map' && providersReady && filtered.length > 0 && (
+        <div
+          className="absolute inset-x-0 z-30"
+          style={{ bottom: session ? 'calc(76px + env(safe-area-inset-bottom))' : 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="flex items-center gap-2 px-4 pb-1.5">
+            <span className="glass-dark rounded-full px-3 py-1.5 text-xs font-semibold text-white">
+              {filtered.length} {filtered.length === 1 ? 'companion' : 'companions'} nearby
+            </span>
+            <span className="glass-dark flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] text-white/85">
+              <BadgeCheck aria-hidden className="h-3 w-3" /> Verified
+              <span className="ml-1 h-2 w-2 rounded-full bg-green-500" /> Available now
+            </span>
+          </div>
+          <div className="scroll-row gap-3 px-4 pb-1 pt-1">
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => goToProfile(p)}
+                className="flex w-14 shrink-0 flex-col items-center gap-1"
+                aria-label={`${p.displayName}, ${p.area}`}
+              >
+                <span className="relative block">
+                  <img
+                    src={p.avatar}
+                    alt=""
+                    loading="lazy"
+                    className={`h-12 w-12 rounded-full object-cover shadow-lg ${p.trustTier === 'elite' ? 'ring-[2.5px] ring-gold' : 'ring-2 ring-white/85'}`}
+                  />
+                  {p.available && (
+                    <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#111118] bg-green-500" />
+                  )}
+                </span>
+                <span className="w-full truncate text-center text-[10px] font-medium text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
+                  {p.displayName.split(' ')[0]}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Signed-in bottom bar on the map (guests keep the clean
+          full-screen map): same five stops as everywhere else,
+          Map popped in the middle. */}
+      {session && view === 'map' && (
+        <nav className="absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#101016]/92 backdrop-blur-md">
+          <div className="grid grid-cols-5 px-1 py-1.5">
+            {[
+              { href: '/dashboard', label: 'Home', Icon: LayoutDashboard, pop: false, active: false },
+              { href: '/live', label: 'Live', Icon: Radio, pop: false, active: false },
+              { href: '/', label: 'Map', Icon: MapIcon, pop: true, active: true },
+              { href: '/messages', label: 'Messages', Icon: MessageCircle, pop: false, active: false },
+              { href: '/dashboard', label: 'More', Icon: LayoutGrid, pop: false, active: false },
+            ].map(({ href, label, Icon, pop, active }) => (
+              <Link
+                key={label}
+                href={href}
+                className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium ${active ? 'text-white' : 'text-white/50'}`}
+              >
+                {pop ? (
+                  <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#AC244D] text-white shadow-[0_8px_20px_rgba(172,36,77,0.5)] ring-4 ring-[#101016]">
+                    <Icon className="h-6 w-6" />
+                  </span>
+                ) : (
+                  <Icon className="h-5 w-5" />
+                )}
+                {label}
+              </Link>
+            ))}
+          </div>
+          <div className="h-[env(safe-area-inset-bottom)]" />
+        </nav>
       )}
 
       {/* First-class list view. Also the graceful fallback when tiles fail. */}
@@ -863,7 +941,7 @@ export default function IntimaMap() {
                 <SearchX aria-hidden className="h-6 w-6 text-[#AC244D]" />
               </div>
               <h3 className="font-display text-lg font-semibold text-charcoal">
-                No providers match
+                No companions match
               </h3>
               <p className="mt-1 text-sm text-neutral-500">
                 Try widening your budget or clearing a filter.
@@ -915,7 +993,10 @@ export default function IntimaMap() {
       )}
 
       {toast && (
-        <div className="absolute inset-x-0 bottom-24 z-40 flex justify-center px-4">
+        <div
+          className="absolute inset-x-0 z-40 flex justify-center px-4"
+          style={{ bottom: 'calc(12rem + env(safe-area-inset-bottom))' }}
+        >
           <div className="flex items-center gap-3 rounded-full bg-charcoal/95 py-2.5 pl-5 pr-2.5 text-sm text-white shadow-2xl backdrop-blur-md">
             <span>{toast.message}</span>
             {toast.actionLabel && (
