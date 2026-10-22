@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Flag, Heart, LayoutGrid, ListChecks,
-  Lock, MapPin, Phone, Plane, Play, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
+  ArrowLeft, BadgeCheck, CheckCircle2, ChevronLeft, ChevronRight, Flag, Heart, LayoutDashboard, LayoutGrid, ListChecks,
+  Lock, Map as MapIcon, MapPin, MessageCircle, Phone, Plane, Play, Radio, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
 import { showToast as globalShowToast } from '@/lib/toast'
@@ -249,6 +249,26 @@ export default function ModelDetailPage() {
     })
     return () => { live = false }
   }, [])
+
+  // Story CTA deep link: /companion/<id>?connect=1 lands here with
+  // the connect modal already open (or a login first, which returns
+  // to this same URL). Fires once, only when the profile is ready.
+  const connectDeepLinkFired = useRef(false)
+  useEffect(() => {
+    if (connectDeepLinkFired.current) return
+    if (loading || !provider || isOwner) return
+    let wantsConnect = false
+    try {
+      wantsConnect = new URLSearchParams(window.location.search).get('connect') === '1'
+    } catch { /* no query string */ }
+    if (!wantsConnect) return
+    connectDeepLinkFired.current = true
+    if (!loggedIn) {
+      router.push(`/login?next=${encodeURIComponent(`/companion/${params.slug}?connect=1`)}`)
+      return
+    }
+    if (!connected) setShowConnectModal(true)
+  }, [loading, provider, loggedIn, connected, isOwner, params.slug, router])
 
   useEffect(() => {
     let live = true
@@ -1156,6 +1176,39 @@ export default function ModelDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Signed-in mobile bottom bar: companion pages live outside
+          the dashboard shell, so without this the bar vanishes here.
+          Same five destinations, Map popped in the middle. */}
+      {loggedIn && (
+        <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-black/[0.06] bg-[#FDF9F6]/95 backdrop-blur-md md:hidden">
+          <div className="grid grid-cols-5 px-1 py-1.5">
+            {[
+              { href: '/dashboard', label: 'Home', Icon: LayoutDashboard, pop: false },
+              { href: '/live', label: 'Live', Icon: Radio, pop: false },
+              { href: '/', label: 'Map', Icon: MapIcon, pop: true },
+              { href: '/messages', label: 'Messages', Icon: MessageCircle, pop: false },
+              { href: '/dashboard', label: 'More', Icon: LayoutGrid, pop: false },
+            ].map(({ href, label, Icon, pop }) => (
+              <Link
+                key={label}
+                href={href}
+                className="flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium text-neutral-400"
+              >
+                {pop ? (
+                  <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#AC244D] text-white shadow-[0_8px_20px_rgba(172,36,77,0.45)] ring-4 ring-[#FDF9F6]">
+                    <Icon className="h-6 w-6" />
+                  </span>
+                ) : (
+                  <Icon className="h-5 w-5" />
+                )}
+                {label}
+              </Link>
+            ))}
+          </div>
+          <div className="h-[env(safe-area-inset-bottom)]" />
+        </nav>
       )}
 
       {/* Request connection modal */}
