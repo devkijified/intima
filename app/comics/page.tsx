@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { BookOpen, ChevronRight } from '@/lib/icons'
 
-const Layers = BookOpen
 
 interface ComicSeries {
   id: string

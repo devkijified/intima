@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
             userIds: admins.map((a) => a.id),
             type: 'provider_hidden',
             title: 'Provider hidden by report threshold',
-            body: 'A provider reached 3 open reports in 30 days and was hidden from the map. Review the reports to decide whether to restore her or keep her hidden.',
+            body: 'A companion reached 3 open reports in 30 days and was hidden from the map. Review the reports to decide whether to restore her or keep her hidden.',
             link: '/admin/reports',
           }).catch(() => {});
         }

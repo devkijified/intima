@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings,
   LogOut, Radio, Mail, BookOpen, ShieldAlert, AlertTriangle, Lock,
-  Trophy, Chart, ListChecks, Gift,
+  Trophy, Chart, ListChecks, Gift, Home,
 } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { createClient } from '@/lib/supabase/client'
@@ -84,12 +84,21 @@ export function AdminRail() {
           )
         })}
       </nav>
+      <Tooltip label="Back to the app" side="right">
+        <Link
+          href="/dashboard"
+          aria-label="Back to the app dashboard"
+          className="mt-2 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-primary-muted hover:text-primary"
+        >
+          <Home className="h-5 w-5" />
+        </Link>
+      </Tooltip>
       <Tooltip label="Log out" side="right">
         <button
           type="button"
           onClick={handleSignOut}
           aria-label="Log out"
-          className="mt-2 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-primary-muted hover:text-primary"
+          className="mt-1 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-primary-muted hover:text-primary"
         >
           <LogOut className="h-5 w-5" />
         </button>

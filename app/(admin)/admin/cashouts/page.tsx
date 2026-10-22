@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2, CheckCircle2, Banknote, XCircle } from '@/lib/icons'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface CashoutRequest {
   id: string
@@ -26,6 +27,7 @@ export default function AdminCashoutsPage() {
   const [requests, setRequests] = useState<CashoutRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
+  const [pendingAct, setPendingAct] = useState<{ id: string; action: 'approve' | 'pay' | 'reject' } | null>(null)
 
   const load = async (status: string) => {
     setLoading(true)
@@ -37,9 +39,12 @@ export default function AdminCashoutsPage() {
 
   useEffect(() => { load(tab) }, [tab])
 
-  const act = async (id: string, action: 'approve' | 'pay' | 'reject') => {
-    const label = action === 'approve' ? 'approve' : action === 'pay' ? 'mark as paid' : 'reject'
-    if (!confirm(`Are you sure you want to ${label} this request?`)) return
+  const act = (id: string, action: 'approve' | 'pay' | 'reject') => {
+    setPendingAct({ id, action })
+  }
+
+  const doAct = async (id: string, action: 'approve' | 'pay' | 'reject') => {
+    setPendingAct(null)
     setActing(id)
     await fetch('/api/admin/cashouts', {
       method: 'POST',
@@ -57,12 +62,12 @@ export default function AdminCashoutsPage() {
         Companions cash out gift coins at ₦10/coin. You transfer manually from your bank, then mark paid.
       </p>
 
-      <div className="mt-4 flex gap-2">
+      <div className="scroll-row mt-4 gap-2 pb-1">
         {(['pending', 'approved', 'paid', 'rejected'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setTab(s)}
-            className={`inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-sm font-medium capitalize ${
+            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium capitalize ${
               tab === s ? 'bg-[#AC244D] text-white' : 'bg-white text-gray-600 border'
             }`}
           >
@@ -128,6 +133,33 @@ export default function AdminCashoutsPage() {
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingAct !== null}
+        title={
+          pendingAct?.action === 'approve'
+            ? 'Approve this cash-out?'
+            : pendingAct?.action === 'pay'
+              ? 'Mark this cash-out as paid?'
+              : 'Reject this cash-out?'
+        }
+        body={
+          pendingAct?.action === 'pay'
+            ? 'Only confirm after the bank transfer has actually left the platform account.'
+            : pendingAct?.action === 'reject'
+              ? 'The held coins go back to the companion in full.'
+              : 'The companion will see the request as approved, ready for payment.'
+        }
+        confirmLabel={
+          pendingAct?.action === 'approve'
+            ? 'Approve'
+            : pendingAct?.action === 'pay'
+              ? 'Mark paid'
+              : 'Reject'
+        }
+        busy={acting !== null}
+        onCancel={() => setPendingAct(null)}
+        onConfirm={() => { if (pendingAct) void doAct(pendingAct.id, pendingAct.action) }}
+      />
     </div>
   )
 }

@@ -28,6 +28,16 @@ export function showToast(message: string) {
   listeners.forEach((l) => l(current))
 }
 
+/** The live host already showed this toast: drop the stash so the
+    next route change does not show the same message a second time. */
+export function clearStashedToast() {
+  try {
+    sessionStorage.removeItem(STASH_KEY)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export function subscribeToast(l: Listener) {
   listeners.add(l)
   l(current)

@@ -71,10 +71,10 @@ export default function AdminPage() {
       <h1 className="font-display text-3xl font-semibold tracking-tight text-gray-900 mb-8">Admin Dashboard</h1>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <StatCard icon={<Users aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
-        <StatCard icon={<UserCheck aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Companions" value={stats.totalModels} />
-        <StatCard icon={<UserX aria-hidden className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
-        <StatCard icon={<Star aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
+        <StatCard href="/admin/users" icon={<Users aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
+        <StatCard href="/admin/models" icon={<UserCheck aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Companions" value={stats.totalModels} />
+        <StatCard href="/admin/verifications" icon={<UserX aria-hidden className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
+        <StatCard href="/admin/reports" icon={<Star aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -127,16 +127,18 @@ export default function AdminPage() {
   )
 }
 
-function StatCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: number }) {
+function StatCard({ icon, title, value, href }: { icon: React.ReactNode; title: string; value: number; href: string }) {
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between p-6">
-        <div>
-          <p className="text-sm text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-        </div>
-        <div className="rounded-full bg-pink-50 p-3">{icon}</div>
-      </CardContent>
-    </Card>
+    <Link href={href} className="block transition-transform active:scale-[0.99]" aria-label={`${title}: open the section`}>
+      <Card className="transition-shadow hover:shadow-md">
+        <CardContent className="flex items-center justify-between p-6">
+          <div>
+            <p className="text-sm text-gray-600">{title}</p>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+          </div>
+          <div className="rounded-full bg-pink-50 p-3">{icon}</div>
+        </CardContent>
+      </Card>
+    </Link>
   )
 }

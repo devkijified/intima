@@ -13,6 +13,7 @@ import { formatCompactPrice, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpe
 import { serviceTypeLabel } from '@/lib/connections/serviceType'
 import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, Image as ImageIcon } from '@/lib/icons'
 import { reencodeImage } from '@/lib/uploads/reencode'
+import { showToast } from '@/lib/toast'
 import {
   isPrivateMediaPath,
   noteMediaUnlocked,
@@ -372,7 +373,7 @@ export default function ThreadPage() {
   const uploadAndSendMedia = async (file: File) => {
     if (!me || uploading || !active) return
     if (file.size > 50 * 1024 * 1024) {
-      alert('That file is too large. Please keep media under 50MB.')
+      showToast('That file is too large. Please keep media under 50MB.')
       return
     }
     setUploading(true)
@@ -414,7 +415,7 @@ export default function ThreadPage() {
         }
       }
     } catch {
-      alert('Upload failed. Please try again.')
+      showToast('Upload failed. Please try again.')
     }
     setUploading(false)
   }
@@ -424,7 +425,7 @@ export default function ThreadPage() {
   const uploadPpvFile = async (file: File) => {
     if (!me || uploading) return
     if (file.size > 50 * 1024 * 1024) {
-      alert('That file is too large. Please keep media under 50MB.')
+      showToast('That file is too large. Please keep media under 50MB.')
       return
     }
     setUploading(true)
@@ -434,7 +435,7 @@ export default function ThreadPage() {
       uploadUrlRef.current = signedUrl
       setPpvPath(path)
     } catch {
-      alert('Upload failed. Please try again.')
+      showToast('Upload failed. Please try again.')
     }
     setUploading(false)
   }
@@ -921,9 +922,9 @@ function PpvMedia({
         onViewed(msg)
       }
     } else if (res.status === 402) {
-      alert(`Not enough coins. You need ${coinsWithNgn(price)}. Top up from Coins.`)
+      showToast(`Not enough coins. You need ${coinsWithNgn(price)}. Top up from Coins.`)
     } else {
-      alert('Could not unlock. Please try again.')
+      showToast('Could not unlock. Please try again.')
     }
   }
 

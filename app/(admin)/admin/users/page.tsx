@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Search, ShieldCheck, UserX } from '@/lib/icons'
 
 interface UserRow {
@@ -26,6 +27,7 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
+  const [suspendTarget, setSuspendTarget] = useState<UserRow | null>(null)
   const supabase = createClient()
 
   async function load() {
@@ -49,8 +51,12 @@ export default function AdminUsersPage() {
       || u.role.includes(q)
   })
 
-  async function toggleSuspend(u: UserRow) {
-    if (!confirm(`Mark ${u.display_name ?? u.username ?? 'this user'} as suspended? They will disappear from public listings.`)) return
+  function toggleSuspend(u: UserRow) {
+    setSuspendTarget(u)
+  }
+
+  async function doSuspend(u: UserRow) {
+    setSuspendTarget(null)
     setActing(u.id)
     await supabase.from('profiles').update({ verification_status: 'rejected' }).eq('id', u.id)
     await supabase.from('admin_audit_logs').insert({
@@ -123,6 +129,15 @@ export default function AdminUsersPage() {
       <p className="text-xs text-neutral-400">
         Suspension marks verification as rejected, which hides the user from public listings.
       </p>
+      <ConfirmDialog
+        open={suspendTarget !== null}
+        title={`Suspend ${suspendTarget?.display_name ?? suspendTarget?.username ?? 'this user'}?`}
+        body="They will disappear from public listings until restored."
+        confirmLabel="Suspend"
+        busy={acting !== null}
+        onCancel={() => setSuspendTarget(null)}
+        onConfirm={() => { if (suspendTarget) void doSuspend(suspendTarget) }}
+      />
     </div>
   )
 }

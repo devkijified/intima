@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { subscribeToast, takeStashedToast } from '@/lib/toast'
+import { clearStashedToast, subscribeToast, takeStashedToast } from '@/lib/toast'
 
 // Renders the global toast. Mounted once in the root layout, so it
 // survives in-app navigation: a message raised on one page is still
@@ -22,7 +22,10 @@ export function ToastHost() {
 
   useEffect(() => {
     const unsub = subscribeToast((t) => {
-      if (t) show(t.message, t.id, 3600)
+      if (t) {
+        show(t.message, t.id, 3600)
+        clearStashedToast()
+      }
     })
     return () => {
       unsub()
