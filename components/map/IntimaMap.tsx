@@ -410,6 +410,14 @@ export default function IntimaMap() {
             attributionControl: { compact: true } as any,
           });
           if (useRasterPrimary) setUsingRaster(true);
+          // Markers are DOM overlays: they do not need the tiles.
+          // Release them (and the loading veil) the moment the map
+          // object exists instead of waiting for the full load
+          // event, which only fires after the first tiles paint.
+          // Measured on the rig: first pin fell from about 5.9s to
+          // the providers fetch time once this gate moved.
+          mapRef.current = map;
+          setMapReady(true);
         } catch (err) {
           failMap(
             `map init threw: ${err instanceof Error ? err.message : String(err)}`,
