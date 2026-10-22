@@ -11,6 +11,7 @@ interface ComicSeries {
   id: string
   title: string
   synopsis: string
+  story_status?: string
   cover_url: string | null
   episodeCount: number
   latestNo: number
@@ -34,7 +35,7 @@ export default function ComicsPage() {
   const load = async () => {
     const [{ data: comics }, { data: eps }] = await Promise.all([
       supabase.from('comics')
-        .select('id, title, synopsis, cover_url')
+        .select('id, title, synopsis, cover_url, story_status')
         .eq('status', 'published')
         .order('created_at', { ascending: true }),
       supabase.from('comic_episodes')
@@ -60,6 +61,7 @@ export default function ComicsPage() {
       return {
         id: c.id,
         title: c.title,
+        story_status: c.story_status ?? 'ongoing',
         synopsis: c.synopsis ?? '',
         cover_url: c.cover_url ?? roll?.cover ?? null,
         episodeCount: roll?.count ?? 0,
@@ -124,6 +126,9 @@ export default function ComicsPage() {
                     {isFresh(featured.latestAt) ? 'New episode out now' : 'Featured comic'}
                   </p>
                   <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-white">{featured.title}</p>
+                  <span className={`mt-2 inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${featured.story_status === 'completed' ? 'bg-white/20 text-white' : 'bg-[#C9A84C] text-charcoal'}`}>
+                    {featured.story_status === 'completed' ? 'Completed' : 'Ongoing'}
+                  </span>
                   {featured.synopsis && (
                     <p className="mt-1 line-clamp-2 max-w-lg text-sm text-white/75">{featured.synopsis}</p>
                   )}
@@ -154,7 +159,12 @@ export default function ComicsPage() {
                   )}
                 </div>
                 <div className="p-3.5">
-                  <p className="truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">{s.title}</p>
+                  <p className="flex items-center gap-2 truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">
+                    <span className="truncate">{s.title}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${s.story_status === 'completed' ? 'bg-neutral-200 text-neutral-500' : 'bg-[#C9A84C]/25 text-[#8a6d2a]'}`}>
+                      {s.story_status === 'completed' ? 'Completed' : 'Ongoing'}
+                    </span>
+                  </p>
                   <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
                     <BookOpen aria-hidden className="h-3 w-3" /> {s.episodeCount} {s.episodeCount === 1 ? 'episode' : 'episodes'}
                   </p>

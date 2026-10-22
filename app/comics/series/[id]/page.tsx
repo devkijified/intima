@@ -45,7 +45,7 @@ export default function ComicSeriesPage() {
     ;(async () => {
       const [{ data: c }, { data: eps }] = await Promise.all([
         supabase.from('comics')
-          .select('id, title, synopsis, cover_url')
+          .select('id, title, synopsis, cover_url, story_status')
           .eq('id', id)
           .eq('status', 'published')
           .maybeSingle(),
@@ -99,6 +99,11 @@ export default function ComicSeriesPage() {
         <div className="absolute inset-x-0 bottom-0 p-5">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">An Intima comic</p>
           <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight text-white">{comic?.title ?? '…'}</h1>
+          {comic && (
+            <span className={`mt-2 inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${(comic as any).story_status === 'completed' ? 'bg-white/20 text-white' : 'bg-[#C9A84C] text-charcoal'}`}>
+              {(comic as any).story_status === 'completed' ? 'Completed' : 'Ongoing'}
+            </span>
+          )}
           {comic?.synopsis && (
             <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-white/80">{comic.synopsis}</p>
           )}

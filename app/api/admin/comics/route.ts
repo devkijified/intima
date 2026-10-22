@@ -26,7 +26,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   const db = svc();
   const { data: series } = await db.from('comics')
-    .select('id, title, synopsis, cover_url, status, created_at')
+    .select('id, title, synopsis, cover_url, status, story_status, created_at')
     .order('created_at', { ascending: true });
   const { data: eps } = await db.from('comic_episodes')
     .select('id, episode_no, title, status, published_at, view_count, panel_urls, cover_url, synopsis, comic_id')
@@ -72,9 +72,19 @@ export async function POST(req: NextRequest) {
         ? body.series.coverUrl.trim()
         : null,
       status: 'published',
+      story_status: body.series.storyStatus === 'completed' ? 'completed' : 'ongoing',
     }).select('id, title').single();
     if (error) throw error;
     return NextResponse.json({ success: true, comic: data });
+  }
+
+  if (body?.seriesStatusUpdate && typeof body.seriesStatusUpdate === 'object') {
+    const sid = String(body.seriesStatusUpdate.id ?? '');
+    const ss = body.seriesStatusUpdate.storyStatus === 'completed' ? 'completed' : 'ongoing';
+    if (!sid) return NextResponse.json({ error: 'Comic id required' }, { status: 400 });
+    const { error } = await db.from('comics').update({ story_status: ss }).eq('id', sid);
+    if (error) throw error;
+    return NextResponse.json({ success: true });
   }
 
   const { title, synopsis, coverUrl, panelUrls, comicId } = body;

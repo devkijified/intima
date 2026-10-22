@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { BookOpen, Plus, Send, Trash2, Eye, CheckCircle2, ArrowLeft } from '@/lib/icons'
+import { HelpTip } from '@/components/ui/Tooltip'
 
 interface Comic {
   id: string
@@ -10,7 +11,12 @@ interface Comic {
   synopsis: string
   cover_url: string | null
   status: string
+  story_status?: string
 }
+
+type PagePreview =
+  | { kind: 'series'; title: string; storyStatus: string | null; chapters: Array<{ no: number; url: string; label: string }> }
+  | { kind: 'episode'; title: string; storyStatus: string | null; images: Array<{ url: string; keep: boolean; reason: string | null }> }
 
 interface Episode {
   id: string
@@ -45,6 +51,13 @@ export default function AdminComicsPage() {
   const [feedUrl, setFeedUrl] = useState('')
   const [preview, setPreview] = useState<{ name: string; items: Array<{ guid: string; title: string; images: string[] }> } | null>(null)
   const [feeds, setFeeds] = useState<Array<{ id: string; name: string; url: string }>>([])
+  const [seriesStatus, setSeriesStatus] = useState<'ongoing' | 'completed'>('ongoing')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [pagePreview, setPagePreview] = useState<PagePreview | null>(null)
+  const [pageKeep, setPageKeep] = useState<Record<string, boolean>>({})
+  const [chapterKeep, setChapterKeep] = useState<Record<number, boolean>>({})
+  const [importLog, setImportLog] = useState<string[]>([])
+  const [importing, setImporting] = useState(false)
 
   async function load() {
     const res = await fetch('/api/admin/comics')
@@ -118,6 +131,7 @@ export default function AdminComicsPage() {
           title: seriesTitle.trim(),
           synopsis: seriesSynopsis.trim(),
           coverUrl: seriesCover.trim(),
+          storyStatus: seriesStatus,
         },
       }),
     })
@@ -131,6 +145,80 @@ export default function AdminComicsPage() {
     } else {
       setMsg(d.error ?? 'Could not create the comic.')
     }
+  }
+
+  async function fetchPagePreview() {
+    setBusy(true); setMsg(''); setImportLog([]); setPagePreview(null)
+    const res = await fetch('/api/admin/comics/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'page-preview', url: linkUrl.trim() }),
+    })
+    const d = await res.json()
+    setBusy(false)
+    if (!res.ok) { setMsg(d.error ?? 'Could not read that page.'); return }
+    setPagePreview(d)
+    if (d.kind === 'episode') {
+      const keep: Record<string, boolean> = {}
+      for (const img of d.images) keep[img.url] = img.keep
+      setPageKeep(keep)
+    }
+    if (d.kind === 'series') {
+      const keep: Record<number, boolean> = {}
+      for (const ch of d.chapters) keep[ch.no] = true
+      setChapterKeep(keep)
+    }
+  }
+
+  async function importPageEpisode(url: string, title: string, keep?: string[]) {
+    const res = await fetch('/api/admin/comics/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'page-import', url, comicId, title, keep }),
+    })
+    const d = await res.json()
+    if (!res.ok) throw new Error(d.error ?? 'Import failed.')
+    return d
+  }
+
+  async function importFromPreview() {
+    if (!pagePreview || !comicId) return
+    setImporting(true); setImportLog([])
+    try {
+      if (pagePreview.kind === 'episode') {
+        const keep = pagePreview.images.filter((i) => pageKeep[i.url]).map((i) => i.url)
+        const d = await importPageEpisode(linkUrl.trim(), pagePreview.title, keep)
+        setMsg(`Imported as Episode ${d.episode.episode_no} (draft), ${d.panels} panels served through our CDN. Publish when ready.`)
+        setPagePreview(null)
+      } else {
+        const picked = pagePreview.chapters.filter((c) => chapterKeep[c.no])
+        const log: string[] = []
+        let okCount = 0
+        for (const ch of picked) {
+          log.push(`Importing ${ch.no}. ${ch.label}…`)
+          setImportLog([...log])
+          try {
+            const d = await importPageEpisode(ch.url, ch.label)
+            log[log.length - 1] = `Done: ${ch.no}. ${ch.label} became Episode ${d.episode.episode_no} (${d.panels} panels).`
+            okCount += 1
+          } catch (e) {
+            log[log.length - 1] = `Skipped ${ch.no}. ${ch.label}: ${e instanceof Error ? e.message : 'failed'}`
+          }
+          setImportLog([...log])
+        }
+        setMsg(`Series import finished: ${okCount} of ${picked.length} episodes landed as drafts.`)
+        if (okCount > 0) setPagePreview(null)
+      }
+      load()
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function setStoryStatus(id: string, storyStatus: 'ongoing' | 'completed') {
+    const res = await fetch('/api/admin/comics', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seriesStatusUpdate: { id, storyStatus } }),
+    })
+    if (res.ok) load()
   }
 
   async function create() {
@@ -231,6 +319,16 @@ export default function AdminComicsPage() {
             rows={2} className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm" />
           <input value={seriesCover} onChange={(e) => setSeriesCover(e.target.value)} placeholder="Cover image URL (optional, the latest episode cover is used otherwise)"
             className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm" />
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-500">Story status
+              <HelpTip text="Ongoing means new episodes are still coming. Completed means the story has ended. Readers see this badge on the shelf." />
+            </span>
+            <select value={seriesStatus} onChange={(e) => setSeriesStatus(e.target.value as 'ongoing' | 'completed')}
+              className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
           <button onClick={createSeries} disabled={busy || !seriesTitle.trim()} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
             <Plus aria-hidden className="h-4 w-4" /> {busy ? 'Creating…' : 'Create comic'}
           </button>
@@ -238,8 +336,20 @@ export default function AdminComicsPage() {
         {comics.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {comics.map((c) => (
-              <span key={c.id} className="rounded-full bg-cream px-3 py-1.5 text-xs font-medium text-charcoal ring-1 ring-black/[0.05]">
+              <span key={c.id} className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cream px-3 py-1.5 text-xs font-medium text-charcoal ring-1 ring-black/[0.05]">
                 {c.title} · {episodes.filter((e) => e.comic_id === c.id).length} episodes
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${c.story_status === 'completed' ? 'bg-neutral-200 text-neutral-600' : 'bg-[#C9A84C]/25 text-[#8a6d2a]'}`}>
+                  {c.story_status === 'completed' ? 'Completed' : 'Ongoing'}
+                </span>
+                <select
+                  aria-label={`Story status for ${c.title}`}
+                  value={c.story_status === 'completed' ? 'completed' : 'ongoing'}
+                  onChange={(e) => setStoryStatus(c.id, e.target.value as 'ongoing' | 'completed')}
+                  className="min-h-[44px] rounded-full bg-transparent text-[11px] font-semibold text-primary outline-none"
+                >
+                  <option value="ongoing">Ongoing</option>
+                  <option value="completed">Completed</option>
+                </select>
               </span>
             ))}
           </div>
@@ -307,6 +417,80 @@ export default function AdminComicsPage() {
                 <span className="shrink-0 text-[11px] text-neutral-400">{i.images.length} panels</span>
                 <button onClick={() => importItem(i.guid)} disabled={busy || i.images.length === 0} className="btn-luxe min-h-[44px] shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">Import</button>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Page-link import */}
+      <div className="card-luxe mt-6 p-5">
+        <h2 className="flex items-center gap-2 t-section-title text-charcoal">Import from a page link
+          <HelpTip text="Paste a chapter link to bring in that one episode, or a series link to bring in every episode in order. Panels are served through our own image CDN, so readers load everything from Intima, fast. Everything lands as drafts." />
+        </h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Only import comics you own or are licensed to republish. Logos, banners and other site decoration are filtered out on their own; you can untick anything else in the preview.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://example.com/comic/series-name or one chapter link"
+            className="min-h-[44px] min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm" />
+          <button onClick={fetchPagePreview} disabled={busy || importing || !linkUrl.trim()} className="btn-luxe min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">Fetch</button>
+        </div>
+        <label className="mt-3 block">
+          <span className="mb-1 block text-xs font-semibold text-neutral-500">Episodes go into this comic</span>
+          <select value={comicId} onChange={(e) => setComicId(e.target.value)}
+            className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
+            {comics.length === 0 && <option value="">No comics yet, create one above</option>}
+            {comics.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </label>
+        {pagePreview && pagePreview.kind === 'series' && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            <p className="text-xs text-neutral-500">
+              {pagePreview.chapters.length} episodes found, in reading order.
+              {pagePreview.storyStatus ? ` The source lists this comic as ${pagePreview.storyStatus === 'completed' ? 'Completed' : 'Ongoing'}; importing will set that here too.` : ''}
+            </p>
+            <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+              {pagePreview.chapters.map((ch) => (
+                <label key={ch.no} className="flex min-h-[44px] items-center gap-3 rounded-xl border border-neutral-100 px-3 py-2">
+                  <input type="checkbox" checked={!!chapterKeep[ch.no]} onChange={(e) => setChapterKeep({ ...chapterKeep, [ch.no]: e.target.checked })} className="h-5 w-5 shrink-0 accent-[#AC244D]" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-charcoal">{ch.no}. {ch.label}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+              {importing ? 'Importing…' : `Import ${pagePreview.chapters.filter((c) => chapterKeep[c.no]).length} episodes as drafts`}
+            </button>
+          </div>
+        )}
+        {pagePreview && pagePreview.kind === 'episode' && (
+          <div className="mt-4 space-y-3">
+            <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            <p className="text-xs text-neutral-500">
+              {pagePreview.images.filter((i) => i.keep).length} panels found. Unticked pictures were judged to be site decoration; tick any of them if that call was wrong.
+            </p>
+            <div className="grid max-h-96 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
+              {pagePreview.images.map((img) => (
+                <label key={img.url} className={`relative block overflow-hidden rounded-xl ring-1 ${pageKeep[img.url] ? 'ring-primary' : 'opacity-60 ring-neutral-200'}`}>
+                  <img src={img.url} alt="" loading="lazy" className="h-24 w-full object-cover" />
+                  <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/55 px-2 py-1.5">
+                    <input type="checkbox" checked={!!pageKeep[img.url]} onChange={(e) => setPageKeep({ ...pageKeep, [img.url]: e.target.checked })} className="h-4 w-4 shrink-0 accent-[#AC244D]" />
+                    <span className="truncate text-[10px] font-medium text-white">{img.keep ? 'Panel' : img.reason ?? 'Stray'}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+              {importing ? 'Importing…' : 'Import this episode as a draft'}
+            </button>
+          </div>
+        )}
+        {importLog.length > 0 && (
+          <div className="mt-3 space-y-1 rounded-xl bg-cream px-3 py-2">
+            {importLog.map((line, i) => (
+              <p key={i} className="text-xs text-neutral-600">{line}</p>
             ))}
           </div>
         )}
