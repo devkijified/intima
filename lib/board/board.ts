@@ -132,8 +132,21 @@ export async function providerIdsInCity(
 async function settledPaymentFor(
   svc: SupabaseClient,
   request: BoardRequestRow
-): Promise<{ rail: 'card' | 'crypto' } | null> {
+): Promise<{ rail: 'card' | 'crypto' | 'coins' } | null> {
   if (!request.payment_ref) return null;
+  // Coins rail: the reference is a coin_ledger spend. Its row is
+  // the settlement proof, written atomically with the balance.
+  if (request.payment_ref.startsWith('COINS-')) {
+    const { data: led } = await svc
+      .from('coin_ledger')
+      .select('id')
+      .eq('kind', 'board_fee')
+      .eq('ref', request.payment_ref)
+      .eq('user_id', request.client_id)
+      .lt('delta', 0)
+      .maybeSingle();
+    return led ? { rail: 'coins' } : null;
+  }
   const { data: card } = await svc
     .from('card_payments')
     .select('status')
@@ -217,6 +230,28 @@ export async function attemptRefundDetailed(
 ): Promise<{ state: string; error: string | null }> {
   if (!request.payment_ref || request.refund_state === 'refunded') {
     return { state: request.refund_state ?? 'pending', error: null };
+  }
+  // Coins refunds are instant: 85% of the fee returns to the
+  // wallet it came from. credit_coins is idempotent on its ref, so
+  // a retry after a crash can never pay twice.
+  if (request.payment_rail === 'coins') {
+    const fee = await boardFeeNgn(svc);
+    const refundCoins = Math.round(Math.ceil(fee / 10) * 0.85);
+    const { error } = await svc.rpc('credit_coins', {
+      p_user_id: request.client_id,
+      p_amount: refundCoins,
+      p_kind: 'board_fee',
+      p_ref: `board-refund-${request.id}`,
+      p_meta: { board_request_id: request.id, pct: 85 },
+    });
+    if (error) {
+      return { state: 'failed', error: 'The coin refund did not go through' };
+    }
+    await svc
+      .from('board_requests')
+      .update({ refund_state: 'refunded', updated_at: new Date().toISOString() })
+      .eq('id', request.id);
+    return { state: 'refunded', error: null };
   }
   // Crypto refunds are manual through the gateway dashboard.
   if (request.payment_rail !== 'card') {
@@ -560,7 +595,7 @@ export async function sweepBoard(
     .lt('updated_at', new Date(Date.now() - 3600 * 1000).toISOString())
     .limit(20);
   for (const row of (retry ?? []) as BoardRequestRow[]) {
-    if (row.payment_rail === 'card') {
+    if (row.payment_rail === 'card' || row.payment_rail === 'coins') {
       await attemptRefund(svc, row);
       refundsRetried++;
     }

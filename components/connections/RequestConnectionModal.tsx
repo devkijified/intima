@@ -73,6 +73,8 @@ export function RequestConnectionModal({
   const [cardEnabled, setCardEnabled] = useState(false)
   const [transferEnabled, setTransferEnabled] = useState(false)
   const [paystackTest, setPaystackTest] = useState(true)
+  const [walletBalance, setWalletBalance] = useState<number | null>(null)
+  const [walletBusy, setWalletBusy] = useState(false)
   const [intakeQuestions, setIntakeQuestions] = useState<string[]>([])
   const [intakeAnswers, setIntakeAnswers] = useState<string[]>([])
   /** False until her profile (questions, rates, services) has loaded. */
@@ -99,6 +101,19 @@ export function RequestConnectionModal({
       prefillRef.current = ''
     }
   }
+
+  useEffect(() => {
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: bal } = await supabase
+        .from('coin_balances')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setWalletBalance(bal?.balance ?? 0)
+    })()
+  }, [])
 
   useEffect(() => {
     fetch('/api/coins/methods')
@@ -374,6 +389,67 @@ export function RequestConnectionModal({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       setStep('error')
+    }
+  }
+
+  /**
+   * Wallet rail: the fee leaves the coin balance inside the same
+   * /api/connections call that creates the connection (the server
+   * spends first, then inserts; a failed insert refunds the spend).
+   * The availability check runs first here, before any coin moves,
+   * exactly like the post-payment check in completeBooking.
+   */
+  async function handleWalletPay() {
+    setWalletBusy(true)
+    setError('')
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('Please sign in to request a connection.')
+      }
+      const { data: presence } = await supabase
+        .from('provider_presence')
+        .select('is_available, city')
+        .eq('provider_id', activeId)
+        .maybeSingle()
+      if (presence && presence.is_available === false) {
+        const picks = await findSimilar(activeId, presence.city ?? null)
+        setSimilar(picks)
+        setStep('unavailable')
+        return
+      }
+      const offerToSend = !ratesNegotiable
+        ? null
+        : typedOfferValid
+          ? typedOffer
+          : baseRate
+      const res = await fetch('/api/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_id: activeId,
+          pay_with_coins: true,
+          proposed_rate_ngn: offerToSend,
+          service_type: selectedOption?.serviceType ?? undefined,
+          intakeAnswers:
+            intakeQuestions.length > 0
+              ? intakeQuestions.map((q, i) => ({ q, a: (intakeAnswers[i] ?? '').trim() }))
+              : undefined,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? 'Could not create the connection. Please try again.')
+      }
+      setStep('success')
+      onConnected()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setStep('error')
+    } finally {
+      setWalletBusy(false)
     }
   }
 
@@ -767,6 +843,23 @@ export function RequestConnectionModal({
               </div>
             )}
 
+            {fee !== null && walletBalance !== null && walletBalance >= Math.ceil(fee / 10) && (
+              <>
+                <button
+                  onClick={handleWalletPay}
+                  disabled={walletBusy || !profileLoaded || (eligibility !== null && !eligibility.eligible) || !intakeComplete}
+                  className="mb-3 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-charcoal py-3.5 text-sm font-semibold text-white transition-all hover:bg-black disabled:opacity-50"
+                >
+                  {walletBusy
+                    ? 'Paying from your wallet...'
+                    : `Pay ${formatPrice(fee)} from your wallet (${Math.ceil(fee / 10)} coins)`}
+                </button>
+                <p className="-mt-1 mb-3 text-center text-xs leading-relaxed text-gray-500">
+                  Straight from your coin balance, no checkout page. You will have{' '}
+                  {(walletBalance - Math.ceil(fee / 10)).toLocaleString()} coins left.
+                </p>
+              </>
+            )}
             <button
               onClick={cardEnabled ? () => handleCardPay() : handlePay}
               disabled={fee === null || !profileLoaded || (eligibility !== null && !eligibility.eligible) || !intakeComplete}

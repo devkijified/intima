@@ -19,4 +19,7 @@ export type CoinLedgerKind =
   | 'subscription_charge'
   | 'subscription_earning'
   | 'referral'
-  | 'admin_adjust';
+  | 'admin_adjust'
+  | 'contest_prize'
+  | 'connection_fee'
+  | 'board_fee';

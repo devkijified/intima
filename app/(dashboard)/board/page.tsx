@@ -6,6 +6,7 @@ import { BadgeCheck, Clock, ListChecks, MapPin, RefreshCw } from '@/lib/icons'
 import { HelpTip } from '@/components/ui/Tooltip'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { showToast } from '@/lib/toast'
+import { createClient } from '@/lib/supabase/client'
 import { formatCompactPrice } from '@/lib/utils/helpers'
 import { useCities } from '@/lib/citiesLive'
 import { SERVICE_TYPE_KEYS, SERVICE_TYPE_LABELS } from '@/lib/connections/serviceType'
@@ -87,6 +88,7 @@ export default function BoardPage() {
   const [data, setData] = useState<BoardData | null>(null)
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [walletBalance, setWalletBalance] = useState<number | null>(null)
 
   // Post form
   const [city, setCity] = useState<string>('Lagos')
@@ -111,6 +113,20 @@ export default function BoardPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: bal } = await supabase
+        .from('coin_balances')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      setWalletBalance(bal?.balance ?? 0)
+    })()
+  }, [])
 
   const liveMine = data?.mine.find((r) => r.status === 'awaiting_payment' || r.status === 'open')
 
@@ -154,6 +170,26 @@ export default function BoardPage() {
         return
       }
       window.location.href = json.authorizationUrl
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function payWithWallet(requestId: string) {
+    setBusy(`pay-${requestId}`)
+    try {
+      const res = await fetch(`/api/board/requests/${requestId}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pay_with_coins: true }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        showToast(json?.error ?? 'Could not pay from your wallet')
+        return
+      }
+      showToast('Paid from your wallet. Your request is live on the board.')
+      await load()
     } finally {
       setBusy(null)
     }
@@ -422,6 +458,11 @@ export default function BoardPage() {
 
                 {r.status === 'awaiting_payment' && (
                   <div className="mt-4 space-y-2">
+                    {walletBalance !== null && walletBalance >= 500 && (
+                      <button onClick={() => payWithWallet(r.id)} disabled={busy === `pay-${r.id}`} className="flex min-h-[48px] w-full items-center justify-center rounded-xl bg-charcoal px-6 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                        Pay ₦5,000 from your wallet (500 coins)
+                      </button>
+                    )}
                     <button onClick={() => pay(r.id)} disabled={busy === `pay-${r.id}`} className="btn-luxe flex min-h-[48px] w-full items-center justify-center px-6 py-3 text-sm disabled:opacity-60">
                       Pay ₦5,000 with card
                     </button>

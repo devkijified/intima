@@ -110,11 +110,13 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as {
     provider_id?: string;
     payment_ref?: string;
+    pay_with_coins?: boolean;
     proposed_rate_ngn?: number | null;
     service_type?: string | null;
     intakeAnswers?: unknown;
   } | null;
-  if (!body?.provider_id || !body?.payment_ref) {
+  const payWithCoins = body?.pay_with_coins === true;
+  if (!body?.provider_id || (!body?.payment_ref && !payWithCoins)) {
     return NextResponse.json(
       { error: 'provider_id and payment_ref are required' },
       { status: 400 }
@@ -181,15 +183,19 @@ export async function POST(req: NextRequest) {
   // resolve to a settled card_payments or crypto_payments row for
   // this caller, this companion, and the current fee, and must not
   // already have opened a connection. Without this, any invented
-  // reference would bypass the fee entirely.
-  const proof = await verifyConnectionFeePayment(svc, {
-    userId: user.id,
-    providerId: body.provider_id,
-    paymentRef: body.payment_ref,
-    feeNgn: fee,
-  });
-  if (!proof.ok) {
-    return NextResponse.json({ error: proof.error }, { status: proof.status });
+  // reference would bypass the fee entirely. The coins rail skips
+  // the gateway proof: its spend below is the proof, checked
+  // against the live balance by spend_coins itself.
+  if (!payWithCoins) {
+    const proof = await verifyConnectionFeePayment(svc, {
+      userId: user.id,
+      providerId: body.provider_id,
+      paymentRef: body.payment_ref!,
+      feeNgn: fee,
+    });
+    if (!proof.ok) {
+      return NextResponse.json({ error: proof.error }, { status: proof.status });
+    }
   }
 
   // If she asks screening questions, answers are required to connect.
@@ -208,6 +214,37 @@ export async function POST(req: NextRequest) {
     intakeAnswers = intake.answers;
   }
 
+  // Coins rail: spend the fee from the wallet now that every
+  // refusal reason has been cleared. spend_coins is atomic and
+  // balance-checked in the database. The ledger ref doubles as the
+  // connection's payment_ref; a compensating credit (distinct ref,
+  // so the ledger idempotency index never confuses the two) undoes
+  // the spend if the insert below fails.
+  let paymentRef = body.payment_ref!;
+  if (payWithCoins) {
+    const feeCoins = Math.ceil(fee / 10);
+    paymentRef = `COINS-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    const { error: spendErr } = await svc.rpc('spend_coins', {
+      p_user_id: user.id,
+      p_amount: feeCoins,
+      p_kind: 'connection_fee',
+      p_ref: paymentRef,
+      p_meta: { provider_id: body.provider_id },
+    });
+    if (spendErr) {
+      if (String(spendErr.message).includes('insufficient_balance')) {
+        return NextResponse.json(
+          { error: `Your wallet does not hold enough coins for the ${'₦'}${fee.toLocaleString('en-NG')} fee. Top up or pay by card.` },
+          { status: 402 }
+        );
+      }
+      return NextResponse.json(
+        { error: 'We could not take the fee from your wallet. Please try again.' },
+        { status: 500 }
+      );
+    }
+  }
+
   const now = new Date();
   const { data: inserted, error } = await svc
     .from('connections')
@@ -221,7 +258,7 @@ export async function POST(req: NextRequest) {
       fee_state: 'held',
       paid_at: now.toISOString(),
       dispute_deadline: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-      payment_ref: body.payment_ref,
+      payment_ref: paymentRef,
       proposed_rate_ngn:
         typeof body.proposed_rate_ngn === 'number' && body.proposed_rate_ngn > 0
           ? body.proposed_rate_ngn
@@ -232,6 +269,19 @@ export async function POST(req: NextRequest) {
     .select('id')
     .single();
   if (error) {
+    if (payWithCoins) {
+      try {
+        await svc.rpc('credit_coins', {
+          p_user_id: user.id,
+          p_amount: Math.ceil(fee / 10),
+          p_kind: 'connection_fee',
+          p_ref: `${paymentRef}-refund`,
+          p_meta: { provider_id: body.provider_id, reason: 'connection_insert_failed' },
+        });
+      } catch {
+        /* the credit is idempotent on its ref; a later reconcile can retry */
+      }
+    }
     return NextResponse.json({ error: 'Could not create the connection' }, { status: 500 });
   }
 

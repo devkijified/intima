@@ -7,7 +7,7 @@ import {
   isPaymentChannel,
   type PaymentChannel,
 } from '@/lib/payments/paystack';
-import { boardFeeNgn, type BoardRequestRow } from '@/lib/board/board';
+import { boardFeeNgn, settleOpenIfPaid, type BoardRequestRow } from '@/lib/board/board';
 
 function service() {
   return createServiceClient(
@@ -33,19 +33,16 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  if (!paystackConfigured()) {
-    return NextResponse.json(
-      { error: 'Card payments are not switched on yet.' },
-      { status: 503 }
-    );
-  }
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
 
-  const body = (await req.json().catch(() => null)) as { channel?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as {
+    channel?: unknown;
+    pay_with_coins?: unknown;
+  } | null;
   if (body?.channel !== undefined && !isPaymentChannel(body.channel)) {
     return NextResponse.json(
       { error: 'channel must be "card" or "bank_transfer"' },
@@ -73,6 +70,54 @@ export async function POST(
   }
 
   const fee = await boardFeeNgn(svc);
+
+  // Coins rail: spend the fee from the wallet, stamp the reference
+  // on the request, and let the shared settler open it (its ledger
+  // proof lives in lib/board/board.ts). No gateway involved, so
+  // this branch runs before the Paystack configuration gate.
+  if (body?.pay_with_coins === true) {
+    const feeCoins = Math.ceil(fee / 10);
+    const reference = `COINS-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    if (row.payment_ref) {
+      await svc
+        .from('card_payments')
+        .update({ status: 'failed' })
+        .eq('reference', row.payment_ref)
+        .eq('status', 'pending');
+    }
+    const { error: spendErr } = await svc.rpc('spend_coins', {
+      p_user_id: user.id,
+      p_amount: feeCoins,
+      p_kind: 'board_fee',
+      p_ref: reference,
+      p_meta: { board_request_id: row.id },
+    });
+    if (spendErr) {
+      if (String(spendErr.message).includes('insufficient_balance')) {
+        return NextResponse.json(
+          { error: 'Your wallet does not hold enough coins for the fee. Top up or pay by card.' },
+          { status: 402 }
+        );
+      }
+      return NextResponse.json(
+        { error: 'We could not take the fee from your wallet. Please try again.' },
+        { status: 500 }
+      );
+    }
+    await svc
+      .from('board_requests')
+      .update({ payment_ref: reference, updated_at: new Date().toISOString() })
+      .eq('id', row.id);
+    const opened = await settleOpenIfPaid(svc, { ...row, payment_ref: reference });
+    return NextResponse.json({ ok: true, reference, opened: opened.status === 'open' });
+  }
+
+  if (!paystackConfigured()) {
+    return NextResponse.json(
+      { error: 'Card payments are not switched on yet.' },
+      { status: 503 }
+    );
+  }
   const reference = makeReference();
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
 
