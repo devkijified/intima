@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { pushState, subscribePush, unsubscribePush, PushState, iosNeedsInstall } from '@/lib/push-client'
 import { Bell, Radio, Calendar, Star, MessageCircle, Info, CheckCheck, Smartphone, Phone } from '@/lib/icons'
+import { PageHeader } from '@/app/(dashboard)/_components/PageHeader'
+import { EmptyState } from '@/app/(dashboard)/_components/EmptyState'
 
 interface Notif {
   id: string
@@ -134,19 +136,21 @@ export default function NotificationsPage() {
   }
 
   return (
-    <PullToRefresh onRefresh={load} className="mx-auto max-w-2xl">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-semibold text-charcoal">Notifications</h1>
-        {notifs.some((n) => !n.read) && (
-          <button onClick={markAllRead} className="flex min-h-[44px] items-center gap-1.5 px-2 text-xs font-semibold text-primary">
-            <CheckCheck aria-hidden className="h-4 w-4" /> Mark all read
-          </button>
-        )}
-      </div>
+    <PullToRefresh onRefresh={load} className="mx-auto max-w-2xl animate-rise-in">
+      <PageHeader
+        title="Notifications"
+        action={
+          notifs.some((n) => !n.read) ? (
+            <button onClick={markAllRead} className="flex min-h-[44px] items-center gap-1.5 rounded-full px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary-muted">
+              <CheckCheck aria-hidden className="h-4 w-4" /> Mark all read
+            </button>
+          ) : undefined
+        }
+      />
 
-      <div className="mt-4 rounded-3xl border border-neutral-200/80 bg-white p-5">
+      <div className="card-luxe mt-6 p-5 sm:p-6">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary">
             <Smartphone className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -163,8 +167,8 @@ export default function NotificationsPage() {
             <button
               onClick={togglePush}
               disabled={pushBusy}
-              className={'shrink-0 rounded-full px-4 py-2 min-h-[44px] text-xs font-semibold transition-colors disabled:opacity-50 ' +
-                (push === 'subscribed' ? 'border border-neutral-300 text-charcoal hover:bg-neutral-50' : 'bg-primary text-white hover:bg-primary/90')}
+              className={'shrink-0 rounded-full px-4 py-2 min-h-[44px] text-xs font-semibold transition-all disabled:opacity-50 ' +
+                (push === 'subscribed' ? 'border border-neutral-300 text-charcoal hover:bg-neutral-50 active:scale-[0.98]' : 'btn-luxe')}
             >
               {push === 'subscribed' ? 'Turn off' : 'Turn on'}
             </button>
@@ -179,19 +183,21 @@ export default function NotificationsPage() {
       </div>
 
       {notifs.length === 0 ? (
-        <div className="mt-8 rounded-3xl border border-neutral-200/80 bg-white p-12 text-center">
-          <Bell className="mx-auto h-10 w-10 text-neutral-300" />
-          <p className="mt-3 font-medium text-charcoal">No notifications yet</p>
-          <p className="mt-1 text-sm text-neutral-500">Live streams, bookings, and reviews will show up here.</p>
+        <div className="mt-6">
+          <EmptyState
+            icon={Bell}
+            title="No notifications yet"
+            guidance="Live streams, bookings, and reviews will show up here."
+          />
         </div>
       ) : (
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-2.5">
           {notifs.map((n) => {
             const Icon = ICONS[n.type] ?? Info
             const inner = (
               <div onClick={() => openNotif(n)}
-                className={'flex items-start gap-3 rounded-2xl border p-4 transition-colors ' + (!n.read ? 'border-primary/20 bg-primary/[0.04]' : 'border-neutral-200/80 bg-white')}>
-                <span className={'flex h-10 w-10 shrink-0 items-center justify-center rounded-full ' + (!n.read ? 'bg-primary/10 text-primary' : 'bg-neutral-100 text-neutral-500')}>
+                className={'flex items-start gap-3 rounded-3xl p-4 ring-1 transition-all duration-200 hover:shadow-lift ' + (!n.read ? 'bg-primary/[0.04] ring-primary/25 shadow-soft' : 'bg-white ring-black/[0.045] shadow-soft')}>
+                <span className={'flex h-10 w-10 shrink-0 items-center justify-center rounded-full ' + (!n.read ? 'bg-primary-muted text-primary' : 'bg-neutral-100 text-neutral-500')}>
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">

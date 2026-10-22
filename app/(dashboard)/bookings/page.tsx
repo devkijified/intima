@@ -9,6 +9,8 @@ import { formatCompactPrice } from '@/lib/utils/helpers'
 import { serviceTypeLabel } from '@/lib/connections/serviceType'
 import { Calendar, MessageCircle, Phone, Video, ArrowUpRight, Loader2, Wallet } from '@/lib/icons'
 import { HelpTip } from '@/components/ui/Tooltip'
+import { PageHeader } from '@/app/(dashboard)/_components/PageHeader'
+import { EmptyState } from '@/app/(dashboard)/_components/EmptyState'
 
 type ConnectionStatus = 'pending_payment' | 'active' | 'refunded' | 'expired'
 
@@ -144,52 +146,47 @@ export default function BookingsPage() {
   }
 
   return (
-    <PullToRefresh onRefresh={fetchConnections} className="max-w-5xl mx-auto space-y-8 font-sans">
+    <PullToRefresh onRefresh={fetchConnections} className="max-w-5xl mx-auto space-y-8 font-sans animate-rise-in">
       {/* Header */}
-      <div className="border-b border-neutral-200/80 pb-6">
-        <span className="text-xs uppercase tracking-widest font-semibold text-[#AC244D]">
-          {isModel ? 'Incoming requests' : 'My bookings'}
-        </span>
-        <h1 className="text-3xl font-display font-semibold tracking-tight text-neutral-900 mt-1">
-          {isModel ? 'Connection Requests' : 'My Bookings'}
-        </h1>
-        <p className="flex items-center gap-1 text-sm text-neutral-500 mt-1">
-          {isModel
-            ? 'Clients who paid the connection fee to reach you.'
-            : 'Companions you have connected with.'}
-          <HelpTip text="Active means the connection fee is paid and the private chat is open. Payment pending means a request started but the fee has not landed yet, and you can open a dispute from inside the chat within 24 hours of paying." />
-        </p>
-      </div>
+      <PageHeader
+        eyebrow={isModel ? 'Incoming requests' : 'My bookings'}
+        title={isModel ? 'Connection Requests' : 'My Bookings'}
+        subtitle={
+          <span className="inline-flex items-center gap-1">
+            {isModel
+              ? 'Clients who paid the connection fee to reach you.'
+              : 'Companions you have connected with.'}
+            <HelpTip text="Active means the connection fee is paid and the private chat is open. Payment pending means a request started but the fee has not landed yet, and you can open a dispute from inside the chat within 24 hours of paying." />
+          </span>
+        }
+      />
 
       {connections.length === 0 ? (
-        <div className="rounded-2xl border border-neutral-200/80 bg-white p-12 text-center shadow-xs">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#AC244D]/10">
-            <Calendar className="h-7 w-7 text-[#AC244D]" />
-          </div>
-          <h2 className="font-serif text-xl text-neutral-900">
-            {isModel ? 'No requests yet' : 'No bookings yet'}
-          </h2>
-          <p className="mt-2 text-sm text-neutral-500">
-            {isModel
+        <EmptyState
+          icon={Calendar}
+          title={isModel ? 'No requests yet' : 'No bookings yet'}
+          guidance={
+            isModel
               ? 'When a client pays the connection fee, their request appears here.'
-              : 'Browse companions and request a connection to get started.'}
-          </p>
+              : 'Browse companions and request a connection to get started.'
+          }
+        >
           {!isModel && (
             <Link
               href="/"
-              className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-1 rounded-full bg-[#AC244D] px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
+              className="btn-luxe mt-6 min-h-[44px] gap-1 px-6 py-2.5 text-sm"
             >
               Browse Companions
               <ArrowUpRight aria-hidden className="h-4 w-4" />
             </Link>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <ul className="space-y-4">
           {connections.map((c) => (
             <li
               key={c.id}
-              className="rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-xs"
+              className="card-luxe p-5 transition-all duration-200 hover:shadow-lift"
             >
               <div className="flex items-start gap-4">
                 {/* Avatar */}
@@ -197,10 +194,10 @@ export default function BookingsPage() {
                   <img
                     src={c.counterpart.avatar_url}
                     alt={c.counterpart.display_name ?? 'Profile'}
-                    className="h-14 w-14 shrink-0 rounded-full object-cover"
+                    className="h-14 w-14 shrink-0 rounded-full object-cover ring-1 ring-black/[0.05]"
                   />
                 ) : (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#AC244D]/10 font-serif text-xl text-[#AC244D]">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-muted font-display text-xl font-semibold text-[#AC244D]">
                     {(c.counterpart.display_name ?? '?')[0]?.toUpperCase()}
                   </div>
                 )}
@@ -208,7 +205,7 @@ export default function BookingsPage() {
                 {/* Details */}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-serif text-lg text-neutral-900">
+                    <h3 className="font-display text-lg font-semibold tracking-tight text-charcoal">
                       {c.counterpart.display_name ?? 'Member'}
                     </h3>
                     <span
@@ -248,7 +245,7 @@ export default function BookingsPage() {
                 <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-100 pt-4">
                   <Link
                     href={`/messages/${c.id}`}
-                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white transition-all hover:bg-[#8F1D40]"
+                    className="btn-luxe min-h-[44px] gap-1.5 px-4 py-2 text-sm"
                   >
                     <MessageCircle aria-hidden className="h-4 w-4" />
                     Open chat
@@ -260,7 +257,7 @@ export default function BookingsPage() {
                 <div className="mt-4 border-t border-neutral-100 pt-4">
                   <button
                     onClick={() => setPayFor(c)}
-                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-amber-600"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-xs transition-all hover:bg-amber-600 active:scale-[0.98]"
                   >
                     <Wallet aria-hidden className="h-4 w-4" />
                     Complete payment

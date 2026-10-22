@@ -331,17 +331,17 @@ export default function LiveFeedPage() {
                   return (
                     <div
                       key={s.id}
-                      className="rounded-2xl border border-neutral-200/80 bg-white p-3"
+                      className="card-luxe p-3.5"
                     >
                       <div className="flex items-center gap-3">
                       {s.provider?.avatar_url ? (
                         <img
                           src={s.provider.avatar_url}
                           alt=""
-                          className="h-10 w-10 rounded-full object-cover"
+                          className="h-10 w-10 rounded-full object-cover ring-1 ring-black/[0.05]"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 font-bold text-neutral-500">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-muted font-display font-semibold text-primary">
                           {(s.provider?.display_name ?? 'C')[0]}
                         </div>
                       )}
@@ -363,14 +363,14 @@ export default function LiveFeedPage() {
                         <button
                           onClick={() => goLive(s)}
                           disabled={goingLiveId === s.id}
-                          className="flex min-h-[44px] shrink-0 items-center rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                          className="flex min-h-[44px] shrink-0 items-center rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-soft transition-all hover:bg-red-700 active:scale-[0.98] disabled:opacity-50"
                         >
                           {goingLiveId === s.id ? 'Starting…' : 'Go live'}
                         </button>
                       ) : s.access_mode === 'fans' && !fanOf.has(s.provider_id) ? (
                         <Link
                           href={`/companion/${s.provider?.username ?? s.provider_id}`}
-                          className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full bg-gold px-3 py-2 text-xs font-bold text-charcoal"
+                          className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full bg-gold px-3 py-2 text-xs font-bold text-charcoal shadow-gold transition-all active:scale-[0.98]"
                         >
                           <Crown className="h-3 w-3" /> Join fan club
                         </Link>
@@ -417,8 +417,8 @@ export default function LiveFeedPage() {
 
           {/* Host: schedule a stream for later */}
           {isModel && (
-            <section className="mt-4 rounded-2xl border border-neutral-200/80 bg-white p-4">
-              <h3 className="text-sm font-bold text-charcoal">Schedule a stream</h3>
+            <section className="card-luxe mt-4 p-5">
+              <h3 className="font-display text-base font-semibold tracking-tight text-charcoal">Schedule a stream</h3>
               <p className="mt-0.5 text-xs text-neutral-500">
                 Announce it now, go live when the time comes. Your scheduled streams are the ones
                 above with a Go live button.
@@ -428,7 +428,7 @@ export default function LiveFeedPage() {
                 onChange={(e) => setSchedTitle(e.target.value)}
                 placeholder="Stream title"
                 maxLength={80}
-                className="mt-3 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-base outline-none focus:border-primary md:text-sm"
+                className="mt-3 w-full rounded-2xl border border-neutral-200 bg-white px-3.5 py-2.5 text-base outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15 md:text-sm"
               />
               <label className="mt-3 block text-xs font-medium text-neutral-500">
                 Schedule for later
@@ -436,13 +436,13 @@ export default function LiveFeedPage() {
                   type="datetime-local"
                   value={schedWhen}
                   onChange={(e) => setSchedWhen(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-base text-charcoal outline-none focus:border-primary md:text-sm"
+                  className="mt-1 w-full rounded-2xl border border-neutral-200 bg-white px-3.5 py-2.5 text-base text-charcoal outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15 md:text-sm"
                 />
               </label>
               <button
                 onClick={submitSchedule}
                 disabled={!schedWhen || schedBusy}
-                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full bg-charcoal py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full bg-charcoal py-2.5 text-sm font-bold text-white shadow-soft transition-all hover:bg-charcoal/90 active:scale-[0.98] disabled:opacity-40"
               >
                 {schedBusy ? 'Scheduling…' : 'Schedule stream'}
               </button>
@@ -459,14 +459,16 @@ export default function LiveFeedPage() {
 
       {streams.length === 0 ? (
         <div className="px-4 py-16 text-center">
-          <Radio className="mx-auto h-12 w-12 text-neutral-300" />
-          <h1 className="mt-4 font-display text-2xl font-semibold text-charcoal">No one is live</h1>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-muted">
+            <Radio className="h-7 w-7 text-[#AC244D]" />
+          </div>
+          <h1 className="mt-4 font-display text-2xl font-semibold tracking-tight text-charcoal">No one is live</h1>
           <p className="mt-2 text-sm text-neutral-500">
             When companions go live, their streams appear here. Check back soon.
           </p>
           <Link
             href="/"
-            className="mt-6 inline-flex min-h-[44px] items-center rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white"
+            className="btn-luxe mt-6 min-h-[44px] px-6 py-2.5 text-sm"
           >
             Browse companions
           </Link>
@@ -547,7 +549,7 @@ export default function LiveFeedPage() {
                   myId === s.provider_id || fanOf.has(s.provider_id) ? (
                     <Link
                       href={`/live/${s.id}`}
-                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-bold text-white active:scale-[0.98]"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-bold text-white shadow-cta transition-all active:scale-[0.98]"
                     >
                       <Crown className="h-4 w-4" />
                       Watch now
@@ -555,7 +557,7 @@ export default function LiveFeedPage() {
                   ) : (
                     <Link
                       href={`/companion/${s.provider?.username ?? s.provider_id}`}
-                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gold py-3 text-sm font-bold text-charcoal active:scale-[0.98]"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gold py-3 text-sm font-bold text-charcoal shadow-gold transition-all active:scale-[0.98]"
                     >
                       <Crown className="h-4 w-4" />
                       Fans only · Join her fan club
@@ -564,7 +566,7 @@ export default function LiveFeedPage() {
                 ) : s.price_ngn > 0 ? (
                   <Link
                     href={`/live/${s.id}`}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gold py-3 text-sm font-bold text-charcoal active:scale-[0.98]"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gold py-3 text-sm font-bold text-charcoal shadow-gold transition-all active:scale-[0.98]"
                   >
                     <Lock className="h-4 w-4" />
                     Join for ₦{s.price_ngn.toLocaleString()}
@@ -572,7 +574,7 @@ export default function LiveFeedPage() {
                 ) : (
                   <Link
                     href={`/live/${s.id}`}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-bold text-white active:scale-[0.98]"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-sm font-bold text-white shadow-cta transition-all active:scale-[0.98]"
                   >
                     <Eye className="h-4 w-4" />
                     Watch free

@@ -35,6 +35,7 @@ import {
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { ngnForCoins } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
+import { PageHeader } from '@/app/(dashboard)/_components/PageHeader'
 
 import { useCities } from '@/lib/citiesLive'
 import { coordsFor } from '@/lib/cities'
@@ -420,25 +421,21 @@ export default function ProfilePage() {
   }
 
   const inputCls =
-    'w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-base text-neutral-900 placeholder:text-neutral-400 focus:border-[#AC244D] focus:outline-none focus:ring-2 focus:ring-[#AC244D]/15 md:text-sm'
+    'w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base text-neutral-900 placeholder:text-neutral-400 focus:border-[#AC244D] focus:outline-none focus:ring-2 focus:ring-[#AC244D]/15 md:text-sm'
   const labelCls = 'mb-1.5 block text-sm font-medium text-neutral-700'
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 font-sans">
+    <div className="mx-auto max-w-3xl space-y-6 font-sans animate-rise-in">
       {/* Header */}
-      <div className="border-b border-neutral-200/80 pb-5">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-[#AC244D]">
-          {role === 'model' ? 'Companion Listing' : 'Account'}
-        </p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-neutral-900">
-          {role === 'model' ? 'My Public Profile' : 'My Profile'}
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          {role === 'model'
+      <PageHeader
+        eyebrow={role === 'model' ? 'Companion Listing' : 'Account'}
+        title={role === 'model' ? 'My Public Profile' : 'My Profile'}
+        subtitle={
+          role === 'model'
             ? 'This is what guests see on the map and in your profile sheet.'
-            : 'Your personal details.'}
-        </p>
-      </div>
+            : 'Your personal details.'
+        }
+      />
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
@@ -447,16 +444,16 @@ export default function ProfilePage() {
       {role === 'model' ? (
         <>
           {/* ---- Completeness checklist ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
+          <div className="card-luxe p-6">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-serif text-lg text-neutral-900">Profile completeness</h2>
+              <h2 className="font-display text-lg font-semibold tracking-tight text-charcoal">Profile completeness</h2>
               <span className="text-sm font-semibold text-[#AC244D]">
                 {doneCount}/5
               </span>
             </div>
             <div className="mb-4 h-2 overflow-hidden rounded-full bg-neutral-100">
               <div
-                className="h-full rounded-full bg-[#AC244D] transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-[#C22A57] to-[#AC244D] transition-all"
                 style={{ width: `${(doneCount / 5) * 100}%` }}
               />
             </div>
@@ -487,8 +484,8 @@ export default function ProfilePage() {
           </div>
 
           {/* ---- Basics ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <Camera className="h-4 w-4 text-[#AC244D]" /> Basics
             </h2>
             <div className="space-y-4">
@@ -564,8 +561,8 @@ export default function ProfilePage() {
 
 
           {/* ---- WhatsApp ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <Phone className="h-4 w-4 text-[#128C4B]" /> WhatsApp
             </h2>
             <div>
@@ -586,8 +583,8 @@ export default function ProfilePage() {
           <StoryManager />
 
           {/* ---- Rates ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <Tag className="h-4 w-4 text-[#AC244D]" /> Rates (₦)
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -622,7 +619,7 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
+            <div className="mt-4 flex items-center justify-between rounded-2xl border border-neutral-200/80 bg-cream px-4 py-3">
               <span className="text-sm font-medium text-neutral-700">
                 My rates are negotiable
                 <span className="block text-xs font-normal text-neutral-500">
@@ -649,8 +646,8 @@ export default function ProfilePage() {
           </div>
 
           {/* ---- Fan club ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <Sparkles className="h-4 w-4 text-[#C9A84C]" /> Fan club
             </h2>
             <div>
@@ -673,8 +670,8 @@ export default function ProfilePage() {
           </div>
 
           {/* ---- Services ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-1 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <Sparkles className="h-4 w-4 text-[#AC244D]" /> Services offered
             </h2>
             <p className="mb-4 text-xs text-neutral-500">
@@ -749,7 +746,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={addCustomService}
-                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[#AC244D] px-4 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-95"
+                  className="btn-luxe min-h-[44px] shrink-0 gap-1.5 px-4 text-sm"
                 >
                   <Plus className="h-4 w-4" /> Add
                 </button>
@@ -881,7 +878,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={addCustomVibe}
-                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[#AC244D] px-4 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-95"
+                  className="btn-luxe min-h-[44px] shrink-0 gap-1.5 px-4 text-sm"
                 >
                   <Plus className="h-4 w-4" /> Add
                 </button>
@@ -899,8 +896,8 @@ export default function ProfilePage() {
           </div>
 
           {/* ---- Screening questions ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-1 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <ShieldCheck className="h-4 w-4 text-[#AC244D]" /> Questions for new clients
               <HelpTip text="Clients answer these questions before your chat opens, so you can screen who reaches you. You can set up to 3 questions. Keep them simple and never ask for contact details." />
             </h2>
@@ -973,8 +970,8 @@ export default function ProfilePage() {
           </div>
 
           {/* ---- Gallery ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-1 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <ImageIcon className="h-4 w-4 text-[#AC244D]" /> Gallery photos
             </h2>
             <p className="mb-3 text-xs text-neutral-500">
@@ -988,12 +985,12 @@ export default function ProfilePage() {
           </div>
 
           {/* ---- Visibility ---- */}
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-            <h2 className="mb-4 flex items-center gap-2 font-serif text-lg text-neutral-900">
+          <div className="card-luxe p-6">
+            <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
               <Zap className="h-4 w-4 text-[#AC244D]" /> Visibility
             </h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
+              <div className="flex items-center justify-between rounded-2xl border border-neutral-200/80 bg-cream px-4 py-3">
                 <span className="flex items-center gap-2 text-sm font-medium text-neutral-700">
                   {form.showOnMap ? (
                     <Eye aria-hidden className="h-4 w-4 text-emerald-600" />
@@ -1022,7 +1019,7 @@ export default function ProfilePage() {
                   />
                 </button>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-neutral-200 px-4 py-3">
+              <div className="flex items-center justify-between rounded-2xl border border-neutral-200/80 bg-cream px-4 py-3">
                 <span className="text-sm font-medium text-neutral-700">
                   Available now
                   <span className="block text-xs font-normal text-neutral-500">
@@ -1059,7 +1056,7 @@ export default function ProfilePage() {
           <button
             onClick={saveProvider}
             disabled={saving}
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#AC244D] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-[0.99] disabled:opacity-60"
+            className="btn-luxe min-h-[44px] w-full py-3.5 text-sm"
           >
             {saving ? (
               <span className="inline-flex items-center gap-2">
@@ -1076,7 +1073,7 @@ export default function ProfilePage() {
         </>
       ) : (
         /* ================= CLIENT VIEW ================= */
-        <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
+        <div className="card-luxe p-6">
           <div className="space-y-4">
             <div>
               <label className={labelCls}>Display name</label>
@@ -1099,7 +1096,7 @@ export default function ProfilePage() {
             <button
               onClick={saveClient}
               disabled={saving}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-[#AC244D] py-3 text-sm font-semibold text-white transition-all hover:bg-[#8F1D40] active:scale-[0.99] disabled:opacity-60"
+              className="btn-luxe min-h-[44px] w-full py-3 text-sm"
             >
               {saving ? (
                 <span className="inline-flex items-center gap-2">

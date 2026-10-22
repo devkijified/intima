@@ -43,8 +43,8 @@ export function BoostPanel() {
     : 0
 
   return (
-    <div className="rounded-3xl border border-neutral-200/80 bg-white p-5">
-      <h3 className="flex items-center gap-2 font-semibold text-charcoal">
+    <div className="card-luxe p-5 sm:p-6">
+      <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
         <Zap className="h-5 w-5 text-gold" aria-hidden /> Boost visibility
         <HelpTip text={`A boost pins your profile to the top of the map and browse lists for 30 minutes, so more clients see you first. It costs ${coinsWithNgn(cost)} and starts the moment you tap.`} />
       </h3>

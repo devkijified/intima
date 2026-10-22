@@ -233,7 +233,7 @@ export default function DashboardPage() {
           ) : (
             <Link
               href="/"
-              className="inline-flex min-h-[44px] items-center justify-center bg-[#AC244D] hover:bg-[#8F1D40] text-white text-sm font-medium px-5 py-2.5 rounded-full transition-all shadow-xs"
+              className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm"
             >
               Browse Companions
             </Link>
@@ -343,40 +343,48 @@ export default function DashboardPage() {
         /* ================= CLIENT VIEW ================= */
         <div className="space-y-8">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div className="card-luxe p-4 sm:p-6">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Connections</span>
-                <Calendar aria-hidden className="h-4 w-4 text-[#AC244D]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Connections</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50">
+                  <Calendar aria-hidden className="h-4 w-4 text-emerald-600" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.bookings}</p>
-              <p className="text-xs text-neutral-400 mt-1">Active companion chats</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.bookings}</p>
+              <p className="mt-1 text-xs text-neutral-400">Active companion chats</p>
             </div>
 
-            <div className="card-luxe p-4 sm:p-6">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Wallet Balance</span>
-                <Wallet aria-hidden className="h-4 w-4 text-[#AC244D]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Wallet Balance</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-muted">
+                  <Wallet aria-hidden className="h-4 w-4 text-[#AC244D]" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.coins.toLocaleString()} coins</p>
-              <p className="text-xs text-neutral-400 mt-1">Worth {ngnForCoins(stats.coins)}</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.coins.toLocaleString()}<span className="ml-1 text-base font-normal text-neutral-400">coins</span></p>
+              <p className="mt-1 text-xs text-neutral-400">Worth {ngnForCoins(stats.coins)}</p>
             </div>
 
-            <div className="card-luxe p-4 sm:p-6">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="text-xs font-medium uppercase tracking-wider">Saved</span>
-                <Sparkles aria-hidden className="h-4 w-4 text-[#AC244D]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Saved</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-muted">
+                  <Sparkles aria-hidden className="h-4 w-4 text-[#AC244D]" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.saved}</p>
-              <p className="text-xs text-neutral-400 mt-1">Favorite companions</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.saved}</p>
+              <p className="mt-1 text-xs text-neutral-400">Favorite companions</p>
             </div>
 
-            <div className="card-luxe p-4 sm:p-6">
-              <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider">Referral earnings <HelpTip text="Share your link. When a friend joins through it and opens their first paid connection, you earn: 500 coins as a companion, 100 coins as a client." /></span>
-                <Gift aria-hidden className="h-4 w-4 text-[#C9A84C]" />
+            <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Referral earnings <HelpTip text="Share your link. When a friend joins through it and opens their first paid connection, you earn: 500 coins as a companion, 100 coins as a client." /></span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15">
+                  <Gift aria-hidden className="h-4 w-4 text-[#C9A84C]" />
+                </span>
               </div>
-              <p className="text-3xl font-serif text-neutral-900">{stats.referralCoins.toLocaleString()} coins</p>
-              <p className="text-xs text-neutral-400 mt-1">≈ {ngnForCoins(stats.referralCoins)} · From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
+              <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.referralCoins.toLocaleString()}<span className="ml-1 text-base font-normal text-neutral-400">coins</span></p>
+              <p className="mt-1 text-xs text-neutral-400">≈ {ngnForCoins(stats.referralCoins)} · From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
             </div>
           </div>
 

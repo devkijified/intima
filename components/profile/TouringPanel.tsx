@@ -60,8 +60,8 @@ export function TouringPanel() {
   const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })
 
   return (
-    <div className="rounded-3xl border border-neutral-200/80 bg-white p-5">
-      <h3 className="font-semibold text-charcoal">Touring</h3>
+    <div className="card-luxe p-5 sm:p-6">
+      <h3 className="font-display text-lg font-semibold tracking-tight text-charcoal">Touring</h3>
       <p className="mt-1 text-xs text-neutral-500">
         Visiting another city? Announce it. You show on that city&apos;s map with a Touring tag for those dates.
       </p>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Wallet, Info, Coins, ArrowRight } from '@/lib/icons'
+import { PageHeader } from '@/app/(dashboard)/_components/PageHeader'
 
 export default function WalletPage() {
   const [role, setRole] = useState('client')
@@ -75,18 +76,21 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-28 md:pb-10">
-      <h1 className="font-display text-2xl font-semibold text-charcoal">Wallet</h1>
+    <div className="mx-auto max-w-3xl animate-rise-in px-4 pb-28 md:pb-10">
+      <PageHeader
+        eyebrow={role === 'model' ? 'Companion Control Panel' : 'VIP Member Account'}
+        title="Wallet"
+      />
 
       {/* Coins section */}
-      <Link href="/coins" className="mt-6 block rounded-3xl bg-gradient-to-br from-primary to-[#7a1a36] p-6 text-white shadow-lg transition-transform active:scale-[0.99]">
+      <Link href="/coins" className="mt-6 block rounded-4xl bg-gradient-to-br from-primary to-[#7a1a36] p-6 text-white shadow-cta ring-1 ring-black/10 transition-all duration-200 hover:shadow-lift active:scale-[0.99]">
         <div className="flex items-center justify-between">
           <p className="flex items-center gap-2 text-sm font-medium text-white/80">
             <Coins className="h-4 w-4 text-gold" /> Coins
           </p>
           <ArrowRight className="h-4 w-4 text-white/60" />
         </div>
-        <p className="mt-2 font-display text-4xl font-bold">
+        <p className="mt-2 font-display text-4xl font-semibold tracking-tight">
           {coinBalance === null ? '…' : coinBalance.toLocaleString()}
         </p>
         <p className="mt-1 text-xs text-white/60">
@@ -95,13 +99,16 @@ export default function WalletPage() {
       </Link>
 
 
-      <div className="mt-6 rounded-3xl border border-neutral-200/80 bg-white p-6">
-        <h2 className="font-semibold text-charcoal">Transaction History</h2>
+      <div className="card-luxe mt-6 p-6">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-charcoal">Transaction History</h2>
         {transactions.length > 0 ? (
           <div className="mt-3 divide-y divide-neutral-100">
             {transactions.map((t) => (
-              <div key={t.id} className="flex items-center justify-between py-3">
-                <div className="min-w-0">
+              <div key={t.id} className="flex items-center gap-3 py-3">
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${t.id.startsWith('top-') ? 'bg-primary-muted text-primary' : 'bg-neutral-100 text-neutral-500'}`}>
+                  {t.id.startsWith('top-') ? <Coins className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                </span>
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-charcoal">{t.label}</p>
                   <p className="text-xs text-neutral-500">{t.sub} · {new Date(t.date).toLocaleDateString()}</p>
                 </div>
@@ -110,9 +117,11 @@ export default function WalletPage() {
             ))}
           </div>
         ) : (
-          <div className="mt-4 rounded-2xl bg-cream p-8 text-center">
-            <Wallet className="mx-auto h-8 w-8 text-neutral-300" />
-          <p className="mt-2 text-sm font-medium text-charcoal">No transactions yet</p>
+          <div className="mt-4 p-4 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary-muted">
+              <Wallet className="h-6 w-6 text-[#AC244D]" />
+            </div>
+            <p className="font-display text-base font-semibold tracking-tight text-charcoal">No transactions yet</p>
             <p className="mt-1 flex items-center justify-center gap-1 text-xs text-neutral-500">
               <Info className="h-3 w-3" />
               Coin top-ups appear in <Link href="/coins" className="font-medium text-primary underline">Coins</Link>.

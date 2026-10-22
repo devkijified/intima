@@ -83,8 +83,8 @@ export function StoryManager() {
   };
 
   return (
-    <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-xs">
-      <h2 className="mb-1 font-serif text-lg text-neutral-900">Stories</h2>
+    <div className="card-luxe p-6">
+      <h2 className="mb-1 font-display text-lg font-semibold tracking-tight text-charcoal">Stories</h2>
       <p className="mb-4 text-xs text-neutral-500">
         Post 24-hour stories like WhatsApp Status. Clients see them in the story tray.
       </p>
