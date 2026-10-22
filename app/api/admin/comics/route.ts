@@ -137,15 +137,45 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, episode: data });
 }
 
-/** PATCH /api/admin/comics: publish (fans out push) or unpublish. Body: { id, action } */
+/** PATCH /api/admin/comics: publish one, publish all drafts, or unpublish. Body: { id, action } or { action: 'publish-all' } */
 export async function PATCH(req: NextRequest) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   const { id, action } = await req.json().catch(() => ({}));
-  if (typeof id !== 'string' || !['publish', 'unpublish'].includes(action)) {
-    return NextResponse.json({ error: 'id and action=publish|unpublish required' }, { status: 400 });
-  }
   const db = svc();
+
+  // Bulk: every draft goes live in one update. Followers get ONE
+  // notification per series (not one per episode), so importing a
+  // whole run of chapters never spams the people following it.
+  if (action === 'publish-all') {
+    const { data: drafts } = await db.from('comic_episodes')
+      .select('id, title, comic_id').eq('status', 'draft');
+    const list = (drafts ?? []) as { id: string; title: string; comic_id: string | null }[];
+    if (list.length === 0) return NextResponse.json({ success: true, published: 0 });
+    const { error } = await db.from('comic_episodes').update({
+      status: 'published',
+      published_at: new Date().toISOString(),
+    }).eq('status', 'draft');
+    if (error) return NextResponse.json({ error: 'Could not publish the drafts' }, { status: 500 });
+    const bySeries = new Map<string, { count: number; firstTitle: string }>();
+    for (const ep of list) {
+      if (!ep.comic_id) continue;
+      const cur = bySeries.get(ep.comic_id) ?? { count: 0, firstTitle: ep.title };
+      cur.count += 1;
+      bySeries.set(ep.comic_id, cur);
+    }
+    for (const [comicId, info] of bySeries) {
+      await notifySeriesFollowers(
+        comicId,
+        info.count === 1 ? info.firstTitle : `${info.count} new episodes to read`,
+      );
+    }
+    return NextResponse.json({ success: true, published: list.length });
+  }
+
+  if (typeof id !== 'string' || !['publish', 'unpublish'].includes(action)) {
+    return NextResponse.json({ error: 'id and action=publish|unpublish|publish-all required' }, { status: 400 });
+  }
   const { data: ep } = await db.from('comic_episodes')
     .select('id, episode_no, title, status, comic_id').eq('id', id).maybeSingle();
   if (!ep) return NextResponse.json({ error: 'Episode not found' }, { status: 404 });

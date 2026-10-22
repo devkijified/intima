@@ -37,24 +37,42 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 import { Tooltip } from '@/components/ui/Tooltip';
 
 /**
- * Primary vector style: CARTO dark matter. The owner's reference is
- * the Snap Map night look: a dark slate-blue base with near-black
- * water, dimmed roads, thin pale borders and very few soft labels,
- * so the pins and the heat layer carry the map. On style load the
- * layers are restyled further toward that palette (see
- * restyleToSnapNight). If the style or its CDN is unreachable, the
- * error path below falls back to the OSM raster style automatically
- * (with the dark CSS filter), and if that also fails the honest list
- * takes over.
+ * Base map strategy (rebuilt 2026-10-22 after the map shipped black
+ * on the owner's phone, twice over). The primary base is Wikimedia's
+ * raster tiles under the app's dark CSS filter: plain image tiles on
+ * highly reachable infrastructure, no external style JSON, no vector
+ * tiles, no webfont glyphs to stall on, and under the filter they
+ * read as the dark slate night base the Snap Map reference calls
+ * for. If no tile paints within the stage budget, or tiles keep
+ * erroring, the base steps down to OpenStreetMap's own raster tiles
+ * (same filter), and only then to the honest list. A base is only
+ * trusted once a tile has genuinely loaded (see the sourcedata proof
+ * in the init effect): the MapLibre 'load' event alone is NOT proof,
+ * it fires for a style whose tiles never arrive.
+ *
+ * Two dead ends already walked, do not re-add them: the CARTO vector
+ * style (its tile and glyph chain stalls on the networks that matter
+ * here) and CARTO's keyless dark_all raster (the tiles arrive
+ * watermarked "API KEY REQUIRED"). The other half of the black-map
+ * bug was never the tiles at all: maplibre-gl.css sets the map
+ * container to position: relative, which beat the Tailwind absolute
+ * classes in the cascade and collapsed the container to zero height.
+ * The container now carries inline position styles (see the JSX),
+ * and a ResizeObserver keeps the canvas matched to its box.
  */
-const CARTO_DARK_MATTER = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const WIKIMEDIA_RASTER_STYLE = {
+  version: 8 as const,
+  sources: {
+    wikimedia: {
+      type: 'raster' as const,
+      tiles: ['https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [{ id: 'wikimedia', type: 'raster' as const, source: 'wikimedia' }],
+};
 
-/**
- * Primary raster style: OpenStreetMap tiles. OSM sends proper CORS headers
- * (required for WebGL tile rendering) and runs on highly reachable
- * infrastructure. The dark-mode CSS filter keeps our brand.
- * A map that loads beats a prettier map that stays black.
- */
 const OSM_RASTER_STYLE = {
   version: 8 as const,
   sources: {
@@ -67,6 +85,13 @@ const OSM_RASTER_STYLE = {
   },
   layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
 };
+
+/** The base chain: Wikimedia raster first, OpenStreetMap raster
+ *  behind it, both under the dark CSS filter. */
+const BASE_STAGES = [
+  { style: WIKIMEDIA_RASTER_STYLE, sourceId: 'wikimedia', filtered: true },
+  { style: OSM_RASTER_STYLE, sourceId: 'osm', filtered: true },
+] as const;
 const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
 
 /** City centers for map fly-to when the city filter changes. [lng, lat]. */
@@ -141,100 +166,6 @@ async function loadMapLibre(): Promise<{ lib: MapLibreLib | null; keys: string }
   return { lib: null, keys };
 }
 
-/**
- * Restyle the loaded CARTO dark-matter layers toward the owner's
- * Snap Map night reference: near-black blue water, slate land,
- * roads dimmed to a whisper (casings included), thin pale boundary
- * lines, soft place labels with a dark halo, and the noisy label
- * layers (road names, POI, transit, airport, housenumbers) hidden
- * outright. Everything is keyed off layer type plus source-layer or
- * id patterns, and every call is guarded: a layer id the style does
- * not have, or a paint property a layer does not accept, must never
- * throw and break the map.
- */
-function restyleToSnapNight(map: MLMap): void {
-  let layers: Array<Record<string, unknown>> = [];
-  try {
-    layers = (map.getStyle()?.layers ?? []) as unknown as Array<Record<string, unknown>>;
-  } catch {
-    return;
-  }
-  const setPaint = (id: string, prop: string, value: unknown) => {
-    try {
-      if (map.getLayer(id)) map.setPaintProperty(id, prop, value as never);
-    } catch {
-      /* this layer does not accept the property; skip it */
-    }
-  };
-  for (const layer of layers) {
-    const id = typeof layer.id === 'string' ? layer.id : '';
-    const type = typeof layer.type === 'string' ? layer.type : '';
-    if (!id) continue;
-    const sourceLayer = String(layer['source-layer'] ?? '').toLowerCase();
-    const lid = id.toLowerCase();
-    try {
-      if (type === 'background') {
-        setPaint(id, 'background-color', '#04070c');
-        continue;
-      }
-      if (type === 'symbol') {
-        // Label noise: road names, POI, transit, airport and
-        // housenumber labels go away. Place labels stay.
-        const noisy =
-          /transportation|poi|transit|public_transport|airport|aeroway|housenumber|house_number/.test(sourceLayer) ||
-          /poi|transit|airport|housenumber|roadname|road_name|roadlabel/.test(lid) ||
-          lid.includes('transportation');
-        if (noisy) {
-          try {
-            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
-          } catch {
-            /* guarded: hiding is best-effort */
-          }
-          continue;
-        }
-        setPaint(id, 'text-color', '#cfe0ee');
-        setPaint(id, 'text-opacity', 0.85);
-        setPaint(id, 'text-halo-color', 'rgba(3,6,10,0.9)');
-        setPaint(id, 'text-halo-width', 1.2);
-        continue;
-      }
-      if (type === 'fill' || type === 'fill-extrusion') {
-        const prop = type === 'fill' ? 'fill-color' : 'fill-extrusion-color';
-        if (sourceLayer === 'water' || lid === 'water') setPaint(id, prop, '#04070c');
-        else if (sourceLayer === 'landcover') setPaint(id, prop, '#0d1622');
-        else if (sourceLayer === 'park' || lid.includes('park')) setPaint(id, prop, '#12202f');
-        else if (sourceLayer.includes('building')) setPaint(id, prop, '#172636');
-        else setPaint(id, prop, '#101925');
-        if (type === 'fill') setPaint(id, 'fill-opacity', 1);
-        continue;
-      }
-      if (type === 'line') {
-        if (sourceLayer === 'boundary' || lid.includes('boundary') || lid.includes('admin')) {
-          setPaint(id, 'line-color', '#8fa9bf');
-          setPaint(id, 'line-opacity', 0.35);
-        } else if (sourceLayer === 'waterway' || lid.includes('waterway')) {
-          setPaint(id, 'line-color', '#0a1522');
-          setPaint(id, 'line-opacity', 0.6);
-        } else if (
-          sourceLayer === 'transit' ||
-          sourceLayer === 'public_transport' ||
-          lid.includes('transit')
-        ) {
-          setPaint(id, 'line-color', '#16222f');
-          setPaint(id, 'line-opacity', 0.3);
-        } else {
-          // Roads and everything else: dim blue-grey lines, and the
-          // casings get the same treatment so nothing reads bright.
-          const isCasing = lid.includes('casing') || lid.includes('_case');
-          setPaint(id, 'line-color', isCasing ? '#0c141f' : '#1c2a3a');
-          setPaint(id, 'line-opacity', isCasing ? 0.5 : 0.55);
-        }
-      }
-    } catch {
-      /* one odd layer must never break the restyle pass */
-    }
-  }
-}
 
 const HEAT_SOURCE_ID = 'intima-heat';
 const HEAT_LAYER_ID = 'intima-heat';
@@ -451,7 +382,7 @@ export default function IntimaMap() {
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   /** True when the raster fallback style is active (gets the dark CSS filter). */
-  const [usingRaster, setUsingRaster] = useState(false);
+  const [usingRaster, setUsingRaster] = useState(true);
   /** True when the map has been loading too long without reaching ready:
       show an honest error card instead of a silent black screen. */
   const [mapStalled, setMapStalled] = useState(false);
@@ -682,12 +613,17 @@ export default function IntimaMap() {
   useEffect(() => {
     let cancelled = false;
     let map: MLMap | null = null;
+    let containerObserver: ResizeObserver | undefined;
     let bundleTimer: ReturnType<typeof setTimeout> | undefined;
-    let styleTimer: ReturnType<typeof setTimeout> | undefined;
+    let baseTimer: ReturnType<typeof setTimeout> | undefined;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
-    let rasterTimer: ReturnType<typeof setTimeout> | undefined;
-    let rasterTried = false;
-    let styleLoaded = false;
+    // The base chain state. A stage counts as working only when one of
+    // its tiles has actually painted (baseProven, set from the
+    // sourcedata handler below). The MapLibre 'load' event is not
+    // proof: it fired happily for the vector build that shipped black.
+    let baseStage = 0;
+    let baseProven = false;
+    let tileErrors = 0;
 
     const failMap = (reason: string) => {
       if (cancelled) return;
@@ -695,27 +631,53 @@ export default function IntimaMap() {
       setMapFailed(true);
     };
 
-    /** Switch to the OSM raster tiles when the CARTO vector style
-        is unreachable. A map that loads beats a prettier map that stays
-        black. */
-    const tryRasterFallback = () => {
-      if (cancelled || !map || rasterTried) return;
-      rasterTried = true;
-      try {
-        map.setStyle(OSM_RASTER_STYLE as any);
-        setUsingRaster(true);
-      } catch {
-        // setStyle failed; the stall timer will surface the error card.
+    const armBaseTimer = () => {
+      if (baseTimer) clearTimeout(baseTimer);
+      baseTimer = setTimeout(() => {
+        if (!cancelled && !baseProven)
+          stepDownBase(`base stage ${baseStage} painted no tile within 7s`);
+      }, 7000);
+    };
+
+    /** Move one step down the base chain (Wikimedia, then OSM). The
+        last stage failing gives up to the honest list. A map that
+        loads beats a prettier map that stays black. */
+    const stepDownBase = (reason: string) => {
+      if (cancelled || !map || baseProven) return;
+      if (baseStage >= BASE_STAGES.length - 1) {
+        failMap(`${reason}; every base source failed`);
+        return;
       }
+      baseStage += 1;
+      tileErrors = 0;
+      const stage = BASE_STAGES[baseStage];
+      try {
+        map.setStyle(stage.style as any);
+        setUsingRaster(stage.filtered);
+      } catch {
+        failMap(`${reason}; switching the base style threw`);
+        return;
+      }
+      armBaseTimer();
+    };
+
+    /** A tile from the current base source reached the screen: the
+        base is real. Stand the watchdogs down. */
+    const markBaseProven = () => {
+      if (cancelled || baseProven) return;
+      baseProven = true;
+      if (baseTimer) clearTimeout(baseTimer);
+      if (stallTimer) clearTimeout(stallTimer);
+      setMapStalled(false);
     };
 
     async function init() {
       try {
-        // Stall watch: 25s without reaching ready means tiles are blocked.
-        // Show an honest error card with retry and list options instead
-        // of a silent black screen.
+        // Stall watch: 25s without a painted tile means the network is
+        // crawling. Show the honest slow card instead of a silent
+        // black screen (the chain keeps trying underneath).
         stallTimer = setTimeout(() => {
-          if (!cancelled) setMapStalled(true);
+          if (!cancelled && !baseProven) setMapStalled(true);
         }, 25000);
         // Stage 1: the maplibre bundle itself. If it cannot download in
         // 45s the connection is truly dead → list fallback.
@@ -731,16 +693,14 @@ export default function IntimaMap() {
           return;
         }
         libRef.current = lib;
-        // Primary style: the dark-matter vector base, restyled to
-        // the Snap night palette on load. The raster style is the
-        // automatic fallback when the vector style errors or stalls
-        // before load (see the error handler and the style timer
-        // below), because a map that loads beats a prettier map that
-        // stays black.
+        // Primary base: the Wikimedia raster style, inline, so the
+        // first paint depends only on small image tiles. The
+        // step-down chain behind it is driven by tile proof, not by
+        // the load event.
         try {
           map = new lib.Map({
             container: containerRef.current,
-            style: CARTO_DARK_MATTER,
+            style: BASE_STAGES[0].style as any,
             center: CITY_CENTERS[loadInitialCity()] ?? LAGOS_CENTER,
             zoom: 11,
             attributionControl: { compact: true } as any,
@@ -753,6 +713,27 @@ export default function IntimaMap() {
           // the providers fetch time once this gate moved.
           mapRef.current = map;
           setMapReady(true);
+          armBaseTimer();
+          // The container is NOT at its final height when the map is
+          // created: measured on the rig, it starts around 300px
+          // tall and settles to full height as the page's trays and
+          // bars lay out. MapLibre sizes its canvas once, from the
+          // box it sees at creation, so without this observer the
+          // tiles paint into a short, misprojected canvas in the top
+          // strip and the rest of the screen stays page-black, on
+          // real phones as much as in the rig (URL bar collapse and
+          // rotation change the box too). Watch the box for the
+          // map's whole life and resize on every change.
+          if (containerRef.current && typeof ResizeObserver !== 'undefined') {
+            containerObserver = new ResizeObserver(() => {
+              try {
+                map?.resize();
+              } catch {
+                /* mid-teardown; ignore */
+              }
+            });
+            containerObserver.observe(containerRef.current);
+          }
         } catch (err) {
           failMap(
             `map init threw: ${err instanceof Error ? err.message : String(err)}`,
@@ -760,11 +741,8 @@ export default function IntimaMap() {
           return;
         }
         map.on('load', () => {
-          styleLoaded = true;
-          // Snap night restyle on the vector style only (the raster
-          // fallback keeps its dark CSS filter instead), then bump
-          // the style epoch so the heat layer syncs onto this style.
-          if (!cancelled && map && !rasterTried) restyleToSnapNight(map);
+          // Bump the style epoch so the heat layer syncs onto this
+          // style (and re-syncs after every step-down).
           if (!cancelled) setStyleEpoch((n) => n + 1);
           if (!cancelled) {
             // The compact attribution control starts EXPANDED
@@ -779,53 +757,42 @@ export default function IntimaMap() {
             // out at init, tiles only cover part of the viewport.
             map?.resize();
             setTimeout(() => { if (!cancelled) map?.resize(); }, 500);
-            if (styleTimer) clearTimeout(styleTimer);
-            if (stallTimer) clearTimeout(stallTimer);
-            if (rasterTimer) clearTimeout(rasterTimer);
-            setMapStalled(false);
             mapRef.current = map;
             setMapReady(true);
           }
         });
-        // MapLibre fires 'error' for transient tile/sprite/font hiccups as
-        // well as fatal style failures. A style failure before load now
-        // tries the raster fallback first; only if that also fails does
-        // the map give up. Once the style has loaded (styleLoaded), failed
-        // tiles are retried by the renderer and the map stays up.
-        map.on('error', (e) => {
-          if (cancelled || styleLoaded) return;
-          if (!rasterTried) {
-            tryRasterFallback();
-            return;
+        // The proof: a sourcedata event carrying a tile for the
+        // CURRENT base source whose state is genuinely 'loaded'.
+        // MapLibre also reports ERRORED tiles as source-loaded (so
+        // the map does not hang waiting on them), and counting those
+        // as proof is exactly how the first version of this chain
+        // certified a black map. Only a real loaded tile proves the
+        // base paints.
+        map.on('sourcedata', (e) => {
+          if (cancelled || baseProven) return;
+          const ev = e as unknown as {
+            sourceId?: string;
+            tile?: { state?: string };
+          };
+          if (
+            ev.sourceId === BASE_STAGES[baseStage].sourceId &&
+            ev.tile &&
+            ev.tile.state === 'loaded'
+          ) {
+            markBaseProven();
           }
-          const detail =
-            e && typeof e === 'object' && 'error' in e
-              ? (e as { error?: { message?: string; status?: number } }).error
-              : undefined;
-          failMap(
-            `style error before load: ${detail?.message ?? 'unknown'}${
-              detail?.status ? ` (status ${detail.status})` : ''
-            }`,
-          );
         });
-        // Stage 2: the style itself. The vector style gets 12s to
-        // reach load; a stall (not just an error) then switches to
-        // the raster fallback, which gets its own 30s before the map
-        // gives up to the list. A slow map shows the loading state,
-        // only a dead one falls back.
-        styleTimer = setTimeout(() => {
-          if (!cancelled && !styleLoaded) {
-            if (!rasterTried) {
-              tryRasterFallback();
-              rasterTimer = setTimeout(() => {
-                if (!cancelled && !styleLoaded)
-                  failMap('style did not reach load (vector 12s, then raster 30s)');
-              }, 30000);
-              return;
-            }
-            failMap('style did not reach load (vector 12s, then raster 30s)');
-          }
-        }, 12000);
+        // Tile and source errors before proof count against the
+        // current stage; four of them step the base down at once
+        // instead of waiting out the stage budget. After proof the
+        // renderer retries failed tiles on its own and the map
+        // stays up.
+        map.on('error', () => {
+          if (cancelled || baseProven) return;
+          tileErrors += 1;
+          if (tileErrors >= 4)
+            stepDownBase(`base stage ${baseStage} tiles kept failing`);
+        });
       } catch (err) {
         failMap(
           `bundle import threw: ${err instanceof Error ? err.message : String(err)}`,
@@ -836,10 +803,10 @@ export default function IntimaMap() {
     init();
     return () => {
       cancelled = true;
+      containerObserver?.disconnect();
       if (bundleTimer) clearTimeout(bundleTimer);
-      if (styleTimer) clearTimeout(styleTimer);
+      if (baseTimer) clearTimeout(baseTimer);
       if (stallTimer) clearTimeout(stallTimer);
-      if (rasterTimer) clearTimeout(rasterTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       pinElsRef.current.clear();
@@ -1046,7 +1013,16 @@ export default function IntimaMap() {
     >
       <div
         ref={containerRef}
-        className={`absolute inset-0 ${usingRaster ? 'map-raster-dark' : ''}`}
+        // Inline position and inset, deliberately NOT just Tailwind
+        // classes: maplibre-gl.css declares .maplibregl-map with
+        // position: relative, and when that stylesheet wins the
+        // cascade over the utilities the container collapses to
+        // zero height and the map ships black (measured on the rig:
+        // container 390x0 while its fixed parent was 390x844).
+        // Inline styles outrank every stylesheet, so the map box
+        // always fills its parent.
+        style={{ position: 'absolute', inset: 0 }}
+        className={usingRaster ? 'map-raster-dark' : undefined}
       />
       {!mapReady && !mapFailed && !mapStalled && view === 'map' && (
         <div className="absolute inset-0 z-10 overflow-hidden bg-[#04070c]">

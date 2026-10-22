@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, ChevronRight } from '@/lib/icons'
+import { ArrowLeft, ChevronRight, ChevronUp } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { PhotoWatermark } from '@/components/media/PhotoWatermark'
 
@@ -61,15 +61,16 @@ function readerHint(): string {
 
 function PanelImage({ src, index, eager }: { src: string; index: number; eager: boolean }) {
   const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const liveSrc = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}cb=${attempt}`
 
   return (
-    <div className="relative w-full bg-[#171017]">
+    <div className={`relative w-full bg-[#171017] ${loaded || failed ? '' : 'min-h-[320px]'}`}>
       {failed ? (
         <button
           type="button"
-          onClick={() => { setAttempt((a) => a + 1); setFailed(false) }}
+          onClick={() => { setAttempt((a) => a + 1); setFailed(false); setLoaded(false) }}
           className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 px-6 text-center"
         >
           <span className="font-display text-base font-semibold text-white/85">This page could not load</span>
@@ -77,17 +78,23 @@ function PanelImage({ src, index, eager }: { src: string; index: number; eager: 
         </button>
       ) : (
         <>
+          {!loaded && (
+            <div aria-hidden className="absolute inset-0 flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-gold" />
+            </div>
+          )}
           <img
             key={attempt}
             src={liveSrc}
             alt={`Panel ${index + 1}`}
             loading={eager ? 'eager' : 'lazy'}
             fetchPriority={eager ? 'high' : undefined}
+            onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
-            className="block h-auto w-full animate-fade-in"
+            className={`block h-auto w-full transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
             draggable={false}
           />
-          <PhotoWatermark variant="edge" />
+          {loaded && <PhotoWatermark variant="edge" />}
         </>
       )}
     </div>
@@ -102,11 +109,18 @@ export default function ComicReaderPage() {
   const [next, setNext] = useState<Episode | null>(null)
   const [comicTitle, setComicTitle] = useState<string | null>(null)
   const [readPct, setReadPct] = useState(0)
+  const [panelsReady, setPanelsReady] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
+    // A fresh episode starts from a clean slate: no stale panels from
+    // the previous episode, and the load gate closes again.
+    setEp(null)
+    setNext(null)
+    setPanelsReady(false)
+    setNotFound(false)
     let live = true
     ;(async () => {
       const { data } = await supabase.from('comic_episodes')
@@ -157,6 +171,34 @@ export default function ComicReaderPage() {
     return () => { live = false }
   }, [id])
 
+  // Load gate: the panel column is revealed only once the first
+  // screen of panels has FULLY loaded, so the reader never watches
+  // half-painted images flicker in. Panels are cached by the service
+  // worker after the first read, so a return visit passes this gate
+  // almost instantly. A 6s escape keeps one dead panel from trapping
+  // the page; it shows its own retry tile instead.
+  useEffect(() => {
+    if (!ep) return
+    const urls = ep.panel_urls.slice(0, 3)
+    if (urls.length === 0) { setPanelsReady(true); return }
+    let live = true
+    const escape = setTimeout(() => { if (live) setPanelsReady(true) }, 6000)
+    Promise.allSettled(
+      urls.map((u) => new Promise<boolean>((resolve) => {
+        const img = new Image()
+        img.onload = () => resolve(true)
+        img.onerror = () => resolve(false)
+        img.src = u
+      })),
+    ).then(() => {
+      if (live) {
+        clearTimeout(escape)
+        setPanelsReady(true)
+      }
+    })
+    return () => { live = false; clearTimeout(escape) }
+  }, [ep])
+
   // Completion: reader reaches the end marker.
   useEffect(() => {
     const el = endRef.current
@@ -197,12 +239,14 @@ export default function ComicReaderPage() {
   }
 
   const backHref = ep?.comic_id ? `/comics/series/${ep.comic_id}` : '/comics'
-  const firstPanel = ep?.panel_urls?.[0]
+  const firstPanels = ep?.panel_urls?.slice(0, 3) ?? []
 
   return (
     <div className="mx-auto max-w-2xl pb-24 animate-fade-in">
-      {/* Warm the first panel before the reader scrolls to it. */}
-      {firstPanel && <link rel="preload" as="image" href={firstPanel} fetchPriority="high" />}
+      {/* Warm the first screen of panels before the reader scrolls. */}
+      {firstPanels.map((p) => (
+        <link key={p} rel="preload" as="image" href={p} fetchPriority="high" />
+      ))}
 
       {/* Reader top bar */}
       <div className="sticky top-0 z-20 border-b border-black/[0.04] bg-cream/85 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
@@ -247,14 +291,36 @@ export default function ComicReaderPage() {
       )}
 
       {/* Panels: one consistent column, panels edge to edge with no
-          gaps, each in its own dark cell so loading never shifts. */}
+          gaps, each in its own dark cell so loading never shifts.
+          The column waits behind a clean preparing state until the
+          first screen of panels has fully loaded. */}
       <div className="bg-[#241722] px-2 py-3 sm:px-4">
-        <div className="mx-auto w-full max-w-xl overflow-hidden rounded-lg shadow-2xl">
-          {ep?.panel_urls.map((src, i) => (
-            <PanelImage key={`${i}-${src}`} src={src} index={i} eager={i < 3} />
-          ))}
-        </div>
+        {ep && !panelsReady ? (
+          <div className="mx-auto flex w-full max-w-xl flex-col items-center justify-center gap-3 rounded-lg bg-[#171017] px-6 py-24 text-center">
+            <div className="h-9 w-9 animate-spin rounded-full border-2 border-white/15 border-t-gold" />
+            <p className="font-display text-base font-semibold text-white/85">Preparing your pages</p>
+            <p className="max-w-xs text-sm text-white/50">Your episode opens the moment its first pages are fully ready, with no flicker.</p>
+          </div>
+        ) : (
+          <div className="mx-auto w-full max-w-xl overflow-hidden rounded-lg shadow-2xl">
+            {ep?.panel_urls.map((src, i) => (
+              <PanelImage key={`${i}-${src}`} src={src} index={i} eager={i < 3} />
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Back to top: appears once the reader is deep in the episode. */}
+      {panelsReady && readPct > 0.2 && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Back to the top of this episode"
+          className="fixed bottom-28 right-4 z-30 inline-flex h-12 items-center gap-1.5 rounded-full bg-charcoal/90 px-4 text-xs font-semibold text-white shadow-xl ring-1 ring-white/15 backdrop-blur transition active:scale-95"
+        >
+          <ChevronUp aria-hidden className="h-4 w-4" /> Top
+        </button>
+      )}
 
       <div ref={endRef} className="px-6 pt-10 text-center">
         <div className="mx-auto max-w-sm rounded-[28px] bg-[#1A1016] px-6 py-8">

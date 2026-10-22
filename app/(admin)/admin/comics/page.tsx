@@ -50,6 +50,8 @@ export default function AdminComicsPage() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [confirmPublishAll, setConfirmPublishAll] = useState(false)
+  const [publishingAll, setPublishingAll] = useState(false)
   const [feedUrl, setFeedUrl] = useState('')
   const [preview, setPreview] = useState<{ name: string; items: Array<{ guid: string; title: string; images: string[] }> } | null>(null)
   const [feeds, setFeeds] = useState<Array<{ id: string; name: string; url: string }>>([])
@@ -297,6 +299,32 @@ export default function AdminComicsPage() {
     }
   }
 
+  async function publishAll() {
+    // Two-tap confirm in our own UI, never a system dialog.
+    if (!confirmPublishAll) {
+      setConfirmPublishAll(true)
+      return
+    }
+    setConfirmPublishAll(false)
+    setPublishingAll(true)
+    try {
+      const res = await fetch('/api/admin/comics', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish-all' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setMsg(d.published > 0 ? `Published ${d.published} episodes. Followers got one notice per series.` : 'No drafts waiting.')
+        load()
+      } else {
+        setMsg(d.error ?? 'Could not publish the drafts.')
+      }
+    } finally {
+      setPublishingAll(false)
+    }
+  }
+
   async function remove(id: string) {
     // Two-tap confirm in our own UI, never a system dialog.
     if (confirmDelete !== id) {
@@ -319,6 +347,8 @@ export default function AdminComicsPage() {
 
   const comicTitle = (cid: string | null) =>
     comics.find((c) => c.id === cid)?.title ?? 'No comic'
+
+  const draftCount = episodes.filter((e) => e.status === 'draft').length
 
   return (
     <div className="mx-auto max-w-4xl px-0 pb-16 pt-2 sm:px-4 sm:pt-6">
@@ -570,6 +600,25 @@ export default function AdminComicsPage() {
 
       {/* Episode list */}
       <div className="mt-6 space-y-3">
+        {!loading && draftCount > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-medium text-neutral-500">
+              {draftCount} draft{draftCount === 1 ? '' : 's'} waiting to go live
+            </p>
+            <button
+              onClick={publishAll}
+              disabled={publishingAll}
+              className="btn-luxe min-h-[44px] px-4 py-2 text-xs disabled:opacity-60"
+            >
+              <Send aria-hidden className="h-3 w-3" />
+              {publishingAll
+                ? 'Publishing…'
+                : confirmPublishAll
+                  ? `Tap again to publish ${draftCount}`
+                  : `Publish all (${draftCount})`}
+            </button>
+          </div>
+        )}
         {loading ? (
           <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
         ) : episodes.length === 0 ? (

@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
     status: 200,
     headers: {
       'Content-Type': ct,
-      'Cache-Control': 'public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800, immutable',
+      'Cache-Control': 'public, max-age=31536000, s-maxage=2592000, stale-while-revalidate=604800, immutable',
       'X-Content-Type-Options': 'nosniff',
     },
   });
