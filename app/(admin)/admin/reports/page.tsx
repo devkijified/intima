@@ -120,12 +120,12 @@ export default function AdminReportsPage() {
         User safety reports. Triage quickly, keep the audit trail honest.
       </p>
 
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="scroll-row mb-4 gap-2 pb-1">
         {(['open', 'resolved', 'dismissed', 'all'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`inline-flex min-h-[44px] items-center justify-center px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
+            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors capitalize ${
               filter === s
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

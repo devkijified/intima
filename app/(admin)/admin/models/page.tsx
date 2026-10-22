@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Search, Eye, EyeOff } from '@/lib/icons'
 import { VerifiedBadge } from '@/components/admin/VerifiedBadge'
+import { DetailSheet } from '@/components/admin/DetailSheet'
 
 interface ModelRow {
   id: string
@@ -31,6 +32,7 @@ export default function AdminModelsPage() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const supabase = createClient()
 
   async function load() {
@@ -69,6 +71,10 @@ export default function AdminModelsPage() {
   // companion has no presence row yet; presence is still flipped
   // when a row exists so both records agree.
   const isHidden = (m: ModelRow) => m.is_hidden === true || m.show_on_map === false
+
+  // The detail panel reads the live row, so a hide or show done
+  // from inside it shows the new state without reopening.
+  const selected = selectedId ? models.find((m) => m.id === selectedId) ?? null : null
 
   async function toggleMap(m: ModelRow) {
     setActing(m.id)
@@ -133,7 +139,20 @@ export default function AdminModelsPage() {
           ) : (
             <div className="divide-y divide-neutral-100">
               {filtered.map((m) => (
-                <div key={m.id} className="flex items-center gap-3 px-4 py-3">
+                <div
+                  key={m.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedId(m.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedId(m.id)
+                    }
+                  }}
+                  aria-label={`Open details for ${m.display_name ?? 'this companion'}`}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-cream/70 focus:outline-none focus-visible:bg-cream"
+                >
                   {m.avatar_url ? (
                     <img src={m.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" />
                   ) : (
@@ -154,6 +173,7 @@ export default function AdminModelsPage() {
                   </div>
                   <Link
                     href={m.username ? `/companion/${m.username}` : `/companion/${m.id}`}
+                    onClick={(e) => e.stopPropagation()}
                     className="inline-flex min-h-[44px] items-center px-1 text-xs font-medium text-primary hover:underline"
                   >
                     View
@@ -162,7 +182,7 @@ export default function AdminModelsPage() {
                     size="sm"
                     variant="outline"
                     disabled={acting === m.id}
-                    onClick={() => toggleMap(m)}
+                    onClick={(e) => { e.stopPropagation(); toggleMap(m) }}
                     title={isHidden(m) ? 'Show on map' : 'Hide from map'}
                     aria-label={isHidden(m) ? 'Show on map' : 'Hide from map'}
                   >
@@ -174,6 +194,82 @@ export default function AdminModelsPage() {
           )}
         </CardContent>
       </Card>
+      <DetailSheet
+        open={selected !== null}
+        title="Companion details"
+        onClose={() => setSelectedId(null)}
+      >
+        {selected && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              {selected.avatar_url ? (
+                <img src={selected.avatar_url} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                  {(selected.display_name ?? '?')[0]}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-display text-lg font-semibold text-charcoal">
+                  <span className="min-w-0 truncate">{selected.display_name ?? 'Unnamed'}</span>
+                  {selected.is_verified && <VerifiedBadge />}
+                </p>
+                <p className="truncate text-sm text-neutral-500">
+                  {selected.username ? `@${selected.username}` : 'No username yet'}
+                </p>
+              </div>
+            </div>
+
+            <dl className="divide-y divide-neutral-100 rounded-2xl bg-cream/60 px-4 ring-1 ring-black/[0.04]">
+              {[
+                ['City', selected.city ?? 'No city set'],
+                ['Short time rate', selected.rate_short_time_ngn
+                  ? `₦${selected.rate_short_time_ngn.toLocaleString()}`
+                  : 'Not set'],
+                ['On the map', isHidden(selected)
+                  ? 'Hidden from the map'
+                  : selected.show_on_map === null
+                    ? 'No presence yet'
+                    : 'Showing on the map'],
+                ['Verification', selected.is_verified ? 'Verified' : 'Not verified'],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <dt className="text-neutral-500">{label}</dt>
+                  <dd className="text-right font-medium text-charcoal">{value}</dd>
+                </div>
+              ))}
+              <div className="py-3 text-sm">
+                <dt className="text-neutral-500">Companion ID</dt>
+                <dd className="mt-1 break-all font-mono text-[11px] text-neutral-500">{selected.id}</dd>
+              </div>
+            </dl>
+
+            <div className="space-y-2">
+              <Link
+                href={selected.username ? `/companion/${selected.username}` : `/companion/${selected.id}`}
+                className="flex min-h-[44px] w-full items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#8F1D40]"
+              >
+                View public profile
+              </Link>
+              <Button
+                variant="outline"
+                disabled={acting === selected.id}
+                onClick={() => toggleMap(selected)}
+                className="min-h-[44px] w-full"
+              >
+                {isHidden(selected) ? (
+                  <><Eye aria-hidden className="h-4 w-4" /> Show on the map</>
+                ) : (
+                  <><EyeOff aria-hidden className="h-4 w-4" /> Hide from the map</>
+                )}
+              </Button>
+            </div>
+            <p className="text-xs leading-relaxed text-neutral-400">
+              Hiding takes her pin off the map and her profile out of public listings. Her account and verification stay untouched.
+            </p>
+          </div>
+        )}
+      </DetailSheet>
     </div>
   )
 }

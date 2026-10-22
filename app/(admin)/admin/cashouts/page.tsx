@@ -67,7 +67,7 @@ export default function AdminCashoutsPage() {
           <button
             key={s}
             onClick={() => setTab(s)}
-            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium capitalize ${
+            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium capitalize ${
               tab === s ? 'bg-[#AC244D] text-white' : 'bg-white text-gray-600 border'
             }`}
           >

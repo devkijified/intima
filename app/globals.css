@@ -356,9 +356,13 @@
 
   /* Horizontally scrolling row (tab bars, chip rows): scrolls
      sideways on mobile instead of overflowing or sticking, with
-     the scrollbar hidden. */
+     the scrollbar hidden. Never wraps and never grows past its
+     parent, so a long tab bar can only ever scroll in place. */
   .scroll-row {
     display: flex;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;

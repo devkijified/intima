@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { VerifiedBadge } from '@/components/admin/VerifiedBadge'
+import { DetailSheet } from '@/components/admin/DetailSheet'
 import { formatCompactCount } from '@/lib/utils/helpers'
 import { Search, ShieldCheck, UserX } from '@/lib/icons'
 
@@ -58,6 +60,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
   const [suspendTarget, setSuspendTarget] = useState<UserRow | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const supabase = createClient()
 
   async function load() {
@@ -143,6 +146,10 @@ export default function AdminUsersPage() {
     load()
   }
 
+  // The detail panel reads the live row, so a suspend or restore
+  // done from inside it shows the new state without reopening.
+  const selected = selectedId ? users.find((u) => u.id === selectedId) ?? null : null
+
   const chipCls = (active: boolean) =>
     `inline-flex min-h-[44px] items-center rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
       active ? 'bg-primary text-white' : 'bg-white text-neutral-600 ring-1 ring-black/[0.06] hover:bg-cream'
@@ -218,7 +225,20 @@ export default function AdminUsersPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((u) => (
-            <div key={u.id} className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04]">
+            <div
+              key={u.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedId(u.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setSelectedId(u.id)
+                }
+              }}
+              aria-label={`Open details for ${u.display_name ?? u.username ?? 'this user'}`}
+              className="min-w-0 cursor-pointer rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/[0.04] transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
               <div className="flex items-start gap-3">
                 {u.avatar_url ? (
                   <img src={u.avatar_url} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
@@ -244,7 +264,7 @@ export default function AdminUsersPage() {
                       size="sm"
                       variant="outline"
                       disabled={acting === u.id}
-                      onClick={() => restore(u)}
+                      onClick={(e) => { e.stopPropagation(); restore(u) }}
                       aria-label="Restore user"
                       className="shrink-0"
                     >
@@ -255,7 +275,7 @@ export default function AdminUsersPage() {
                       size="sm"
                       variant="outline"
                       disabled={acting === u.id}
-                      onClick={() => toggleSuspend(u)}
+                      onClick={(e) => { e.stopPropagation(); toggleSuspend(u) }}
                       aria-label="Suspend user"
                       className="shrink-0 text-red-600"
                     >
@@ -283,6 +303,101 @@ export default function AdminUsersPage() {
       <p className="text-xs text-neutral-400">
         Suspension hides the user from public listings. Their verification record is untouched, so restoring brings them back exactly as they were.
       </p>
+      <DetailSheet
+        open={selected !== null}
+        title="User details"
+        onClose={() => setSelectedId(null)}
+      >
+        {selected && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              {selected.avatar_url ? (
+                <img src={selected.avatar_url} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                  {initialsOf(selected)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-display text-lg font-semibold text-charcoal">
+                  <span className="min-w-0 truncate">{selected.display_name ?? selected.username ?? 'Unnamed'}</span>
+                  {selected.is_verified && <VerifiedBadge />}
+                </p>
+                <p className="truncate text-sm text-neutral-500">
+                  {selected.username ? `@${selected.username}` : 'No username yet'}
+                </p>
+              </div>
+            </div>
+
+            <dl className="divide-y divide-neutral-100 rounded-2xl bg-cream/60 px-4 ring-1 ring-black/[0.04]">
+              {[
+                ['Role', ROLE_LABEL[selected.role] ?? selected.role],
+                ['Account', selected.is_hidden ? 'Suspended' : 'Active'],
+                ['Verification', selected.is_verified
+                  ? 'Verified'
+                  : pendingIds.has(selected.id)
+                    ? 'Pending review'
+                    : 'Not verified'],
+                ['Joined', new Date(selected.created_at).toLocaleString('en-NG', {
+                  day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
+                })],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <dt className="text-neutral-500">{label}</dt>
+                  <dd className="font-medium text-charcoal">{value}</dd>
+                </div>
+              ))}
+              <div className="py-3 text-sm">
+                <dt className="text-neutral-500">User ID</dt>
+                <dd className="mt-1 break-all font-mono text-[11px] text-neutral-500">{selected.id}</dd>
+              </div>
+            </dl>
+
+            <div className="space-y-2">
+              {selected.role === 'model' && (
+                <Link
+                  href={`/companion/${selected.username ?? selected.id}`}
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#8F1D40]"
+                >
+                  View public profile
+                </Link>
+              )}
+              {!selected.is_verified && pendingIds.has(selected.id) && (
+                <Link
+                  href="/admin/verifications"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-medium text-charcoal ring-1 ring-black/[0.08] transition-colors hover:bg-cream"
+                >
+                  Review their verification
+                </Link>
+              )}
+              {selected.role !== 'super_admin' && (
+                selected.is_hidden ? (
+                  <Button
+                    variant="outline"
+                    disabled={acting === selected.id}
+                    onClick={() => restore(selected)}
+                    className="min-h-[44px] w-full"
+                  >
+                    <ShieldCheck aria-hidden className="h-4 w-4" /> Restore this user
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled={acting === selected.id}
+                    onClick={() => toggleSuspend(selected)}
+                    className="min-h-[44px] w-full text-red-600"
+                  >
+                    <UserX aria-hidden className="h-4 w-4" /> Suspend this user
+                  </Button>
+                )
+              )}
+            </div>
+            <p className="text-xs leading-relaxed text-neutral-400">
+              Suspension hides the user from public listings. Their verification record is untouched, so restoring brings them back exactly as they were.
+            </p>
+          </div>
+        )}
+      </DetailSheet>
       <ConfirmDialog
         open={suspendTarget !== null}
         title={`Suspend ${suspendTarget?.display_name ?? suspendTarget?.username ?? 'this user'}?`}

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { Radio, Eye, Ban, Star, CheckCircle } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
@@ -15,9 +14,13 @@ interface Stream {
   status: string
   featured: boolean
   started_at: string
+  scheduled_for: string | null
+  ended_at: string | null
   provider_name: string | null
   provider_username: string | null
 }
+
+type LiveAction = 'end' | 'suspend' | 'restore' | 'feature' | 'unfeature'
 
 const FILTERS = [
   { value: '', label: 'All' },
@@ -27,60 +30,66 @@ const FILTERS = [
   { value: 'ended', label: 'Ended' },
 ] as const
 
+function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleString('en-NG', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 /**
  * Admin: live stream control. Feature, suspend, restore or end
- * any stream; every write is checked and failures say so instead
- * of quietly reloading. Restoring clears the ended stamp so the
- * room can be rejoined cleanly.
+ * any stream. All reads and writes go through /api/admin/live:
+ * live_sessions RLS only lets a stream's own host update it, so
+ * browser-side writes from here silently changed nothing. The
+ * route checks the admin role server-side and writes with the
+ * service client. Restoring clears the ended stamp so the room
+ * can be rejoined cleanly.
  */
 export default function AdminLivePage() {
   const [streams, setStreams] = useState<Stream[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [msg, setMsg] = useState('')
-  const supabase = createClient()
+  const [acting, setActing] = useState<string | null>(null)
 
   async function load() {
-    const { data } = await supabase.from('live_sessions')
-      .select('id, provider_id, title, price_ngn, viewer_count, status, featured, started_at')
-      .order('started_at', { ascending: false }).limit(100)
-    const list = (data ?? []) as any[]
-    if (list.length > 0) {
-      const { data: profs } = await supabase.from('profiles')
-        .select('id, display_name, username').in('id', list.map((s) => s.provider_id))
-      const byId = new Map((profs ?? []).map((p: any) => [p.id, p]))
-      list.forEach((s) => {
-        s.provider_name = byId.get(s.provider_id)?.display_name ?? 'Unknown'
-        s.provider_username = byId.get(s.provider_id)?.username ?? null
-      })
+    try {
+      const res = await fetch('/api/admin/live')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error('load failed')
+      setStreams((data.streams ?? []) as Stream[])
+    } catch {
+      setMsg('Could not load the streams. Please try again.')
     }
-    setStreams(list as Stream[])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  const setStatus = async (id: string, status: 'ended' | 'suspended' | 'live') => {
+  const act = async (id: string, action: LiveAction) => {
     setMsg('')
-    const { error } = await supabase.from('live_sessions').update({
-      status,
-      ...(status === 'ended' ? { ended_at: new Date().toISOString() } : {}),
-      ...(status === 'live' ? { ended_at: null } : {}),
-    }).eq('id', id)
-    if (error) {
+    setActing(id)
+    try {
+      const res = await fetch('/api/admin/live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg(data.error ?? 'That change did not save. Please try again.')
+        setActing(null)
+        return
+      }
+    } catch {
       setMsg('That change did not save. Please try again.')
+      setActing(null)
       return
     }
-    load()
-  }
-
-  const toggleFeatured = async (id: string, featured: boolean) => {
-    setMsg('')
-    const { error } = await supabase.from('live_sessions').update({ featured: !featured }).eq('id', id)
-    if (error) {
-      setMsg('That change did not save. Please try again.')
-      return
-    }
+    setActing(null)
     load()
   }
 
@@ -99,7 +108,7 @@ export default function AdminLivePage() {
     <div className="mx-auto max-w-5xl">
       <h1 className="t-page-title text-charcoal">Live streams</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Platform control: feature, suspend, or end any stream. {liveCount} live now.
+        Platform control: feature, suspend, or end any stream. {formatCompactCount(liveCount)} live now.
       </p>
       {msg && <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{msg}</p>}
 
@@ -109,7 +118,7 @@ export default function AdminLivePage() {
             key={f.value}
             type="button"
             onClick={() => setFilter(f.value)}
-            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium ${
+            className={`inline-flex min-h-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium ${
               filter === f.value ? 'bg-[#AC244D] text-white' : 'bg-white text-gray-600 ring-1 ring-neutral-200'
             }`}
           >
@@ -149,6 +158,13 @@ export default function AdminLivePage() {
                   </span>
                   <span className="flex items-center gap-1"><Eye aria-hidden className="h-3 w-3" />{formatCompactCount(s.viewer_count)}</span>
                   <span>{s.price_ngn > 0 ? '₦' + s.price_ngn.toLocaleString() + ' paid' : 'Free'}</span>
+                  {s.status === 'scheduled' && s.scheduled_for ? (
+                    <span>Starts {formatWhen(s.scheduled_for)}</span>
+                  ) : s.status === 'ended' && s.ended_at ? (
+                    <span>Ended {formatWhen(s.ended_at)}</span>
+                  ) : (
+                    <span>Started {formatWhen(s.started_at)}</span>
+                  )}
                   {s.featured && <span className="font-semibold text-gold">FEATURED</span>}
                   {s.status === 'live' && (
                     <Link href={`/live/${s.id}`} className="font-semibold text-primary hover:underline">
@@ -158,26 +174,32 @@ export default function AdminLivePage() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <button onClick={() => toggleFeatured(s.id, s.featured)} title={s.featured ? 'Unfeature' : 'Feature'} aria-label={s.featured ? 'Unfeature' : 'Feature'}
-                  className={'flex h-11 w-11 items-center justify-center rounded-full ' + (s.featured ? 'bg-gold/15 text-gold' : 'bg-neutral-100 text-neutral-400 hover:text-gold')}>
+                <button onClick={() => act(s.id, s.featured ? 'unfeature' : 'feature')} disabled={acting === s.id} title={s.featured ? 'Unfeature' : 'Feature'} aria-label={s.featured ? 'Unfeature' : 'Feature'}
+                  className={'flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-50 ' + (s.featured ? 'bg-gold/15 text-gold' : 'bg-neutral-100 text-neutral-400 hover:text-gold')}>
                   <Star className="h-4 w-4" />
                 </button>
                 {s.status === 'live' && (
                   <>
-                    <button onClick={() => setStatus(s.id, 'suspended')} title="Suspend stream" aria-label="Suspend stream"
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200">
+                    <button onClick={() => act(s.id, 'suspend')} disabled={acting === s.id} title="Suspend stream" aria-label="Suspend stream"
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">
                       <Ban className="h-4 w-4" />
                     </button>
-                    <button onClick={() => setStatus(s.id, 'ended')} title="End stream" aria-label="End stream"
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-700 hover:bg-red-200">
+                    <button onClick={() => act(s.id, 'end')} disabled={acting === s.id} title="End stream" aria-label="End stream"
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50">
                       <CheckCircle className="h-4 w-4" />
                     </button>
                   </>
                 )}
                 {s.status === 'suspended' && (
-                  <button onClick={() => setStatus(s.id, 'live')} title="Restore stream" aria-label="Restore stream"
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-700 hover:bg-green-200">
+                  <button onClick={() => act(s.id, 'restore')} disabled={acting === s.id} title="Restore stream" aria-label="Restore stream"
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50">
                     <CheckCircle className="h-4 w-4" />
+                  </button>
+                )}
+                {s.status === 'scheduled' && (
+                  <button onClick={() => act(s.id, 'end')} disabled={acting === s.id} title="Cancel scheduled stream" aria-label="Cancel scheduled stream"
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50">
+                    <Ban className="h-4 w-4" />
                   </button>
                 )}
               </div>
