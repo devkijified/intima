@@ -13,6 +13,7 @@ interface Comic {
   cover_url: string | null
   status: string
   story_status?: string
+  is_featured?: boolean
 }
 
 type PagePreview =
@@ -227,6 +228,32 @@ export default function AdminComicsPage() {
     }
   }
 
+  async function setFeatured(id: string, featured: boolean) {
+    const res = await fetch('/api/admin/comics', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seriesFeature: { id, featured } }),
+    })
+    if (res.ok) load()
+  }
+
+  async function createFromPreview() {
+    if (!pagePreview) return
+    setBusy(true); setMsg('')
+    const res = await fetch('/api/admin/comics', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ series: { title: pagePreview.title, storyStatus: pagePreview.storyStatus === 'completed' ? 'completed' : 'ongoing' } }),
+    })
+    const d = await res.json()
+    setBusy(false)
+    if (res.ok && d.comic?.id) {
+      setComicId(d.comic.id)
+      setMsg(`Comic created: ${pagePreview.title}. The import button below is ready now.`)
+      load()
+    } else {
+      setMsg(d.error ?? 'Could not create the comic.')
+    }
+  }
+
   async function setStoryStatus(id: string, storyStatus: 'ongoing' | 'completed') {
     const res = await fetch('/api/admin/comics', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -348,7 +375,8 @@ export default function AdminComicsPage() {
           </button>
         </div>
         {comics.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
+          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            <HelpTip text="Featuring puts one comic first on the shelf, in the big banner, so readers see it before everything else. Only one comic holds the spot at a time." />
             {comics.map((c) => (
               <span key={c.id} className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cream px-3 py-1.5 text-xs font-medium text-charcoal ring-1 ring-black/[0.05]">
                 {c.title} · {episodes.filter((e) => e.comic_id === c.id).length} episodes
@@ -364,6 +392,14 @@ export default function AdminComicsPage() {
                   <option value="ongoing">Ongoing</option>
                   <option value="completed">Completed</option>
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setFeatured(c.id, !c.is_featured)}
+                  aria-pressed={!!c.is_featured}
+                  className={`min-h-[44px] rounded-full px-2.5 text-[11px] font-bold ${c.is_featured ? 'bg-[#C9A84C] text-charcoal' : 'bg-black/[0.05] text-neutral-500'}`}
+                >
+                  {c.is_featured ? 'Featured' : 'Feature'}
+                </button>
               </span>
             ))}
           </div>
@@ -450,6 +486,14 @@ export default function AdminComicsPage() {
           <button onClick={fetchPagePreview} disabled={busy || importing || !linkUrl.trim()} className="btn-luxe min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">Fetch</button>
         </div>
         <label className="mt-3 block">
+          {pagePreview && comics.length === 0 && (
+            <div className="mb-3 rounded-2xl bg-[#C9A84C]/15 p-3.5">
+              <p className="text-xs leading-relaxed text-charcoal">There is no comic yet to receive these episodes, which is why the import button below stays off.</p>
+              <button type="button" onClick={createFromPreview} disabled={busy} className="btn-luxe mt-2.5 min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+                Create “{pagePreview.title}” as a new comic
+              </button>
+            </div>
+          )}
           <span className="mb-1 block text-xs font-semibold text-neutral-500">Episodes go into this comic</span>
           <select value={comicId} onChange={(e) => setComicId(e.target.value)}
             className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
@@ -486,6 +530,7 @@ export default function AdminComicsPage() {
             <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
               {importing ? 'Importing…' : `Import ${pagePreview.chapters.filter((c) => chapterKeep[c.no]).length} episodes as drafts`}
             </button>
+            {!comicId && <p className="text-xs text-neutral-500">Choose the comic these episodes go into above to switch this button on.</p>}
           </div>
         )}
         {pagePreview && pagePreview.kind === 'episode' && (
@@ -511,6 +556,7 @@ export default function AdminComicsPage() {
             <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
               {importing ? 'Importing…' : 'Import this episode as a draft'}
             </button>
+            {!comicId && <p className="text-xs text-neutral-500">Choose the comic this episode goes into above to switch this button on.</p>}
           </div>
         )}
         {importLog.length > 0 && (

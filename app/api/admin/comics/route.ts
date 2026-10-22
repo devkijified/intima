@@ -26,7 +26,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Admin only' }, { status: 403 });
   const db = svc();
   const { data: series } = await db.from('comics')
-    .select('id, title, synopsis, cover_url, status, story_status, created_at')
+    .select('id, title, synopsis, cover_url, status, story_status, is_featured, created_at')
     .order('created_at', { ascending: true });
   const { data: eps } = await db.from('comic_episodes')
     .select('id, episode_no, title, status, published_at, view_count, panel_urls, cover_url, synopsis, comic_id')
@@ -76,6 +76,19 @@ export async function POST(req: NextRequest) {
     }).select('id, title').single();
     if (error) throw error;
     return NextResponse.json({ success: true, comic: data });
+  }
+
+  if (body?.seriesFeature && typeof body.seriesFeature === 'object') {
+    const sid = String(body.seriesFeature.id ?? '');
+    const featured = body.seriesFeature.featured === true;
+    if (!sid) return NextResponse.json({ error: 'Comic id required' }, { status: 400 });
+    if (featured) {
+      // One featured comic at a time: it owns the shelf banner.
+      await db.from('comics').update({ is_featured: false }).eq('is_featured', true);
+    }
+    const { error } = await db.from('comics').update({ is_featured: featured }).eq('id', sid);
+    if (error) throw error;
+    return NextResponse.json({ success: true });
   }
 
   if (body?.seriesStatusUpdate && typeof body.seriesStatusUpdate === 'object') {

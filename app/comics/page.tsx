@@ -19,6 +19,7 @@ interface ComicSeries {
   latestAt: string | null
   totalReads: number
   monthlyViews: number
+  featured: boolean
 }
 
 const isFresh = (at: string | null) =>
@@ -37,7 +38,7 @@ export default function ComicsPage() {
   const load = async () => {
     const [{ data: comics }, { data: eps }, { data: stats }] = await Promise.all([
       supabase.from('comics')
-        .select('id, title, synopsis, cover_url, story_status')
+        .select('id, title, synopsis, cover_url, story_status, is_featured')
         .eq('status', 'published')
         .order('created_at', { ascending: true }),
       supabase.from('comic_episodes')
@@ -75,10 +76,12 @@ export default function ComicsPage() {
         latestAt: roll?.latestAt ?? null,
         totalReads: statsByComic.get(c.id)?.total ?? roll?.reads ?? 0,
         monthlyViews: statsByComic.get(c.id)?.monthly ?? 0,
+        featured: c.is_featured === true,
       }
     }).filter((s) => s.episodeCount > 0)
-    // Freshest series first: the rack leads with what just dropped.
-    list.sort((a, b) => +new Date(b.latestAt ?? 0) - +new Date(a.latestAt ?? 0))
+    // The featured comic leads (it takes the banner), then the
+    // freshest series first: the rack leads with what just dropped.
+    list.sort((a, b) => Number(b.featured) - Number(a.featured) || (+new Date(b.latestAt ?? 0) - +new Date(a.latestAt ?? 0)))
     setSeries(list)
     setLoading(false)
   }
