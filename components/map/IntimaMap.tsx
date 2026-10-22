@@ -35,7 +35,15 @@ import { useCall } from '@/components/calls/CallProvider';
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal';
 import { Tooltip } from '@/components/ui/Tooltip';
 
-const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+/**
+ * Primary vector style: CARTO Voyager. A bright, illustrated base in
+ * the Snap Map direction, so companions read as standing in a real,
+ * colourful city instead of floating over dark street lines. If the
+ * style or its CDN is unreachable, the error path below falls back to
+ * the OSM raster style automatically (with the dark CSS filter), and
+ * if that also fails the honest list takes over.
+ */
+const CARTO_VOYAGER = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 /**
  * Primary raster style: OpenStreetMap tiles. OSM sends proper CORS headers
@@ -353,6 +361,7 @@ export default function IntimaMap() {
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
     let rasterTimer: ReturnType<typeof setTimeout> | undefined;
     let rasterTried = false;
+    let styleLoaded = false;
 
     const failMap = (reason: string) => {
       if (cancelled) return;
@@ -360,11 +369,11 @@ export default function IntimaMap() {
       setMapFailed(true);
     };
 
-    /** Switch to the Wikimedia raster tiles when the CARTO vector style
+    /** Switch to the OSM raster tiles when the CARTO vector style
         is unreachable. A map that loads beats a prettier map that stays
         black. */
     const tryRasterFallback = () => {
-      if (cancelled || !map || mapRef.current || rasterTried) return;
+      if (cancelled || !map || rasterTried) return;
       rasterTried = true;
       try {
         map.setStyle(OSM_RASTER_STYLE as any);
@@ -396,16 +405,16 @@ export default function IntimaMap() {
           return;
         }
         libRef.current = lib;
-        // Primary style: Wikimedia raster tiles. Wikimedia Foundation
-        // infrastructure is reachable virtually everywhere, unlike
-        // commercial vector CDNs that get filtered on some networks.
-        // The dark CSS filter keeps our brand. A map that loads beats
-        // a prettier map that stays black.
-        const useRasterPrimary = true;
+        // Primary style: the bright Voyager vector base. The raster
+        // style is no longer primary; it is the automatic fallback
+        // when the vector style errors or stalls before load (see the
+        // error handler and the style timer below), because a map
+        // that loads beats a prettier map that stays black.
+        const useRasterPrimary = false;
         try {
           map = new lib.Map({
             container: containerRef.current,
-            style: useRasterPrimary ? (OSM_RASTER_STYLE as any) : CARTO_DARK,
+            style: useRasterPrimary ? (OSM_RASTER_STYLE as any) : CARTO_VOYAGER,
             center: CITY_CENTERS[loadInitialCity()] ?? LAGOS_CENTER,
             zoom: 11,
             attributionControl: { compact: true } as any,
@@ -426,6 +435,7 @@ export default function IntimaMap() {
           return;
         }
         map.on('load', () => {
+          styleLoaded = true;
           if (!cancelled) {
             // The compact attribution control starts EXPANDED
             // (maplibregl-compact-show), a white bar across the
@@ -450,10 +460,10 @@ export default function IntimaMap() {
         // MapLibre fires 'error' for transient tile/sprite/font hiccups as
         // well as fatal style failures. A style failure before load now
         // tries the raster fallback first; only if that also fails does
-        // the map give up. Once the style has loaded (mapRef set), failed
+        // the map give up. Once the style has loaded (styleLoaded), failed
         // tiles are retried by the renderer and the map stays up.
         map.on('error', (e) => {
-          if (cancelled || mapRef.current) return;
+          if (cancelled || styleLoaded) return;
           if (!rasterTried) {
             tryRasterFallback();
             return;
@@ -468,12 +478,24 @@ export default function IntimaMap() {
             }`,
           );
         });
-        // Stage 2: the style itself. A generous 60s for slow connections,
-        // a slow map shows the loading state, only a dead one falls back.
+        // Stage 2: the style itself. The vector style gets 12s to
+        // reach load; a stall (not just an error) then switches to
+        // the raster fallback, which gets its own 30s before the map
+        // gives up to the list. A slow map shows the loading state,
+        // only a dead one falls back.
         styleTimer = setTimeout(() => {
-          if (!cancelled && !mapRef.current)
+          if (!cancelled && !styleLoaded) {
+            if (!rasterTried) {
+              tryRasterFallback();
+              rasterTimer = setTimeout(() => {
+                if (!cancelled && !styleLoaded)
+                  failMap('style did not reach load within 60s');
+              }, 30000);
+              return;
+            }
             failMap('style did not reach load within 60s');
-        }, 60000);
+          }
+        }, 12000);
       } catch (err) {
         failMap(
           `bundle import threw: ${err instanceof Error ? err.message : String(err)}`,
