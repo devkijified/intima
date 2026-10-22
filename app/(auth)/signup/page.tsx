@@ -78,6 +78,7 @@ export default function SignupPage() {
       // Profile row is created server-side by the on_auth_user_created trigger
       // (uses the metadata passed above). Nothing to insert client-side.
       if (authData.user) {
+        try { localStorage.removeItem('intima_ref') } catch { /* storage unavailable */ }
         if (authData.session) {
           // No email confirmation required: session is live, go back.
           if (nextParam) {

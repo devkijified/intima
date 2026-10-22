@@ -6,6 +6,7 @@ import { COIN_PACKAGES } from '@/lib/coins/packages'
 import { Coins, Loader2, Plus, History } from '@/lib/icons'
 import { coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
+import { ReferralCard } from '@/components/referrals/ReferralCard'
 import { PullToRefresh } from '@/components/shared/PullToRefresh'
 import { DedicatedAccountCard } from '@/components/coins/DedicatedAccountCard'
 import Link from 'next/link'
@@ -162,7 +163,7 @@ export default function CoinsPage() {
       <div className="mt-4 rounded-3xl border border-neutral-200/70 bg-white px-5 py-4">
         <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-widest text-neutral-400">
           Referral rewards
-          <HelpTip text={`Share your link from your profile. When a friend joins through it and opens their first connection, you earn ${coinsWithNgn(100)}. When a companion joins through your link, you earn ${coinsWithNgn(500)}.`} />
+          <HelpTip text="Share your link. When a friend joins through it and opens their first paid connection, you earn: 500 coins as a companion, 100 coins as a client." />
         </p>
         {loading ? (
           <div className="mt-2 space-y-2">
@@ -178,6 +179,9 @@ export default function CoinsPage() {
             <p className="mt-0.5 text-xs text-neutral-400">
               Share your link. When a friend you brought opens their first connection, your reward lands here.
             </p>
+            <div className="mt-4 border-t border-neutral-100 pt-4">
+              <ReferralCard />
+            </div>
           </>
         )}
       </div>

@@ -17,6 +17,12 @@ export function companionShareLink(username: string): string {
   return `${siteOrigin()}/c/${username}`;
 }
 
+/** The referral link any member can share (clients included):
+    lands on the map with the referrer captured for signup. */
+export function referralLink(username: string): string {
+  return `${siteOrigin()}/?ref=${encodeURIComponent(username)}`;
+}
+
 /** Canonical profile URL (optionally with a referrer credit). */
 export function companionLink(username: string, ref?: string): string {
   const base = `${siteOrigin()}/companion/${username}`;

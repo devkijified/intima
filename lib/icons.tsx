@@ -23,6 +23,7 @@ import {
   CloseCircle as SaxCloseCircle,
   CloseSquare as SaxCloseSquare,
   Coin as SaxCoin,
+  Copy as SaxCopy,
   Danger as SaxDanger,
   DirectInbox as SaxDirectInbox,
   Edit2 as SaxEdit2,
@@ -201,6 +202,7 @@ export const Inbox = wrap(SaxDirectInbox)
 export const Bank = wrap(SaxBank)
 export const Speaker = wrap(SaxRadio)
 export const Check = wrap(SaxTickCircle)
+export const Copy = wrap(SaxCopy)
 export const Image = wrap(SaxGalleryExport)
 export const Map = wrap(SaxSearchNormal1)
 export const PictureInPicture2 = wrap(SaxMaximize)

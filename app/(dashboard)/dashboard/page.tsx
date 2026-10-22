@@ -10,6 +10,7 @@ import { Walkthrough } from '@/components/setup/Walkthrough'
 import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet, Loader2,
   Banknote, BookOpen, Gift, ListChecks } from '@/lib/icons'
 import { formatCompactCount, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
+import { ReferralCard } from '@/components/referrals/ReferralCard'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 export default function DashboardPage() {
@@ -280,7 +281,7 @@ export default function DashboardPage() {
 
             <div className="card-luxe p-5 sm:p-6 transition-all duration-200 hover:shadow-lift">
               <div className="mb-3 flex items-center justify-between">
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Referral earnings <HelpTip text={`Share your link. When a friend joins through it and opens their first connection, you earn ${coinsWithNgn(100)}. When a companion joins through your link, you earn ${coinsWithNgn(500)}.`} /></span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Referral earnings <HelpTip text="Share your link. When a friend joins through it and opens their first paid connection, you earn: 500 coins as a companion, 100 coins as a client." /></span>
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gold/15">
                   <Gift aria-hidden className="h-4 w-4 text-[#C9A84C]" />
                 </span>
@@ -288,6 +289,12 @@ export default function DashboardPage() {
               <p className="font-display text-4xl font-semibold tracking-tight text-charcoal">{stats.referralCoins.toLocaleString()}<span className="ml-1 text-base font-normal text-neutral-400">coins</span></p>
               <p className="mt-1 text-xs text-neutral-400">≈ {ngnForCoins(stats.referralCoins)} · From {stats.referralCount} friend{stats.referralCount === 1 ? '' : 's'} who joined</p>
             </div>
+          </div>
+
+          <div className="card-luxe mt-6 p-5 sm:p-6">
+            <h3 className="font-display text-xl font-semibold tracking-tight text-charcoal">Your referral link</h3>
+            <p className="mb-4 mt-1 text-sm text-neutral-500">Friends who join with it earn you coins on their first connection.</p>
+            <ReferralCard />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -365,7 +372,7 @@ export default function DashboardPage() {
 
             <div className="card-luxe p-4 sm:p-6">
               <div className="flex items-center justify-between text-neutral-500 mb-2">
-                <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider">Referral earnings <HelpTip text={`Share your link. When a friend joins through it and opens their first connection, you earn ${coinsWithNgn(100)}. When a companion joins through your link, you earn ${coinsWithNgn(500)}.`} /></span>
+                <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider">Referral earnings <HelpTip text="Share your link. When a friend joins through it and opens their first paid connection, you earn: 500 coins as a companion, 100 coins as a client." /></span>
                 <Gift aria-hidden className="h-4 w-4 text-[#C9A84C]" />
               </div>
               <p className="text-3xl font-serif text-neutral-900">{stats.referralCoins.toLocaleString()} coins</p>
