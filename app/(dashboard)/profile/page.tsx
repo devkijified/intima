@@ -40,6 +40,7 @@ import { useCities } from '@/lib/citiesLive'
 import { coordsFor } from '@/lib/cities'
 import { getSetting } from '@/lib/settings/platformSettings'
 import { DEFAULT_VIBES, MAX_VIBES, customVibeProblem } from '@/lib/vibes'
+import { LANGUAGE_OPTIONS, MAX_LANGUAGES } from '@/lib/languages'
 
 /** Screening questions companions ask again and again. One tap adds one to her list. */
 const COMMON_QUESTIONS = [
@@ -60,6 +61,7 @@ interface ProviderForm {
   rateWeekend: string
   services: string[]
   vibes: string[]
+  languages: string[]
   ratesNegotiable: boolean
   whatsappNumber: string
   bio: string
@@ -79,6 +81,7 @@ const EMPTY_FORM: ProviderForm = {
   rateWeekend: '',
   services: [],
   vibes: [],
+  languages: [],
   ratesNegotiable: true,
     whatsappNumber: '',
   bio: '',
@@ -132,7 +135,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
+          'role, display_name, avatar_url, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, languages, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -156,6 +159,7 @@ export default function ProfilePage() {
           rateWeekend: profile?.rate_weekend_ngn?.toString() ?? '',
           services: profile?.services ?? [],
           vibes: (profile as { vibes?: string[] } | null)?.vibes ?? [],
+          languages: (profile as { languages?: string[] } | null)?.languages ?? [],
           ratesNegotiable: profile?.rates_negotiable ?? true,
     whatsappNumber: profile?.whatsapp_number ?? '',
     bio: profile?.bio ?? '',
@@ -335,6 +339,7 @@ export default function ProfilePage() {
           rate_weekend_ngn: parseRate(form.rateWeekend),
           services: form.services,
           vibes: form.vibes,
+          languages: form.languages,
           rates_negotiable: form.ratesNegotiable,
           whatsapp_number: form.whatsappNumber.trim() || null,
           bio: form.bio.trim() || null,
@@ -781,6 +786,34 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
+            <div className="mt-5 border-t border-neutral-100 pt-4">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                Languages you speak
+              </p>
+              <p className="mb-3 text-xs text-neutral-500">
+                They show on your profile, so clients know how you will chat.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {LANGUAGE_OPTIONS.map((lang) => {
+                  const on = form.languages.includes(lang)
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        languages: on
+                          ? form.languages.filter((x) => x !== lang)
+                          : (form.languages.length >= MAX_LANGUAGES ? form.languages : [...form.languages, lang]),
+                      })}
+                      className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}
+                    >
+                      {lang}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <div className="mt-5 border-t border-neutral-100 pt-4">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-neutral-400">
                 Your vibes

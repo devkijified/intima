@@ -48,6 +48,7 @@ interface Provider {
   rateWeekend: number | null
   services: string[]
   vibes: string[]
+  languages: string[]
   ratesNegotiable: boolean
   gallery: string[]
   videos: string[]
@@ -283,7 +284,7 @@ export default function ModelDetailPage() {
       // then raw id as fallback.
       const base = () => supabase
         .from('profiles')
-        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, rates_negotiable, gallery_urls, video_urls, view_count, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days')
+        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, languages, rates_negotiable, gallery_urls, video_urls, view_count, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days')
         .eq('role', 'model')
       const { data: byName } = await base().eq('username', slug).maybeSingle()
       const { data: byId } = byName ? { data: null } : await base().eq('id', slug).maybeSingle()
@@ -425,6 +426,7 @@ export default function ModelDetailPage() {
         rateWeekend: p.rate_weekend_ngn,
         services: p.services ?? [],
         vibes: (p as { vibes?: string[] }).vibes ?? [],
+        languages: (p as { languages?: string[] }).languages ?? [],
         ratesNegotiable: p.rates_negotiable !== false,
         gallery: p.gallery_urls ?? [],
         videos: p.video_urls ?? [],
@@ -1110,6 +1112,18 @@ export default function ModelDetailPage() {
           <div className="space-y-4">
             <VibeChips vibes={provider.vibes} />
             <ServiceChips services={provider.services} />
+            {provider.languages.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Languages</p>
+                <div className="flex flex-wrap gap-2">
+                  {provider.languages.map((lang) => (
+                    <span key={lang} className="inline-flex items-center rounded-full bg-cream px-3 py-1.5 text-[13px] font-medium text-neutral-600 ring-1 ring-black/[0.06]">
+                      {lang}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         {activeTab === 'rates' && (
