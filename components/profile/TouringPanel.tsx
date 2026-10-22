@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { MapPin, Plus, Trash2 } from '@/lib/icons'
 
-const CITIES = ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Enugu', 'Benin City', 'Kano']
+import { useCities } from '@/lib/citiesLive'
 
 interface Tour {
   id: string
@@ -15,6 +15,7 @@ interface Tour {
 
 /** Touring calendar: companions announce city visits; they appear on the map. */
 export function TouringPanel() {
+  const { cities: CITIES } = useCities()
   const [tours, setTours] = useState<Tour[]>([])
   const [city, setCity] = useState('Abuja')
   const [start, setStart] = useState('')

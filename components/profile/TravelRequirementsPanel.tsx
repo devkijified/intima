@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { NIGERIA_CITIES } from '@/lib/cities'
+import { useCities } from '@/lib/citiesLive'
 import { Plane, ShieldCheck } from '@/lib/icons'
 
 type TravelMode = 'none' | 'selected' | 'nationwide'
@@ -14,6 +14,7 @@ type TravelMode = 'none' | 'selected' | 'nationwide'
  * she decides who is allowed to open a booking with her.
  */
 export function TravelRequirementsPanel() {
+  const { cities: liveCities } = useCities()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -92,7 +93,7 @@ export function TravelRequirementsPanel() {
 
       {travelMode === 'selected' && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {NIGERIA_CITIES.map((c) => {
+          {liveCities.map((c) => {
             const on = travelCities.includes(c)
             return (
               <button key={c} onClick={() => setTravelCities(on ? travelCities.filter((x) => x !== c) : [...travelCities, c])}

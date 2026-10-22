@@ -24,7 +24,7 @@ import {
   X,
 } from '@/lib/icons';
 import { createClient } from '@/lib/supabase/client';
-import { MAP_CITIES } from '@/lib/map/mockProviders';
+import { useCities } from '@/lib/citiesLive';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
 import { ComicRibbon } from '@/components/comics/ComicRibbon';
 import { ProviderSheet } from './ProviderSheet';
@@ -223,6 +223,7 @@ export default function IntimaMap() {
   const libRef = useRef<MapLibreLib | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { cities: liveCities, coordOverrides } = useCities();
   const [session, setSession] = useState<Session | null>(null);
   const [providers, setProviders] = useState<MapProvider[]>([]);
   const [providersReady, setProvidersReady] = useState(false);
@@ -464,7 +465,10 @@ export default function IntimaMap() {
       return;
     }
     if (!mapReady || !mapRef.current || mapFailed) return;
-    const center = filters.city ? CITY_CENTERS[filters.city] : LAGOS_CENTER;
+    const override = filters.city ? coordOverrides[filters.city] : undefined;
+    const center = filters.city
+      ? (CITY_CENTERS[filters.city] ?? (override ? [override[1], override[0]] as [number, number] : LAGOS_CENTER))
+      : LAGOS_CENTER;
     if (!center) return;
     try {
       mapRef.current.flyTo({ center, zoom: 11, duration: 1200 });
@@ -669,7 +673,7 @@ export default function IntimaMap() {
                 <option value="" className="text-charcoal">
                   All cities
                 </option>
-                {MAP_CITIES.map((c) => (
+                {liveCities.map((c) => (
                   <option key={c} value={c} className="text-charcoal">
                     {c}
                   </option>

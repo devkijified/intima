@@ -5,6 +5,7 @@ import { BadgeCheck, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Heart, 
 import { RateCard } from '@/components/rates/RateCard';
 import { HelpTip } from '@/components/ui/Tooltip';
 import { ServiceChips } from '@/components/services/ServiceChips';
+import { VibeChips } from '@/components/services/VibeChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import { formatRecency } from '@/lib/utils/recency';
 import { formatCompactCount, formatCompactPrice } from '@/lib/utils/helpers';
@@ -532,7 +533,10 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
               </div>
             )}
             {activeTab === 'services' && (
-              <ServiceChips services={provider.services} />
+              <div className="space-y-4">
+                <VibeChips vibes={provider.vibes} />
+                <ServiceChips services={provider.services} />
+              </div>
             )}
             {activeTab === 'rates' && (
               <RateCard

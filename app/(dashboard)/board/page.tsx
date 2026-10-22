@@ -7,7 +7,7 @@ import { HelpTip } from '@/components/ui/Tooltip'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { showToast } from '@/lib/toast'
 import { formatCompactPrice } from '@/lib/utils/helpers'
-import { NIGERIA_CITIES } from '@/lib/cities'
+import { useCities } from '@/lib/citiesLive'
 import { SERVICE_TYPE_KEYS, SERVICE_TYPE_LABELS } from '@/lib/connections/serviceType'
 import { BOARD_TIMINGS, BOARD_TIMING_LABELS } from '@/lib/board/shared'
 
@@ -83,6 +83,7 @@ function memberSince(iso: string | null): string {
 }
 
 export default function BoardPage() {
+  const { cities: liveCities } = useCities()
   const [data, setData] = useState<BoardData | null>(null)
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -318,7 +319,7 @@ export default function BoardPage() {
             <div>
               <label htmlFor="board-city" className="text-sm font-medium text-charcoal">City</label>
               <select id="board-city" value={city} onChange={(e) => setCity(e.target.value)} className={inputCls + ' mt-1.5'}>
-                {NIGERIA_CITIES.map((c) => (
+                {liveCities.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>

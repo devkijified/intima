@@ -39,6 +39,8 @@ export interface MapProvider {
   rateWeekend: number | null;
   /** Catalog ids from lib/services.ts. Empty array = not listed yet. */
   services: string[];
+  /** Vibe tags from lib/vibes.ts, admin presets or her own words. */
+  vibes: string[];
   avatar: string;
   userId: string | null; // null for mock/preview pins
   username: string | null;
@@ -70,6 +72,7 @@ interface MapProviderRow {
   rate_overnight_ngn: number | null;
   rate_weekend_ngn: number | null;
   services: string[] | null;
+  vibes: string[] | null;
   last_active_at: string | null;
   rates_negotiable: boolean | null;
   gallery_urls: string[] | null;
@@ -106,6 +109,7 @@ export function mockToMapProvider(m: MockProvider): MapProvider {
     rateOvernight: m.rateOvernight,
     rateWeekend: m.rateWeekend,
     services: m.services,
+    vibes: m.vibes ?? [],
     avatar: m.avatar,
     userId: m.userId,
     username: null,
@@ -144,6 +148,7 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     rateOvernight: row.rate_overnight_ngn,
     rateWeekend: row.rate_weekend_ngn,
     services: row.services ?? [],
+    vibes: row.vibes ?? [],
     avatar: row.avatar_url || `https://i.pravatar.cc/600?img=${hashToImg(row.provider_id)}`,
     userId: row.provider_id,
     username: row.username ?? null,
@@ -169,7 +174,7 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
     const { data, error } = await supabase
       .from('map_providers')
       .select(
-        'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls, travel_mode, travel_cities',
+        'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls, travel_mode, travel_cities, vibes',
       )
       .limit(300);
     if (error) throw error;

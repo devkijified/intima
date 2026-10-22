@@ -1,4 +1,11 @@
-/** Nigerian cities Intima operates in, with approximate centers for pins. */
+/**
+ * Cities Intima operates in. The built-in list below is the
+ * default; the live list is admin-editable in Admin, Services and
+ * cities (platform_settings key 'cities'), so a new city opens by
+ * adding it there, never by shipping code. Client readers use
+ * useCities() from lib/citiesLive; this module stays pure so
+ * server code (board API, sitemap, city pages) can import it too.
+ */
 export const NIGERIA_CITIES = [
   'Lagos',
   'Abuja',
@@ -24,4 +31,14 @@ export const CITY_COORDS: Record<string, [number, number]> = {
 
 export function cityCoords(city: string): [number, number] {
   return CITY_COORDS[city] ?? CITY_COORDS.Lagos;
+}
+
+/** Admin-added city centres from settings, same [lat, lng] shape. */
+export type CityCoordOverrides = Record<string, [number, number]>;
+
+export function coordsFor(
+  city: string,
+  overrides?: CityCoordOverrides | null,
+): [number, number] {
+  return overrides?.[city] ?? cityCoords(city);
 }

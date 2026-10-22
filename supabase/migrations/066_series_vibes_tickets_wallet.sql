@@ -181,5 +181,5 @@ values
    'Cities companions can base themselves in. Edited in Admin, Services and cities.'),
   ('city_coords',
    '{}'::jsonb,
-   'Optional map centres for cities added later, as {"City":[lng,lat]}. Edited in Admin, Services and cities.')
+   'Optional map centres for cities added later, as {"City":[lat,lng]}. Edited in Admin, Services and cities.')
 on conflict (key) do nothing;

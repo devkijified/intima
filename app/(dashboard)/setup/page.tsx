@@ -11,7 +11,10 @@ import {
   isCustomService,
   makeCustomServiceId,
 } from '@/lib/services'
-import { NIGERIA_CITIES, cityCoords } from '@/lib/cities'
+import { coordsFor } from '@/lib/cities'
+import { getSetting } from '@/lib/settings/platformSettings'
+import { DEFAULT_VIBES, MAX_VIBES, customVibeProblem } from '@/lib/vibes'
+import { useCities } from '@/lib/citiesLive'
 import { computeSetupSteps, isLiveOnMap, type SetupProfile } from '@/lib/setup/completeness'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { AvatarUploader, GalleryUploader } from '@/components/uploads/PhotoUploader'
@@ -45,6 +48,7 @@ export default function SetupWizardPage() {
   const [error, setError] = useState('')
 
   const [displayName, setDisplayName] = useState('')
+  const { cities: liveCities, coordOverrides } = useCities()
   const [city, setCity] = useState('Lagos')
   const [presenceCity, setPresenceCity] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState('')
@@ -55,6 +59,11 @@ export default function SetupWizardPage() {
   const [negotiable, setNegotiable] = useState(true)
   const [services, setServices] = useState<string[]>([])
   const [customServiceInput, setCustomServiceInput] = useState('')
+  const [vibes, setVibes] = useState<string[]>([])
+  const [customVibeInput, setCustomVibeInput] = useState('')
+  const [customVibeMsg, setCustomVibeMsg] = useState('')
+  const [presetServices, setPresetServices] = useState<string[]>([])
+  const [presetVibes, setPresetVibes] = useState<string[]>(DEFAULT_VIBES)
   const [customServiceMsg, setCustomServiceMsg] = useState('')
   const [travelMode, setTravelMode] = useState<'none' | 'selected' | 'nationwide'>('none')
   const [travelCities, setTravelCities] = useState<string[]>([])
@@ -67,13 +76,27 @@ export default function SetupWizardPage() {
   useEffect(() => {
     let live = true
     ;(async () => {
+      const [ps, pv] = await Promise.all([
+        getSetting<unknown>('preset_services', []),
+        getSetting<unknown>('preset_vibes', null),
+      ])
+      if (!live) return
+      if (Array.isArray(ps)) setPresetServices(ps.filter((x): x is string => typeof x === 'string'))
+      if (Array.isArray(pv) && pv.length > 0) setPresetVibes(pv.filter((x): x is string => typeof x === 'string'))
+    })()
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
       if (!live) return
       setUserId(user.id)
       const [{ data: p }, { data: presence }] = await Promise.all([
         supabase.from('profiles')
-          .select('display_name, avatar_url, gallery_urls, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days, verification_status, username')
+          .select('display_name, avatar_url, gallery_urls, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, rates_negotiable, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days, verification_status, username')
           .eq('id', user.id).maybeSingle(),
         supabase.from('provider_presence')
           .select('city').eq('provider_id', user.id).maybeSingle(),
@@ -87,6 +110,7 @@ export default function SetupWizardPage() {
       setRateWeekend(p.rate_weekend_ngn?.toString() ?? '')
       setNegotiable(p.rates_negotiable ?? true)
       setServices(p.services ?? [])
+      setVibes((p as { vibes?: string[] }).vibes ?? [])
       setTravelMode((p.travel_mode as typeof travelMode) ?? 'none')
       setTravelCities(p.travel_cities ?? [])
       setReqVerified(p.req_verified_client ?? false)
@@ -126,7 +150,42 @@ export default function SetupWizardPage() {
   // Custom services: her own words, stored in the same services array
   // as "custom:<text>". The leak scan runs first (the fence), then the
   // shared house rules in lib/services.
-  const customEntries = services.filter(isCustomService)
+  const presetServiceIds = new Set(presetServices.map((label) => makeCustomServiceId(label)))
+  const customEntries = services.filter((e) => isCustomService(e) && !presetServiceIds.has(e))
+
+  function toggleVibe(v: string) {
+    if (vibes.includes(v)) {
+      setVibes(vibes.filter((x) => x !== v))
+      setCustomVibeMsg('')
+      return
+    }
+    if (vibes.length >= MAX_VIBES) {
+      setCustomVibeMsg(`You can show up to ${MAX_VIBES} vibes. Remove one first.`)
+      return
+    }
+    setVibes([...vibes, v])
+    setCustomVibeMsg('')
+  }
+
+  function addCustomVibe() {
+    const text = customVibeInput.trim()
+    if (!text) return
+    const scan = scanForLeaks(text)
+    if (!scan.clean) { setCustomVibeMsg(leakWarning(scan.leaks)); return }
+    const problem = customVibeProblem(text)
+    if (problem) { setCustomVibeMsg(problem); return }
+    if (vibes.some((v) => v.toLowerCase() === text.toLowerCase())) {
+      setCustomVibeMsg('That vibe is already on your list.')
+      return
+    }
+    if (vibes.length >= MAX_VIBES) {
+      setCustomVibeMsg(`You can show up to ${MAX_VIBES} vibes. Remove one first.`)
+      return
+    }
+    setVibes([...vibes, text])
+    setCustomVibeInput('')
+    setCustomVibeMsg('')
+  }
 
   function addCustomService() {
     const text = customServiceInput.trim()
@@ -153,7 +212,7 @@ export default function SetupWizardPage() {
         const { error: e1 } = await supabase.from('profiles')
           .update({ display_name: displayName.trim() }).eq('id', userId)
         if (e1) throw e1
-        const [lat, lng] = cityCoords(city)
+        const [lat, lng] = coordsFor(city, coordOverrides)
         const { error: e2 } = await supabase.from('provider_presence').upsert(
           { provider_id: userId, city, area_lat: lat, area_lng: lng, show_on_map: true, is_available: true, updated_at: new Date().toISOString() },
           { onConflict: 'provider_id' }
@@ -177,6 +236,7 @@ export default function SetupWizardPage() {
             rate_overnight_ngn: num(rateOvernight),
             rate_weekend_ngn: num(rateWeekend),
             services,
+            vibes,
             rates_negotiable: negotiable,
           }).eq('id', userId)
         if (e) throw e
@@ -257,7 +317,7 @@ export default function SetupWizardPage() {
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Base city</label>
               <div className="mt-1.5 flex flex-wrap gap-2">
-                {NIGERIA_CITIES.map((c) => (
+                {liveCities.map((c) => (
                   <button key={c} onClick={() => setCity(c)}
                     className={`inline-flex min-h-[44px] items-center rounded-full px-3.5 py-2 text-[13px] font-medium transition-all active:scale-95 ${city === c ? 'bg-primary text-white shadow-cta' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
                     {c}
@@ -324,6 +384,23 @@ export default function SetupWizardPage() {
                 })}
               </div>
             </div>
+            {presetServices.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">More options</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {presetServices.map((label) => {
+                    const id = makeCustomServiceId(label)
+                    const on = services.includes(id)
+                    return (
+                      <button key={label} onClick={() => setServices(on ? services.filter((x) => x !== id) : [...services, id])}
+                        className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-primary text-white' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Your own services</label>
               <p className="mt-1 text-[13px] text-neutral-500">Offer something that is not on the list? Add it in your own words. It shows on your profile exactly as typed.</p>
@@ -354,6 +431,47 @@ export default function SetupWizardPage() {
                 <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{customServiceMsg}</p>
               )}
             </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Your vibes</label>
+              <p className="mt-1 text-[13px] text-neutral-500">Pick the tags that sound like you. They show as chips on your profile and in your map card, and clients filter by them in their heads long before they call.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {presetVibes.map((v) => {
+                  const on = vibes.includes(v)
+                  return (
+                    <button key={v} onClick={() => toggleVibe(v)}
+                      className={`inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 text-[13px] font-medium transition-all active:scale-95 ${on ? 'bg-[#C9A84C] text-charcoal' : 'bg-cream text-neutral-600 ring-1 ring-black/[0.06]'}`}>
+                      {v}
+                    </button>
+                  )
+                })}
+              </div>
+              {vibes.filter((v) => !presetVibes.includes(v)).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {vibes.filter((v) => !presetVibes.includes(v)).map((v) => (
+                    <button key={v} onClick={() => toggleVibe(v)}
+                      aria-label={`Remove ${v}`}
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-[#C9A84C] bg-[#C9A84C]/10 px-3 py-1.5 text-[13px] font-medium text-neutral-800 transition-all active:scale-95">
+                      {v}
+                      <X className="h-3.5 w-3.5 text-neutral-500" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-2 flex gap-2">
+                <input value={customVibeInput} onChange={(e) => setCustomVibeInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomVibe() } }}
+                  placeholder="Or add your own vibe" aria-label="Add your own vibe"
+                  className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-base outline-none md:text-[15px] focus:border-primary" />
+                <button onClick={addCustomVibe}
+                  className="inline-flex min-h-[44px] shrink-0 items-center rounded-full bg-primary px-4 text-sm font-semibold text-white transition-all active:scale-95">
+                  Add
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-neutral-400">{vibes.length} of {MAX_VIBES} vibes. Never add phone numbers or social handles.</p>
+              {customVibeMsg && (
+                <p className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{customVibeMsg}</p>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -382,7 +500,7 @@ export default function SetupWizardPage() {
             <div className="card-luxe p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Cities you can travel to</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {NIGERIA_CITIES.filter((c) => c !== city).map((c) => {
+                {liveCities.filter((c) => c !== city).map((c) => {
                   const on = travelCities.includes(c)
                   return (
                     <button key={c} onClick={() => setTravelCities(on ? travelCities.filter((x) => x !== c) : [...travelCities, c])}

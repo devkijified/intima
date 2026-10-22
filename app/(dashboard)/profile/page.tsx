@@ -36,7 +36,7 @@ import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { ngnForCoins } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
 
-const CITIES = ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Kano', 'Enugu'] as const
+import { useCities } from '@/lib/citiesLive'
 
 /** Screening questions companions ask again and again. One tap adds one to her list. */
 const COMMON_QUESTIONS = [
@@ -106,6 +106,7 @@ function parseSubPrice(v: string): number | null {
 }
 
 export default function ProfilePage() {
+  const { cities: CITIES } = useCities()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [bioWarning, setBioWarning] = useState('')

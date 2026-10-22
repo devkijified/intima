@@ -37,6 +37,7 @@ export interface MockProvider {
   /** Catalog ids from lib/services.ts. Deliberately varied: not everyone
       offers video calls or threesomes, and one provider lists nothing. */
   services: string[];
+  vibes?: string[];
   /** ISO timestamp for the recency chip. Deliberately varied. */
   lastActiveAt: string;
   /** False = fixed rates, not open to offers. Deliberately varied. */
@@ -78,6 +79,7 @@ interface PinSeed {
   rateWeekend: number | null;
   img: number;
   services: string[];
+  vibes?: string[];
 }
 
 const SEEDS: PinSeed[] = [

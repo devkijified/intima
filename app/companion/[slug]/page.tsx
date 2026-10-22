@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { showToast as globalShowToast } from '@/lib/toast'
 import { RateCard } from '@/components/rates/RateCard'
 import { ServiceChips } from '@/components/services/ServiceChips'
+import { VibeChips } from '@/components/services/VibeChips'
 import { formatRecency } from '@/lib/utils/recency'
 import { formatCompactCount } from '@/lib/utils/helpers'
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings'
@@ -46,6 +47,7 @@ interface Provider {
   rateOvernight: number | null
   rateWeekend: number | null
   services: string[]
+  vibes: string[]
   ratesNegotiable: boolean
   gallery: string[]
   videos: string[]
@@ -280,7 +282,7 @@ export default function ModelDetailPage() {
       // then raw id as fallback.
       const base = () => supabase
         .from('profiles')
-        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, rates_negotiable, gallery_urls, video_urls, view_count, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days')
+        .select('id, username, bio, display_name, avatar_url, is_verified, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, rates_negotiable, gallery_urls, video_urls, view_count, travel_mode, travel_cities, req_verified_client, req_min_connections, req_min_account_days')
         .eq('role', 'model')
       const { data: byName } = await base().eq('username', slug).maybeSingle()
       const { data: byId } = byName ? { data: null } : await base().eq('id', slug).maybeSingle()
@@ -410,6 +412,7 @@ export default function ModelDetailPage() {
         rateOvernight: p.rate_overnight_ngn,
         rateWeekend: p.rate_weekend_ngn,
         services: p.services ?? [],
+        vibes: (p as { vibes?: string[] }).vibes ?? [],
         ratesNegotiable: p.rates_negotiable !== false,
         gallery: p.gallery_urls ?? [],
         videos: p.video_urls ?? [],
@@ -1075,7 +1078,12 @@ export default function ModelDetailPage() {
             </div>
           )
         )}
-        {activeTab === 'services' && <ServiceChips services={provider.services} />}
+        {activeTab === 'services' && (
+          <div className="space-y-4">
+            <VibeChips vibes={provider.vibes} />
+            <ServiceChips services={provider.services} />
+          </div>
+        )}
         {activeTab === 'rates' && (
           <RateCard
             rates={{
