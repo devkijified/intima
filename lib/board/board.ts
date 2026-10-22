@@ -12,6 +12,7 @@ import {
   listRefundsForTransaction,
   refundStateForGatewayStatus,
 } from '@/lib/payments/paystack';
+import { maybeGrantReferralReward } from '@/lib/payments/settleConnection';
 import { SERVICE_TYPE_LABELS, type ServiceType } from '@/lib/connections/serviceType';
 import { formatCompactPrice } from '@/lib/utils/helpers';
 
@@ -522,6 +523,11 @@ export async function fillRequest(
   if (connErr || !conn) {
     return { ok: false, status: 500, error: 'Could not create the connection' };
   }
+
+  // A filled board request is a paid connection like any other, so
+  // it grants the referral reward on the same terms as a direct
+  // connection (the helper guards first-connection-only itself).
+  await maybeGrantReferralReward(svc, request.client_id, conn.id);
 
   await svc
     .from('board_requests')
