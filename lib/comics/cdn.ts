@@ -6,15 +6,33 @@
  * panels from our domain and the edge cache serves them after the
  * first read. The source address stays recoverable from the token,
  * and the signature keeps the endpoint from being an open proxy.
+ *
+ * Signing uses a dedicated stable secret first (CRON_SECRET, which
+ * does not rotate with database keys), then the service role key,
+ * then a static fallback. Verification accepts a signature from ANY
+ * of those keys, so panels signed before this change (with the old
+ * service-role-derived key) keep loading instead of 403ing.
  */
 import { createHmac } from 'crypto';
 
-function key(): string {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'intima-cdn-fallback';
+const FALLBACK_KEY = 'intima-cdn-fallback';
+
+/** Every secret a panel signature may legitimately have been made with, signing key first. */
+function signingKeys(): string[] {
+  const candidates = [
+    process.env.CRON_SECRET,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    FALLBACK_KEY,
+  ];
+  return [...new Set(candidates.filter((k): k is string => !!k))];
+}
+
+function signWith(secret: string, sourceUrl: string): string {
+  return createHmac('sha256', secret).update(sourceUrl).digest('hex').slice(0, 24);
 }
 
 export function signImageUrl(sourceUrl: string): string {
-  return createHmac('sha256', key()).update(sourceUrl).digest('hex').slice(0, 24);
+  return signWith(signingKeys()[0], sourceUrl);
 }
 
 export function cdnImagePath(sourceUrl: string): string {
@@ -37,7 +55,11 @@ export function verifyImageRequest(u: string, s: string): string | null {
     return null;
   }
   if (!source.startsWith('http')) return null;
-  if (signImageUrl(source) !== s) return null;
+  // Current key first, then every legacy key: panels already stored
+  // in the database were signed with the service role key (or the
+  // static fallback where no key was configured) and must keep
+  // verifying after the signing key changes.
+  if (!signingKeys().some((k) => signWith(k, source) === s)) return null;
   return source;
 }
 

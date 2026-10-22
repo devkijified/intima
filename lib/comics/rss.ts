@@ -11,6 +11,21 @@ export interface FeedItem {
   link: string | null;
   description: string | null;
   images: string[];
+  /** Best cover candidate: the widest image the feed declares
+   *  (media width attribute or a size baked into the filename),
+   *  so the episode cover is not whichever small image came first. */
+  cover: string | null;
+}
+
+/** Width estimate for a feed image: explicit width attribute on its
+ *  tag, else a WordPress style size in the filename (-800x1200). */
+function widthHintOf(url: string, tag: string | null): number {
+  if (tag) {
+    const w = tag.match(/\bwidth\s*=\s*"(\d{2,5})"/i);
+    if (w) return parseInt(w[1], 10);
+  }
+  const sized = url.split('?')[0].match(/-(\d{2,5})x(\d{2,5})\.(?:jpe?g|png|webp|avif)$/i);
+  return sized ? parseInt(sized[1], 10) : 0;
 }
 
 function stripCdata(s: string): string {
@@ -64,12 +79,21 @@ export function parseFeed(xml: string, feedUrl: string): { name: string; items: 
       '';
 
     const images: string[] = [];
-    const add = (u: string | null | undefined) => {
+    let cover: string | null = null;
+    let coverW = -1;
+    const add = (u: string | null | undefined, tag: string | null = null) => {
       const url = u ? decodeEntities(u).trim() : '';
-      if (url.startsWith('http') && !images.includes(url)) images.push(url);
+      if (!url.startsWith('http')) return;
+      if (!images.includes(url)) images.push(url);
+      const w = widthHintOf(url, tag);
+      if (w > coverW) { coverW = w; cover = url; }
     };
-    for (const mm of body.matchAll(/<(?:enclosure|media:content|media:thumbnail)[^>]*(?:url|href)="([^"]+)"[^>]*>/g)) add(mm[1]);
-    for (const mm of html.matchAll(/<img[^>]*src="([^"]+)"[^>]*>/g)) add(mm[1]);
+    for (const mm of body.matchAll(/<(?:enclosure|media:content|media:thumbnail)\b[^>]*>/g)) {
+      add(mm[0].match(/(?:url|href)="([^"]+)"/)?.[1], mm[0]);
+    }
+    for (const mm of html.matchAll(/<img\b[^>]*>/g)) {
+      add(mm[0].match(/src="([^"]+)"/)?.[1], mm[0]);
+    }
 
     items.push({
       guid,
@@ -78,6 +102,7 @@ export function parseFeed(xml: string, feedUrl: string): { name: string; items: 
       link,
       description: html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) : null,
       images,
+      cover: cover ?? images[0] ?? null,
     });
   }
   return { name, items };

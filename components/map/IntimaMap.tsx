@@ -26,6 +26,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { formatCompactCount } from '@/lib/utils/helpers';
 import { useCities } from '@/lib/citiesLive';
+import { GAZETTEER_COORDS } from '@/lib/cities';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
 import { ComicRibbon } from '@/components/comics/ComicRibbon';
 import { ProviderSheet } from './ProviderSheet';
@@ -36,14 +37,17 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 import { Tooltip } from '@/components/ui/Tooltip';
 
 /**
- * Primary vector style: CARTO Voyager. A bright, illustrated base in
- * the Snap Map direction, so companions read as standing in a real,
- * colourful city instead of floating over dark street lines. If the
- * style or its CDN is unreachable, the error path below falls back to
- * the OSM raster style automatically (with the dark CSS filter), and
- * if that also fails the honest list takes over.
+ * Primary vector style: CARTO dark matter. The owner's reference is
+ * the Snap Map night look: a dark slate-blue base with near-black
+ * water, dimmed roads, thin pale borders and very few soft labels,
+ * so the pins and the heat layer carry the map. On style load the
+ * layers are restyled further toward that palette (see
+ * restyleToSnapNight). If the style or its CDN is unreachable, the
+ * error path below falls back to the OSM raster style automatically
+ * (with the dark CSS filter), and if that also fails the honest list
+ * takes over.
  */
-const CARTO_VOYAGER = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+const CARTO_DARK_MATTER = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 /**
  * Primary raster style: OpenStreetMap tiles. OSM sends proper CORS headers
@@ -137,6 +141,184 @@ async function loadMapLibre(): Promise<{ lib: MapLibreLib | null; keys: string }
   return { lib: null, keys };
 }
 
+/**
+ * Restyle the loaded CARTO dark-matter layers toward the owner's
+ * Snap Map night reference: near-black blue water, slate land,
+ * roads dimmed to a whisper (casings included), thin pale boundary
+ * lines, soft place labels with a dark halo, and the noisy label
+ * layers (road names, POI, transit, airport, housenumbers) hidden
+ * outright. Everything is keyed off layer type plus source-layer or
+ * id patterns, and every call is guarded: a layer id the style does
+ * not have, or a paint property a layer does not accept, must never
+ * throw and break the map.
+ */
+function restyleToSnapNight(map: MLMap): void {
+  let layers: Array<Record<string, unknown>> = [];
+  try {
+    layers = (map.getStyle()?.layers ?? []) as unknown as Array<Record<string, unknown>>;
+  } catch {
+    return;
+  }
+  const setPaint = (id: string, prop: string, value: unknown) => {
+    try {
+      if (map.getLayer(id)) map.setPaintProperty(id, prop, value as never);
+    } catch {
+      /* this layer does not accept the property; skip it */
+    }
+  };
+  for (const layer of layers) {
+    const id = typeof layer.id === 'string' ? layer.id : '';
+    const type = typeof layer.type === 'string' ? layer.type : '';
+    if (!id) continue;
+    const sourceLayer = String(layer['source-layer'] ?? '').toLowerCase();
+    const lid = id.toLowerCase();
+    try {
+      if (type === 'background') {
+        setPaint(id, 'background-color', '#04070c');
+        continue;
+      }
+      if (type === 'symbol') {
+        // Label noise: road names, POI, transit, airport and
+        // housenumber labels go away. Place labels stay.
+        const noisy =
+          /transportation|poi|transit|public_transport|airport|aeroway|housenumber|house_number/.test(sourceLayer) ||
+          /poi|transit|airport|housenumber|roadname|road_name|roadlabel/.test(lid) ||
+          lid.includes('transportation');
+        if (noisy) {
+          try {
+            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+          } catch {
+            /* guarded: hiding is best-effort */
+          }
+          continue;
+        }
+        setPaint(id, 'text-color', '#cfe0ee');
+        setPaint(id, 'text-opacity', 0.85);
+        setPaint(id, 'text-halo-color', 'rgba(3,6,10,0.9)');
+        setPaint(id, 'text-halo-width', 1.2);
+        continue;
+      }
+      if (type === 'fill' || type === 'fill-extrusion') {
+        const prop = type === 'fill' ? 'fill-color' : 'fill-extrusion-color';
+        if (sourceLayer === 'water' || lid === 'water') setPaint(id, prop, '#04070c');
+        else if (sourceLayer === 'landcover') setPaint(id, prop, '#0d1622');
+        else if (sourceLayer === 'park' || lid.includes('park')) setPaint(id, prop, '#12202f');
+        else if (sourceLayer.includes('building')) setPaint(id, prop, '#172636');
+        else setPaint(id, prop, '#101925');
+        if (type === 'fill') setPaint(id, 'fill-opacity', 1);
+        continue;
+      }
+      if (type === 'line') {
+        if (sourceLayer === 'boundary' || lid.includes('boundary') || lid.includes('admin')) {
+          setPaint(id, 'line-color', '#8fa9bf');
+          setPaint(id, 'line-opacity', 0.35);
+        } else if (sourceLayer === 'waterway' || lid.includes('waterway')) {
+          setPaint(id, 'line-color', '#0a1522');
+          setPaint(id, 'line-opacity', 0.6);
+        } else if (
+          sourceLayer === 'transit' ||
+          sourceLayer === 'public_transport' ||
+          lid.includes('transit')
+        ) {
+          setPaint(id, 'line-color', '#16222f');
+          setPaint(id, 'line-opacity', 0.3);
+        } else {
+          // Roads and everything else: dim blue-grey lines, and the
+          // casings get the same treatment so nothing reads bright.
+          const isCasing = lid.includes('casing') || lid.includes('_case');
+          setPaint(id, 'line-color', isCasing ? '#0c141f' : '#1c2a3a');
+          setPaint(id, 'line-opacity', isCasing ? 0.5 : 0.55);
+        }
+      }
+    } catch {
+      /* one odd layer must never break the restyle pass */
+    }
+  }
+}
+
+const HEAT_SOURCE_ID = 'intima-heat';
+const HEAT_LAYER_ID = 'intima-heat';
+
+/**
+ * Keep the heat layer fed with the same companion points the markers
+ * use. Available companions weigh 1, the rest 0.35, so busy available
+ * areas glow with Snap's spectral ramp (blue to red), Snap Map style. Adds the
+ * source and layer on first call (after the style has loaded),
+ * afterwards just swaps the data. Each step is guarded separately:
+ * before the style loads, addSource throws and the load handler
+ * re-runs the sync once the style is ready. Safe over the raster
+ * fallback too: a GeoJSON source works on any style.
+ */
+function syncHeatLayer(map: MLMap, list: MapProvider[]): void {
+  const data = {
+    type: 'FeatureCollection',
+    features: list.map((p) => ({
+      type: 'Feature',
+      properties: { weight: p.available ? 1 : 0.35 },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+    })),
+  };
+  try {
+    if (!map.getSource(HEAT_SOURCE_ID)) {
+      map.addSource(HEAT_SOURCE_ID, { type: 'geojson', data } as never);
+    }
+  } catch {
+    /* style not ready yet; retried on load */
+  }
+  try {
+    const src = map.getSource(HEAT_SOURCE_ID) as unknown as
+      | { setData: (d: unknown) => void }
+      | undefined;
+    if (src) src.setData(data);
+  } catch {
+    /* source vanished with a style swap; the layer step below re-adds on next sync */
+  }
+  try {
+    if (!map.getLayer(HEAT_LAYER_ID) && map.getSource(HEAT_SOURCE_ID)) {
+      map.addLayer({
+        id: HEAT_LAYER_ID,
+        type: 'heatmap',
+        source: HEAT_SOURCE_ID,
+        paint: {
+          'heatmap-weight': ['get', 'weight'],
+          'heatmap-intensity': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 0.7,
+            12, 1.0,
+            14, 1.4,
+          ],
+          'heatmap-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 22,
+            12, 34,
+            14, 52,
+          ],
+          // Snap's spectral ramp: deep blue at low density through
+          // cyan, green and yellow to orange and red at the peak.
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(0,0,0,0)',
+            0.15, 'rgba(16,52,166,0.55)',
+            0.3, '#00c2e0',
+            0.45, '#2fd35f',
+            0.6, '#ffd60a',
+            0.8, '#ff7b1c',
+            1.0, '#f72c1d',
+          ],
+          // Pins own street level: the glow fades out by zoom 14.
+          'heatmap-opacity': [
+            'interpolate', ['linear'], ['zoom'],
+            12, 1,
+            14, 0,
+          ],
+        },
+      } as never);
+    }
+  } catch {
+    /* style not ready yet; retried on load */
+  }
+}
+
 /** Compact pin recency, Snap Map style: "2m", "3h", "2d". */
 function shortRecency(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -172,8 +354,10 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
         ? 'rgba(201,168,76,0.50)'
         : 'rgba(172,36,77,0.42)'
     } 0%, transparent 68%)"></span>` +
-    // Name + time plate above her head, Snap Map style.
-    `<span style="position:relative;z-index:2;background:rgba(8,8,12,0.72);color:#fff;font-size:10px;font-weight:600;line-height:1;` +
+    // Name + time plate above her head. Hidden while the pin is
+    // selected: the selected pin shows the one Snap-style plate
+    // under the figure instead, never two name plates at once.
+    `<span class="intima-pin-topplate" style="position:relative;z-index:2;background:rgba(8,8,12,0.72);color:#fff;font-size:10px;font-weight:600;line-height:1;` +
     `padding:4px 7px;border-radius:9999px;white-space:nowrap;backdrop-filter:blur(4px);margin-bottom:3px">` +
     `${firstName}${recency ? ` <span style="color:rgba(255,255,255,.65);font-weight:500">· ${recency}</span>` : ''}</span>` +
     // The standing figure: a tall capsule of her photo planted on
@@ -200,6 +384,12 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
     `<span style="width:38px;height:10px;margin-top:2px;border-radius:50%;pointer-events:none;` +
     `background:radial-gradient(ellipse at center, rgba(0,0,0,.55) 0%, transparent 70%);` +
     `animation:pin-shadow 2.8s ease-in-out ${delay}s infinite alternate"></span>` +
+    // Selected plate under the figure, Snap Map style: dark glass,
+    // first name plus her availability word. CSS in globals.css
+    // (.intima-pin-plate) keeps it hidden until the pin carries
+    // the .intima-pin-selected class.
+    `<span class="intima-pin-plate"><span class="pin-plate-dot${provider.available ? ' on' : ''}"></span>` +
+    `<span class="pin-plate-text">${firstName} · ${provider.available ? 'Available now' : 'Away'}</span></span>` +
     `</div>`;
   el.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -269,6 +459,17 @@ export default function IntimaMap() {
   const [mapFailReason, setMapFailReason] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
   const [selected, setSelected] = useState<MapProvider | null>(null);
+  /** Pin id carrying the selected name plate on the map. */
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
+  /** Live pin elements by provider id, for the selected plate toggle. */
+  const pinElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  /** Bumped when a style reaches load, so the heat layer re-syncs
+      onto the fresh style (initial load or raster fallback). */
+  const [styleEpoch, setStyleEpoch] = useState(0);
+  /** Area name chip (Snap shows the current area at the top): the
+      active city filter, or the gazetteer city nearest the settled
+      map centre. Null = chip hidden. */
+  const [areaName, setAreaName] = useState<string | null>(null);
   const [connectionTarget, setConnectionTarget] = useState<MapProvider | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [filters, setFilters] = useState<Filters>(() => ({
@@ -349,6 +550,131 @@ export default function IntimaMap() {
     [providers, filters],
   );
 
+  // Mirrors for the map event handlers, which are registered once
+  // and must never read stale render state.
+  const filteredRef = useRef<MapProvider[]>([]);
+  const selectedPinIdRef = useRef<string | null>(null);
+  const cityFilterRef = useRef('');
+  useEffect(() => {
+    filteredRef.current = filtered;
+  }, [filtered]);
+  useEffect(() => {
+    selectedPinIdRef.current = selectedPinId;
+  }, [selectedPinId]);
+  useEffect(() => {
+    cityFilterRef.current = filters.city;
+  }, [filters.city]);
+
+  /**
+   * Decide every pin's under-plate at the current zoom, Snap style.
+   * Pins whose ground points sit within a pin width of each other
+   * overlap visually, so they group: the first pin of the group
+   * carries one plate, "FirstName & N more", and the rest carry
+   * none. This is a display grouping at render time only; the data
+   * layer is untouched. The selected pin always carries its own
+   * plate (name plus availability word) and suppresses its group's
+   * plate. Runs after pins render and whenever the map settles.
+   */
+  const refreshPlates = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const list = filteredRef.current;
+    const selectedId = selectedPinIdRef.current;
+    const OVERLAP_PX = 56;
+    interface Placed { p: MapProvider; x: number; y: number }
+    let placed: Placed[] = [];
+    try {
+      placed = list.map((p) => {
+        const pt = map.project([p.lng, p.lat]);
+        return { p, x: pt.x, y: pt.y };
+      });
+    } catch {
+      return; // map mid-teardown; the next settle re-runs this
+    }
+    const assigned = new Set<string>();
+    const plateFor = new Map<string, { text: string; dot: boolean }>();
+    for (const item of placed) {
+      if (assigned.has(item.p.id)) continue;
+      const group = placed.filter(
+        (o) =>
+          !assigned.has(o.p.id) &&
+          Math.hypot(o.x - item.x, o.y - item.y) < OVERLAP_PX,
+      );
+      group.forEach((o) => assigned.add(o.p.id));
+      if (group.length < 2) continue;
+      if (group.some((o) => o.p.id === selectedId)) continue; // selected plate wins
+      const rep = group[0].p;
+      plateFor.set(rep.id, {
+        text: `${rep.displayName.split(' ')[0] ?? rep.displayName} & ${group.length - 1} more`,
+        dot: false,
+      });
+    }
+    pinElsRef.current.forEach((el, id) => {
+      const isSelected = id === selectedId;
+      el.classList.toggle('intima-pin-selected', isSelected);
+      const plate = el.querySelector('.intima-pin-plate') as HTMLElement | null;
+      const textEl = el.querySelector('.pin-plate-text') as HTMLElement | null;
+      const dotEl = el.querySelector('.pin-plate-dot') as HTMLElement | null;
+      if (!plate || !textEl) return;
+      if (isSelected) {
+        const p = list.find((x) => x.id === id);
+        if (p) {
+          textEl.textContent = `${p.displayName.split(' ')[0] ?? p.displayName} · ${p.available ? 'Available now' : 'Away'}`;
+          if (dotEl) {
+            dotEl.style.display = '';
+            dotEl.classList.toggle('on', p.available);
+          }
+        }
+        plate.classList.add('plate-on');
+        return;
+      }
+      const group = plateFor.get(id);
+      if (group) {
+        textEl.textContent = group.text;
+        if (dotEl) dotEl.style.display = 'none';
+        plate.classList.add('plate-on');
+      } else {
+        plate.classList.remove('plate-on');
+      }
+    });
+  };
+
+  /**
+   * Area chip content: the active city filter wins; otherwise the
+   * gazetteer city nearest the settled map centre, shown only when
+   * the centre is actually near it (within about 60 km), never a
+   * faraway guess.
+   */
+  const updateAreaName = () => {
+    const city = cityFilterRef.current;
+    if (city) {
+      setAreaName(city);
+      return;
+    }
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      const c = map.getCenter();
+      let best: string | null = null;
+      let bestKm = Infinity;
+      for (const [name, [lat, lng]] of Object.entries(GAZETTEER_COORDS)) {
+        const dLat = ((lat - c.lat) * Math.PI) / 180;
+        const dLng = ((lng - c.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((c.lat * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+        const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        if (km < bestKm) {
+          bestKm = km;
+          best = name;
+        }
+      }
+      setAreaName(bestKm <= 60 ? best : null);
+    } catch {
+      /* centre unreadable mid-teardown; keep the last name */
+    }
+  };
+
   // Initialise the map once. maplibre-gl is imported lazily so a failed
   // download degrades to the honest fallback list instead of a crash.
   // Every failure path records a reason, surfaced under Technical details
@@ -405,21 +731,20 @@ export default function IntimaMap() {
           return;
         }
         libRef.current = lib;
-        // Primary style: the bright Voyager vector base. The raster
-        // style is no longer primary; it is the automatic fallback
-        // when the vector style errors or stalls before load (see the
-        // error handler and the style timer below), because a map
-        // that loads beats a prettier map that stays black.
-        const useRasterPrimary = false;
+        // Primary style: the dark-matter vector base, restyled to
+        // the Snap night palette on load. The raster style is the
+        // automatic fallback when the vector style errors or stalls
+        // before load (see the error handler and the style timer
+        // below), because a map that loads beats a prettier map that
+        // stays black.
         try {
           map = new lib.Map({
             container: containerRef.current,
-            style: useRasterPrimary ? (OSM_RASTER_STYLE as any) : CARTO_VOYAGER,
+            style: CARTO_DARK_MATTER,
             center: CITY_CENTERS[loadInitialCity()] ?? LAGOS_CENTER,
             zoom: 11,
             attributionControl: { compact: true } as any,
           });
-          if (useRasterPrimary) setUsingRaster(true);
           // Markers are DOM overlays: they do not need the tiles.
           // Release them (and the loading veil) the moment the map
           // object exists instead of waiting for the full load
@@ -436,6 +761,11 @@ export default function IntimaMap() {
         }
         map.on('load', () => {
           styleLoaded = true;
+          // Snap night restyle on the vector style only (the raster
+          // fallback keeps its dark CSS filter instead), then bump
+          // the style epoch so the heat layer syncs onto this style.
+          if (!cancelled && map && !rasterTried) restyleToSnapNight(map);
+          if (!cancelled) setStyleEpoch((n) => n + 1);
           if (!cancelled) {
             // The compact attribution control starts EXPANDED
             // (maplibregl-compact-show), a white bar across the
@@ -489,11 +819,11 @@ export default function IntimaMap() {
               tryRasterFallback();
               rasterTimer = setTimeout(() => {
                 if (!cancelled && !styleLoaded)
-                  failMap('style did not reach load within 60s');
+                  failMap('style did not reach load (vector 12s, then raster 30s)');
               }, 30000);
               return;
             }
-            failMap('style did not reach load within 60s');
+            failMap('style did not reach load (vector 12s, then raster 30s)');
           }
         }, 12000);
       } catch (err) {
@@ -512,6 +842,7 @@ export default function IntimaMap() {
       if (rasterTimer) clearTimeout(rasterTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      pinElsRef.current.clear();
       map?.remove();
       mapRef.current = null;
     };
@@ -551,11 +882,15 @@ export default function IntimaMap() {
       const lib = libRef.current;
       if (cancelled || !mapRef.current || !lib) return;
       markersRef.current.forEach((m) => m.remove());
-      markersRef.current = filtered.map((p) =>
-        new lib.Marker({ element: markerElement(p, goToProfile), anchor: 'bottom' } as any)
+      pinElsRef.current.clear();
+      markersRef.current = filtered.map((p) => {
+        const el = markerElement(p, selectPin);
+        pinElsRef.current.set(p.id, el);
+        return new lib.Marker({ element: el, anchor: 'bottom' } as any)
           .setLngLat([p.lng, p.lat])
-          .addTo(mapRef.current as MLMap),
-      );
+          .addTo(mapRef.current as MLMap);
+      });
+      refreshPlates();
     }
 
     renderPins();
@@ -563,6 +898,44 @@ export default function IntimaMap() {
       cancelled = true;
     };
   }, [filtered, mapReady, mapFailed]);
+
+  // Heat layer: the same filtered points the pins use, re-synced
+  // whenever they change and whenever a fresh style loads (style
+  // epoch), so the glow always matches who is actually on the map.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || mapFailed) return;
+    syncHeatLayer(mapRef.current, filtered);
+  }, [filtered, mapReady, mapFailed, styleEpoch]);
+
+  // Plates: recomputed whenever the selection or the pin set
+  // changes, and again on every map settle (see the listener below),
+  // because overlap grouping is a function of the current zoom.
+  useEffect(() => {
+    refreshPlates();
+  }, [selectedPinId, filtered, mapReady]);
+
+  // Map settle: regroup the plates for the new zoom and refresh the
+  // area name chip. Registered per map instance (retries swap it).
+  useEffect(() => {
+    if (!mapReady || mapFailed) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const onSettle = () => {
+      refreshPlates();
+      updateAreaName();
+    };
+    map.on('moveend', onSettle);
+    updateAreaName();
+    return () => {
+      map.off('moveend', onSettle);
+    };
+  }, [mapReady, mapFailed, mapAttempt]);
+
+  // The area chip follows the city filter immediately, not only
+  // after the fly-to settles.
+  useEffect(() => {
+    updateAreaName();
+  }, [filters.city]);
 
   const toggle = (key: 'verifiedOnly' | 'availableNow' | 'negotiableOnly') =>
     setFilters((f) => ({ ...f, [key]: !f[key] }));
@@ -643,6 +1016,14 @@ export default function IntimaMap() {
     setSelected(p);
   };
 
+  /** Every selection path (pin, list card, nearby tray) marks the
+      pin selected first, so its name plate shows on the map, then
+      follows the normal profile path. */
+  const selectPin = (p: MapProvider) => {
+    setSelectedPinId(p.id);
+    goToProfile(p);
+  };
+
   const handleViewProfile = (p: MapProvider) => {
     if (!p.userId) return;
     if (!session) {
@@ -661,14 +1042,14 @@ export default function IntimaMap() {
 
   return (
     <div
-      className="fixed left-0 right-0 top-0 h-dvh w-full overflow-hidden bg-[#111118]"
+      className="fixed left-0 right-0 top-0 h-dvh w-full overflow-hidden bg-[#04070c]"
     >
       <div
         ref={containerRef}
         className={`absolute inset-0 ${usingRaster ? 'map-raster-dark' : ''}`}
       />
       {!mapReady && !mapFailed && !mapStalled && view === 'map' && (
-        <div className="absolute inset-0 z-10 overflow-hidden bg-[#111118]">
+        <div className="absolute inset-0 z-10 overflow-hidden bg-[#04070c]">
           {/* Shimmer sweep: guests see intentional loading, not a bug. */}
           <div className="map-shimmer absolute inset-0" />
           {/* Pulsing pin placeholders where providers will appear. */}
@@ -683,7 +1064,7 @@ export default function IntimaMap() {
         </div>
       )}
       {mapStalled && !mapReady && !mapFailed && view === 'map' && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#111118] px-6 text-center">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#04070c] px-6 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#AC244D]/15">
             <MapPin aria-hidden className="h-7 w-7 text-[#AC244D]" />
           </div>
@@ -863,6 +1244,17 @@ export default function IntimaMap() {
         <div className="absolute left-0 right-0 top-[calc(118px+env(safe-area-inset-top))] z-30 flex flex-col">
           <StoryTray />
           <ComicRibbon />
+          {/* Area name, Snap style: a quiet dark-glass chip centred
+              under the tray stack once the map settles. It lives in
+              this column so it can never overlap the tray, the
+              ribbon or the filter row above it. */}
+          {areaName && (
+            <div className="pointer-events-none mt-2 flex justify-center px-4">
+              <span className="glass-dark rounded-full px-3.5 py-1.5 font-display text-[13px] font-semibold tracking-wide text-white/90">
+                {areaName}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -893,7 +1285,7 @@ export default function IntimaMap() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => goToProfile(p)}
+                onClick={() => selectPin(p)}
                 className="flex w-14 shrink-0 flex-col items-center gap-1"
                 aria-label={`${p.displayName}, ${p.area}`}
               >
@@ -905,7 +1297,7 @@ export default function IntimaMap() {
                     className={`h-12 w-12 rounded-full object-cover shadow-lg ${p.trustTier === 'elite' ? 'ring-[2.5px] ring-gold' : 'ring-2 ring-white/85'}`}
                   />
                   {p.available && (
-                    <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#111118] bg-green-500" />
+                    <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#04070c] bg-green-500" />
                   )}
                 </span>
                 <span className="w-full truncate text-center text-[10px] font-medium text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
@@ -1013,7 +1405,7 @@ export default function IntimaMap() {
           ) : filtered.length > 0 ? (
             <ul className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {filtered.map((p) => (
-                <ProviderListCard key={p.id} provider={p} onSelect={goToProfile} travelNote={travelNoteFor(p)} />
+                <ProviderListCard key={p.id} provider={p} onSelect={selectPin} travelNote={travelNoteFor(p)} />
               ))}
             </ul>
           ) : (
@@ -1040,7 +1432,10 @@ export default function IntimaMap() {
 
       <ProviderSheet
         provider={selected}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          setSelectedPinId(null);
+        }}
         onViewProfile={handleViewProfile}
         onRequestConnection={handleRequestConnection}
         onVoiceCall={handleVoiceCall}

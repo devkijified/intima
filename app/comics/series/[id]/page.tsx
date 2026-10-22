@@ -135,10 +135,14 @@ export default function ComicSeriesPage() {
 
   return (
     <div className="mx-auto max-w-2xl pb-28 animate-fade-in md:pb-12">
-      {/* Cover plate */}
+      {/* Cover plate: the cover sharp over its own blurred fill,
+          the same treatment as the shelf's featured banner. */}
       <div className="relative overflow-hidden bg-charcoal">
         {cover ? (
-          <img src={cover} alt={comic?.title ?? ''} className="aspect-[16/10] w-full object-cover opacity-90 sm:aspect-[16/8]" />
+          <>
+            <img src={cover} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
+            <img src={cover} alt={comic?.title ?? ''} fetchPriority="high" className="relative aspect-[16/10] w-full object-contain sm:aspect-[16/8]" />
+          </>
         ) : (
           <div className="flex aspect-[16/10] w-full items-center justify-center bg-gradient-to-br from-[#2A1220] to-[#AC244D] sm:aspect-[16/8]">
             <BookOpen className="h-14 w-14 text-white/50" />

@@ -124,7 +124,13 @@ export default function ComicsPage() {
             >
               <div className="relative aspect-[16/10] bg-charcoal sm:aspect-[16/8]">
                 {featured.cover_url ? (
-                  <img src={featured.cover_url} alt={featured.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <>
+                    {/* Blurred fill of the cover itself, so the sharp
+                        cover on top never sits on a hard crop and a
+                        modest source image still fills the banner. */}
+                    <img src={featured.cover_url} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl" />
+                    <img src={featured.cover_url} alt={featured.title} fetchPriority="high" className="absolute inset-0 h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]" />
+                  </>
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#2A1220] to-[#AC244D]">
                     <BookOpen className="h-12 w-12 text-white/50" />

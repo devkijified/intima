@@ -45,14 +45,14 @@ export default function DownloadPage() {
         </div>
 
         <a
-          href="/intima-1.0.apk"
+          href="/intima-1.1.apk"
           download
           className="btn-luxe mt-8 flex w-full items-center justify-center rounded-full px-6 py-4 text-base font-semibold"
         >
           Download the app
         </a>
         <p className="mt-3 text-center text-xs text-neutral-500">
-          Version 1.0 · 133 KB · Android 8.0 and above
+          Version 1.1 · 137 KB · Android 8.0 and above
         </p>
 
         <section className="mt-10 rounded-3xl bg-white p-6 shadow-[0_10px_36px_rgba(26,26,26,0.07)] ring-1 ring-black/5">

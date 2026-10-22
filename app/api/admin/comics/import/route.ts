@@ -4,6 +4,7 @@ import { fetchFeed } from '@/lib/comics/rss';
 import { getComicFeeds, saveComicFeeds, importFeedItem, serviceDb } from '@/lib/comics/import';
 import {
   fetchPageHtmlWithFallback, extractPanels, discoverChapters, detectStoryStatus, pageTitle, extractSeriesCover,
+  filterLoadablePanels,
 } from '@/lib/comics/pageImport';
 import { toCdnUrl, isPublicHttpUrl } from '@/lib/comics/cdn';
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck';
@@ -170,6 +171,14 @@ export async function POST(req: NextRequest) {
       if (unsafe.length > 0) {
         return NextResponse.json({ error: 'That page points at image addresses we cannot serve.' }, { status: 422 });
       }
+      // Drop panels whose addresses no longer load, so a dead image
+      // is never stored as a broken hole in the reader.
+      const panelCountBefore = panels.length;
+      panels = await filterLoadablePanels(panels, url);
+      const droppedPanels = panelCountBefore - panels.length;
+      if (panels.length === 0) {
+        return NextResponse.json({ error: 'None of the pictures on that page could be loaded. They may have moved or the site is refusing us.' }, { status: 422 });
+      }
       const stored = panels.map(toCdnUrl);
 
       const { data: max } = await db.from('comic_episodes')
@@ -202,6 +211,7 @@ export async function POST(req: NextRequest) {
         episode: data,
         panels: stored.length,
         cdn: stored.length,
+        droppedPanels,
       });
     }
 

@@ -1,0 +1,7 @@
+{
+  "latestCode": 2,
+  "latestName": "1.1",
+  "apkUrl": "https://intima-snowy.vercel.app/intima-1.1.apk",
+  "notes": "This version lets the app tell you when a newer Intima is ready, so you are never stuck on an old build.",
+  "minSupportedCode": 1
+}

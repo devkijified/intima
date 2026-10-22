@@ -83,6 +83,7 @@ interface MapProviderRow {
   video_urls: string[] | null;
   travel_mode?: string | null;
   travel_cities?: string[] | null;
+  trust_tier?: string | null;
 }
 
 const MOCK_TRAVEL: Record<string, { mode: string; cities: string[] }> = {};
@@ -132,7 +133,7 @@ function hashToImg(id: string): number {
 function rowToMapProvider(row: MapProviderRow): MapProvider {
   return {
     id: `db-${row.provider_id}`,
-    trustTier: (row as any).trust_tier ?? 'verified',
+    trustTier: row.trust_tier ?? 'verified',
     displayName: row.display_name || 'Intima companion',
     age: null,
     city: row.city,

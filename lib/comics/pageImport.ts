@@ -55,16 +55,32 @@ function dirOf(u: string): string {
   }
 }
 
-function bestFromSrcset(srcset: string): string | null {
+function bestFromSrcset(srcset: string): { url: string; w: number } | null {
   const parts = srcset.split(',').map((p) => p.trim()).filter(Boolean);
-  let best: string | null = null;
+  let best: { url: string; w: number } | null = null;
   let bestW = -1;
   for (const p of parts) {
     const [u, w] = p.split(/\s+/);
     const width = w && w.endsWith('w') ? parseInt(w, 10) : 0;
-    if (u && width >= bestW) { bestW = width; best = u; }
+    if (u && width >= bestW) { bestW = width; best = { url: u, w: width }; }
   }
   return best;
+}
+
+/**
+ * A width estimate baked into an image address itself: WordPress
+ * style resized names (cover-800x1200.jpg) or an explicit width
+ * query parameter. 0 when the address carries no size information.
+ */
+export function imageWidthHint(url: string): number {
+  const sized = url.split('?')[0].match(/-(\d{2,5})x(\d{2,5})\.(?:jpe?g|png|webp|avif)$/i);
+  if (sized) return parseInt(sized[1], 10);
+  try {
+    const q = new URL(url).searchParams;
+    const w = parseInt(q.get('w') ?? q.get('width') ?? '', 10);
+    if (Number.isFinite(w) && w > 0) return w;
+  } catch { /* not a parseable address */ }
+  return 0;
 }
 
 /**
@@ -88,7 +104,7 @@ export function extractPanels(html: string, pageUrl: string): PanelCandidate[] {
     const lazy = attr('data-src') ?? attr('data-lazy-src') ?? attr('data-original');
     if (lazy && (!raw || /blank|loading|placeholder|spacer|1x1/i.test(raw))) raw = lazy;
     const srcset = attr('srcset') ?? attr('data-srcset');
-    if (srcset) raw = bestFromSrcset(srcset) ?? raw;
+    if (srcset) raw = bestFromSrcset(srcset)?.url ?? raw;
     if (!raw || raw.startsWith('data:')) continue;
     let abs: string;
     try { abs = new URL(raw, pageUrl).toString(); } catch { continue; }
@@ -245,11 +261,17 @@ export async function fetchPageHtmlWithFallback(
 }
 
 /**
- * The series cover: the poster's address on a series page. Comic
- * sites put it in the page's social meta (og:image) or as the one
- * image carrying a WordPress poster size in its filename (the
- * -193x278 style suffix). Falls back to the first image that is not
- * obvious site decoration. Returns an absolute source URL, or null.
+ * The series cover: the poster's address on a series page. The
+ * page's social meta (og:image) is the site's own chosen poster and
+ * wins first. Otherwise the largest candidate by real dimensions
+ * wins: width hints come from the srcset the browser would pick,
+ * the tag's width attribute, or a WordPress style size baked into
+ * the filename (-800x1200). A small thumbnail chosen raw is what
+ * made featured covers render blurry, so a candidate at least
+ * 800px wide takes the pick whenever one exists. With no size
+ * information anywhere, falls back to the poster-sized filename,
+ * then the first image that is not obvious site decoration.
+ * Returns an absolute source URL, or null.
  */
 export function extractSeriesCover(html: string, pageUrl: string): string | null {
   const meta = html.match(/<meta[^>]+(?:property|name)\s*=\s*"(?:og:image|twitter:image)"[^>]+content\s*=\s*"([^"]+)"/i)?.[1]
@@ -260,7 +282,8 @@ export function extractSeriesCover(html: string, pageUrl: string): string | null
       if (IMAGE_EXT.test(abs)) return abs;
     } catch { /* fall through to the image scan */ }
   }
-  const imgs: string[] = [];
+  const candidates: Array<{ url: string; w: number }> = [];
+  const seen = new Set<string>();
   const imgRe = /<img\b[^>]*>/gi;
   let m: RegExpExecArray | null;
   while ((m = imgRe.exec(html)) !== null) {
@@ -273,15 +296,79 @@ export function extractSeriesCover(html: string, pageUrl: string): string | null
     let raw = attr('src');
     const lazy = attr('data-src') ?? attr('data-lazy-src') ?? attr('data-original');
     if (lazy && (!raw || /blank|loading|placeholder|spacer|1x1/i.test(raw))) raw = lazy;
+    let hint = 0;
     const srcset = attr('srcset') ?? attr('data-srcset');
-    if (srcset) raw = bestFromSrcset(srcset) ?? raw;
+    if (srcset) {
+      const best = bestFromSrcset(srcset);
+      if (best) { raw = best.url; hint = best.w; }
+    }
     if (!raw || raw.startsWith('data:')) continue;
     let abs: string;
     try { abs = new URL(raw, pageUrl).toString(); } catch { continue; }
-    if (!/\.(jpe?g|png|webp)(\?.*)?$/i.test(abs)) continue;
+    if (!/\.(jpe?g|png|webp|avif)(\?.*)?$/i.test(abs)) continue;
     if (STRAY_PATH.test(abs)) continue;
-    if (!imgs.includes(abs)) imgs.push(abs);
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    const attrW = parseInt(attr('width') ?? '', 10);
+    hint = Math.max(hint, Number.isFinite(attrW) ? attrW : 0, imageWidthHint(abs));
+    candidates.push({ url: abs, w: hint });
   }
-  const poster = imgs.find((u) => /-\d{2,4}x\d{2,4}\.(jpe?g|png|webp)$/i.test(u.split('?')[0]));
-  return poster ?? imgs[0] ?? null;
+  if (candidates.length === 0) return null;
+  const sized = candidates.filter((c) => c.w > 0);
+  if (sized.length > 0) {
+    sized.sort((a, b) => b.w - a.w);
+    return sized[0].url;
+  }
+  const poster = candidates.find((c) => /-\d{2,4}x\d{2,4}\.(jpe?g|png|webp)$/i.test(c.url.split('?')[0]));
+  return poster?.url ?? candidates[0].url;
+}
+
+/**
+ * Verify each panel address actually loads before it is stored:
+ * a lightweight HEAD, falling back to a one-byte ranged GET when
+ * the host refuses HEAD or answers without a content type. A panel
+ * passes only on an ok response with an image content type, so
+ * dead addresses are dropped at import instead of leaving broken
+ * holes in the reader. Checks run a few at a time; order is kept.
+ */
+export async function filterLoadablePanels(urls: string[], pageUrl: string): Promise<string[]> {
+  const check = async (u: string): Promise<boolean> => {
+    const headers = { 'User-Agent': PAGE_IMPORT_UA, Referer: pageUrl };
+    try {
+      const head = await fetch(u, {
+        method: 'HEAD',
+        headers,
+        signal: AbortSignal.timeout(10000),
+        redirect: 'follow',
+      });
+      if (head.ok) {
+        const ct = (head.headers.get('content-type') ?? '').split(';')[0].trim();
+        if (ct.startsWith('image/')) return true;
+        if (ct) return false;
+        // No content type on HEAD: confirm with the ranged GET below.
+      }
+    } catch { /* HEAD refused or unreachable: try the GET */ }
+    try {
+      const res = await fetch(u, {
+        headers: { ...headers, Range: 'bytes=0-0' },
+        signal: AbortSignal.timeout(10000),
+        redirect: 'follow',
+      });
+      const ct = (res.headers.get('content-type') ?? '').split(';')[0].trim();
+      try { await res.body?.cancel(); } catch { /* already closed */ }
+      return (res.ok || res.status === 206) && ct.startsWith('image/');
+    } catch {
+      return false;
+    }
+  };
+  const keep = new Array<boolean>(urls.length).fill(false);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(6, urls.length) }, async () => {
+    while (next < urls.length) {
+      const i = next++;
+      keep[i] = await check(urls[i]);
+    }
+  });
+  await Promise.all(workers);
+  return urls.filter((_, i) => keep[i]);
 }

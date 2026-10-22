@@ -2,7 +2,8 @@
  * Shared episode-import logic for comic feeds.
  * Used by the admin import API and the scheduled poller.
  * NOTE: only import from feeds you own or are licensed to republish.
- * Imported episodes carry source credit shown to readers.
+ * Source details are stored for the admin only; readers never see
+ * them and are never sent to the source.
  */
 
 import { createClient as createServiceClient } from '@supabase/supabase-js';
@@ -84,7 +85,7 @@ export async function importFeedItem(
     episode_no,
     title: item.title,
     synopsis: item.description,
-    cover_url: item.images[0],
+    cover_url: item.cover ?? item.images[0],
     panel_urls: item.images,
     status: publish ? 'published' : 'draft',
     published_at: publish ? new Date().toISOString() : null,

@@ -157,6 +157,47 @@
   .intima-pin * { animation: none !important; }
 }
 
+/* Pin name plate under the figure, Snap style: white bold text on
+   a semi-transparent black pill with a subtle shadow. Hidden by
+   default; JS adds .plate-on for the selected pin and for the
+   representative pin of an overlap group ("Name & N more"). */
+.intima-pin-plate {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.intima-pin .intima-pin-plate.plate-on {
+  display: inline-flex;
+}
+/* The selected pin shows the under-figure plate only, never the
+   name plate above her head as well. */
+.intima-pin.intima-pin-selected .intima-pin-topplate {
+  display: none;
+}
+.intima-pin-plate .pin-plate-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #5b6b7a;
+}
+.intima-pin-plate .pin-plate-dot.on {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+}
+
 /* Protected media (screenshot deterrents): no long-press callout,
    no image dragging out of the app. The PrivacyVeil handles the
    rest (context menu, app-switcher cover). */

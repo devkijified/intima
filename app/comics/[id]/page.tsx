@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, ChevronRight } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { PhotoWatermark } from '@/components/media/PhotoWatermark'
 
 interface Episode {
   id: string
@@ -16,10 +17,50 @@ interface Episode {
   synopsis: string | null
   panel_urls: string[]
   view_count: number
-  source_name: string | null
-  source_link: string | null
   comic_id: string | null
   cover_url: string | null
+}
+
+/**
+ * One reader panel: a fixed full-width cell on a dark ground, so a
+ * panel that is still loading (or one that failed) never shifts the
+ * column or leaves a broken hole. Every loaded panel carries the
+ * platform watermark, straight at the bottom centre, like photos.
+ * A failed panel swaps to a neat dark tile with a tap to retry.
+ */
+function PanelImage({ src, index, eager }: { src: string; index: number; eager: boolean }) {
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const liveSrc = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}cb=${attempt}`
+
+  return (
+    <div className="relative w-full bg-[#171017]">
+      {failed ? (
+        <button
+          type="button"
+          onClick={() => { setAttempt((a) => a + 1); setFailed(false) }}
+          className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 px-6 text-center"
+        >
+          <span className="font-display text-base font-semibold text-white/85">This page could not load</span>
+          <span className="text-sm font-medium text-gold">Tap to retry</span>
+        </button>
+      ) : (
+        <>
+          <img
+            key={attempt}
+            src={liveSrc}
+            alt={`Panel ${index + 1}`}
+            loading={eager ? 'eager' : 'lazy'}
+            fetchPriority={eager ? 'high' : undefined}
+            onError={() => setFailed(true)}
+            className="block h-auto w-full animate-fade-in"
+            draggable={false}
+          />
+          <PhotoWatermark variant="edge" />
+        </>
+      )}
+    </div>
+  )
 }
 
 /** Vertical-scroll reader: panels stack, reading is tracked for analytics. */
@@ -34,24 +75,11 @@ export default function ComicReaderPage() {
   const endRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
-  const viewerKey = () => {
-    try {
-      let k = localStorage.getItem('intima_viewer_key')
-      if (!k) {
-        k = 'v_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
-        localStorage.setItem('intima_viewer_key', k)
-      }
-      return k
-    } catch {
-      return 'v_' + Math.random().toString(36).slice(2)
-    }
-  }
-
   useEffect(() => {
     let live = true
     ;(async () => {
       const { data } = await supabase.from('comic_episodes')
-        .select('id, episode_no, title, synopsis, panel_urls, view_count, source_name, source_link, comic_id, cover_url')
+        .select('id, episode_no, title, synopsis, panel_urls, view_count, comic_id, cover_url')
         .eq('id', id)
         .eq('status', 'published')
         .maybeSingle()
@@ -70,11 +98,13 @@ export default function ComicReaderPage() {
           body: JSON.stringify({ comicId: (data as Episode).comic_id }),
         }).catch(() => {})
       }
-      // Track the open (deduped per viewer server-side).
+      // Track the open. Reader identity rides the httpOnly
+      // intima_reader_id cookie the track route sets, so a reader
+      // counts once per episode however often they return.
       fetch('/api/comics/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ episodeId: id, viewerKey: viewerKey() }),
+        body: JSON.stringify({ episodeId: id }),
       }).catch(() => {})
       // Next episode inside the same comic (numbers run per series).
       let nextQuery = supabase.from('comic_episodes')
@@ -101,7 +131,7 @@ export default function ComicReaderPage() {
         fetch('/api/comics/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ episodeId: id, viewerKey: viewerKey(), completed: true }),
+          body: JSON.stringify({ episodeId: id, completed: true }),
         }).catch(() => {})
         io.disconnect()
       }
@@ -132,9 +162,13 @@ export default function ComicReaderPage() {
   }
 
   const backHref = ep?.comic_id ? `/comics/series/${ep.comic_id}` : '/comics'
+  const firstPanel = ep?.panel_urls?.[0]
 
   return (
     <div className="mx-auto max-w-2xl pb-24 animate-fade-in">
+      {/* Warm the first panel before the reader scrolls to it. */}
+      {firstPanel && <link rel="preload" as="image" href={firstPanel} fetchPriority="high" />}
+
       {/* Reader top bar */}
       <div className="sticky top-0 z-20 border-b border-black/[0.04] bg-cream/85 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-3 px-4 py-2.5">
@@ -177,18 +211,12 @@ export default function ComicReaderPage() {
         </div>
       )}
 
-      {/* Panels on a paper column, like pages of the magazine. */}
+      {/* Panels: one consistent column, panels edge to edge with no
+          gaps, each in its own dark cell so loading never shifts. */}
       <div className="bg-[#241722] px-2 py-3 sm:px-4">
-        <div className="mx-auto max-w-xl overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="mx-auto w-full max-w-xl overflow-hidden rounded-lg shadow-2xl">
           {ep?.panel_urls.map((src, i) => (
-            <img
-              key={i}
-              src={src}
-              alt={`Panel ${i + 1}`}
-              loading={i < 2 ? 'eager' : 'lazy'}
-              className="w-full animate-fade-in"
-              draggable={false}
-            />
+            <PanelImage key={`${i}-${src}`} src={src} index={i} eager={i < 3} />
           ))}
         </div>
       </div>
@@ -207,15 +235,6 @@ export default function ComicReaderPage() {
           <Link href={backHref} className="btn-soft mt-6 inline-flex min-h-[44px] items-center justify-center px-6 py-3 text-sm">Back to the comic</Link>
         )}
         <p className="mt-6 text-xs text-neutral-400">New episodes drop regularly. Follow Intima and you will never miss one.</p>
-        {ep?.source_name && (
-          <p className="mt-2 text-[11px] text-neutral-400">
-            Source: {ep.source_link ? (
-              <a href={ep.source_link} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">{ep.source_name}</a>
-            ) : (
-              <span className="font-semibold">{ep.source_name}</span>
-            )}
-          </p>
-        )}
       </div>
     </div>
   )
