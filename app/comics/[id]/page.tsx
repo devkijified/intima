@@ -28,6 +28,37 @@ interface Episode {
  * platform watermark, straight at the bottom centre, like photos.
  * A failed panel swaps to a neat dark tile with a tap to retry.
  */
+/**
+ * One stable reader hint per browser, shared by every tracking ping
+ * on this page. The track route adopts it as the guest identity
+ * until its own httpOnly reader cookie exists, which is what stops
+ * two pings from one visit minting two readers. Cached in a module
+ * variable first so even a browser that refuses storage still uses
+ * a single hint for the whole page load.
+ */
+let hintCache: string | null = null
+function readerHint(): string {
+  if (hintCache) return hintCache
+  try {
+    hintCache = window.localStorage.getItem('intima_reader_hint')
+  } catch {
+    /* storage refused: the module cache still covers this load */
+  }
+  if (!hintCache) {
+    const rand =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36)
+    hintCache = `r_${rand}`
+    try {
+      window.localStorage.setItem('intima_reader_hint', hintCache)
+    } catch {
+      /* best effort */
+    }
+  }
+  return hintCache
+}
+
 function PanelImage({ src, index, eager }: { src: string; index: number; eager: boolean }) {
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -100,11 +131,15 @@ export default function ComicReaderPage() {
       }
       // Track the open. Reader identity rides the httpOnly
       // intima_reader_id cookie the track route sets, so a reader
-      // counts once per episode however often they return.
+      // counts once per episode however often they return. Every
+      // ping also carries the reader hint: the completion ping can
+      // fire before the cookie from this response comes back, and
+      // without a shared hint the route would mint a second reader
+      // for the same visit (proven live: two opens counted 2).
       fetch('/api/comics/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ episodeId: id }),
+        body: JSON.stringify({ episodeId: id, viewerKey: readerHint() }),
       }).catch(() => {})
       // Next episode inside the same comic (numbers run per series).
       let nextQuery = supabase.from('comic_episodes')
@@ -131,7 +166,7 @@ export default function ComicReaderPage() {
         fetch('/api/comics/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ episodeId: id, completed: true }),
+          body: JSON.stringify({ episodeId: id, completed: true, viewerKey: readerHint() }),
         }).catch(() => {})
         io.disconnect()
       }
