@@ -18,6 +18,7 @@ import { LANGUAGE_OPTIONS, MAX_LANGUAGES } from '@/lib/languages'
 import { useCities } from '@/lib/citiesLive'
 import { computeSetupSteps, isLiveOnMap, type SetupProfile } from '@/lib/setup/completeness'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
+import { HelpTip } from '@/components/ui/Tooltip'
 import { AvatarUploader, GalleryUploader } from '@/components/uploads/PhotoUploader'
 import {
   ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, Clock, MapPin, Plane, ShieldCheck, X,
@@ -65,6 +66,7 @@ export default function SetupWizardPage() {
   const [customVibeInput, setCustomVibeInput] = useState('')
   const [customVibeMsg, setCustomVibeMsg] = useState('')
   const [presetServices, setPresetServices] = useState<string[]>([])
+  const [feeNgn, setFeeNgn] = useState(5000)
   const [presetVibes, setPresetVibes] = useState<string[]>(DEFAULT_VIBES)
   const [customServiceMsg, setCustomServiceMsg] = useState('')
   const [travelMode, setTravelMode] = useState<'none' | 'selected' | 'nationwide'>('none')
@@ -78,10 +80,12 @@ export default function SetupWizardPage() {
   useEffect(() => {
     let live = true
     ;(async () => {
-      const [ps, pv] = await Promise.all([
+      const [ps, pv, fee] = await Promise.all([
         getSetting<unknown>('preset_services', []),
         getSetting<unknown>('preset_vibes', null),
+        getSetting<unknown>('connection_fee_ngn', 5000),
       ])
+      if (typeof fee === 'number' && fee > 0) setFeeNgn(fee)
       if (!live) return
       if (Array.isArray(ps)) setPresetServices(ps.filter((x): x is string => typeof x === 'string'))
       if (Array.isArray(pv) && pv.length > 0) setPresetVibes(pv.filter((x): x is string => typeof x === 'string'))
@@ -357,7 +361,9 @@ export default function SetupWizardPage() {
 
       {step === 3 && (
         <div className="mt-4 space-y-4">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Rates and services</h1>
+          <h1 className="flex items-center gap-2 font-display text-3xl font-semibold tracking-tight text-charcoal">Rates and services
+            <HelpTip text={`Your rates are yours: the client pays you directly and you keep everything. Intima earns only the connection fee of ₦${feeNgn.toLocaleString('en-NG')}, which the client pays to open the booking, never from your rate.`} />
+          </h1>
           <div className="card-luxe space-y-4 p-5">
             {([
               ['Short time (₦)', rateShort, setRateShort],
@@ -371,7 +377,9 @@ export default function SetupWizardPage() {
               </div>
             ))}
             <label className="flex items-center justify-between gap-3 rounded-2xl bg-cream px-4 py-3">
-              <span className="text-sm font-medium text-charcoal">My rates are negotiable</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-charcoal">My rates are negotiable
+                <HelpTip text="On means clients can propose their own rate when they request you, and you can accept or keep your listed rate. Off means your listed rate is final and no propose box shows." />
+              </span>
               <input type="checkbox" checked={negotiable} onChange={(e) => setNegotiable(e.target.checked)} className="h-5 w-5 accent-[#AC244D]" />
             </label>
             <div>
@@ -497,7 +505,9 @@ export default function SetupWizardPage() {
 
       {step === 4 && (
         <div className="mt-4 space-y-4">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Can you travel?</h1>
+          <h1 className="flex items-center gap-2 font-display text-3xl font-semibold tracking-tight text-charcoal">Can you travel?
+            <HelpTip text="Clients in cities you pick will see that you can come to them. How you travel and who covers the cost is agreed between you and the client in chat after the connection opens." />
+          </h1>
           <p className="text-sm text-neutral-500">Some companions only work in their city. Others can travel to clients. Tell clients which one you are.</p>
           <div className="space-y-2.5">
             {([
@@ -536,7 +546,9 @@ export default function SetupWizardPage() {
 
       {step === 5 && (
         <div className="mt-4 space-y-4">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Who can book you</h1>
+          <h1 className="flex items-center gap-2 font-display text-3xl font-semibold tracking-tight text-charcoal">Who can book you
+            <HelpTip text="Stricter gates mean fewer requests but safer ones. You can change these any time in your profile settings, and clients who do not qualify are told what to fix instead of paying." />
+          </h1>
           <p className="text-sm text-neutral-500">Like Bybit P2P, you can set who is allowed to open a booking with you. Clients who do not qualify will see what they are missing instead of paying.</p>
           <div className="card-luxe space-y-5 p-5">
             <label className="flex items-center justify-between gap-3">
