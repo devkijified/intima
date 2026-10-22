@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Search, ShieldCheck, Eye, EyeOff } from '@/lib/icons'
+import { Search, Eye, EyeOff } from '@/lib/icons'
+import { VerifiedBadge } from '@/components/admin/VerifiedBadge'
 
 interface ModelRow {
   id: string
@@ -141,9 +142,9 @@ export default function AdminModelsPage() {
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-charcoal">
-                      {m.display_name ?? 'Unnamed'}
-                      {m.is_verified && <ShieldCheck aria-hidden className="ml-1 inline h-4 w-4 text-primary" />}
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium text-charcoal">
+                      <span className="min-w-0 truncate">{m.display_name ?? 'Unnamed'}</span>
+                      {m.is_verified && <VerifiedBadge />}
                     </p>
                     <p className="text-xs text-neutral-500">
                       {m.city ?? 'No city'}{m.rate_short_time_ngn ? ` · ₦${m.rate_short_time_ngn.toLocaleString()}` : ''}

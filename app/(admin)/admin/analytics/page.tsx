@@ -139,10 +139,10 @@ function KpiNum({
 }) {
   return (
     <Card className={warn ? 'border-amber-300 bg-amber-50' : undefined}>
-      <CardContent className="p-4">
+      <CardContent className="flex h-full flex-col items-center p-4 text-center">
         <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
         <p className="mt-1 font-display text-2xl font-semibold tracking-tight text-charcoal">{display}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
           {previous !== undefined && <Delta value={numeric} previous={previous} />}
           {sub && <span className="text-xs text-gray-500">{sub}</span>}
         </div>

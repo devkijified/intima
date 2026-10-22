@@ -10,6 +10,12 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
 
+  const { data: profile } = await supabase.from('profiles')
+    .select('role').eq('id', user.id).maybeSingle();
+  if (!profile || !['admin', 'super_admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Admin only' }, { status: 403 });
+  }
+
   const svc = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!

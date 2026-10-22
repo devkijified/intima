@@ -15,6 +15,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
+  // Storing the platform Gmail token is an admin effect: require the
+  // same role the connect route checks before the token is written.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  if (profile?.role !== 'admin' && profile?.role !== 'super_admin') {
+    return NextResponse.redirect(new URL('/admin/email-setup?error=forbidden', req.url));
+  }
+
   const code = req.nextUrl.searchParams.get('code');
   const appUrl = new URL(req.url).origin;
   if (!code) {

@@ -581,11 +581,16 @@ export function RequestConnectionModal({
         if (step !== 'processing') onClose()
       }}
     >
+      {/* Sheet frame: fixed column capped at the full dynamic viewport
+          height. The header never scrolls (safe-area top padding keeps
+          the title visible under notches), the body is the only
+          scroller, and the safe-area bottom padding lives on the body
+          so the last action never hides behind the home indicator. */}
       <div
-        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl px-6 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6 shadow-2xl max-h-[92vh] overflow-y-auto"
+        className="flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[92dvh] sm:max-w-md sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex shrink-0 items-start justify-between px-6 pb-4 pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-6">
           <h2 className="text-xl font-bold text-charcoal">Request connection</h2>
           <button
             onClick={onClose}
@@ -597,6 +602,7 @@ export function RequestConnectionModal({
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pb-6">
         {step === 'summary' && (
           <>
             <div className="flex items-center gap-4 mb-5">
@@ -1007,6 +1013,7 @@ export function RequestConnectionModal({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

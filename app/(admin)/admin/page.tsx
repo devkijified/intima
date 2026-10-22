@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Users, UserCheck, UserX, Video, Star } from '@/lib/icons'
+import { Users, UserCheck, Video, Star } from '@/lib/icons'
+import { formatCompactCount } from '@/lib/utils/helpers'
 
 export default function AdminPage() {
   const [activity, setActivity] = useState<any[]>([])
@@ -73,7 +74,7 @@ export default function AdminPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard href="/admin/users" icon={<Users aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Users" value={stats.totalUsers} />
         <StatCard href="/admin/models" icon={<UserCheck aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Companions" value={stats.totalModels} />
-        <StatCard href="/admin/verifications" icon={<UserX aria-hidden className="h-6 w-6 text-yellow-500" />} title="Pending Verifications" value={stats.pendingVerifications} />
+        <StatCard href="/admin/verifications" icon={<UserCheck aria-hidden className="h-6 w-6 text-[#C9A84C]" />} title="Pending Verifications" value={stats.pendingVerifications} />
         <StatCard href="/admin/reports" icon={<Star aria-hidden className="h-6 w-6 text-[#AC244D]" />} title="Total Reviews" value={stats.totalReviews} />
       </div>
 
@@ -130,13 +131,11 @@ export default function AdminPage() {
 function StatCard({ icon, title, value, href }: { icon: React.ReactNode; title: string; value: number; href: string }) {
   return (
     <Link href={href} className="block transition-transform active:scale-[0.99]" aria-label={`${title}: open the section`}>
-      <Card className="transition-shadow hover:shadow-md">
-        <CardContent className="flex items-center justify-between p-6">
-          <div>
-            <p className="text-sm text-gray-600">{title}</p>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-          </div>
-          <div className="rounded-full bg-pink-50 p-3">{icon}</div>
+      <Card className="h-full transition-shadow hover:shadow-md">
+        <CardContent className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-muted">{icon}</div>
+          <p className="font-display text-3xl font-bold tracking-tight text-charcoal">{formatCompactCount(value)}</p>
+          <p className="text-sm text-neutral-500">{title}</p>
         </CardContent>
       </Card>
     </Link>

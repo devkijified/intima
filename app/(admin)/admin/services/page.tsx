@@ -10,7 +10,7 @@ import {
   serviceLabel,
   type ServiceCategory,
 } from '@/lib/services'
-import { NIGERIA_CITIES } from '@/lib/cities'
+import { NIGERIA_CITIES, gazetteerCoords } from '@/lib/cities'
 import { DEFAULT_VIBES } from '@/lib/vibes'
 import { getSetting } from '@/lib/settings/platformSettings'
 import { MapPin, Plus, Sparkles, Tag, Trash2 } from '@/lib/icons'
@@ -256,6 +256,12 @@ function CitiesEditor() {
   const [lng, setLng] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
+  const [coordNote, setCoordNote] = useState('')
+  const [finding, setFinding] = useState(false)
+  // The name the current lat/lng were auto-filled for, so typing a
+  // different unknown name clears the auto values instead of
+  // silently pinning the new city at the old city's centre.
+  const [autoFor, setAutoFor] = useState<string | null>(null)
 
   useEffect(() => {
     ;(async () => {
@@ -287,6 +293,52 @@ function CitiesEditor() {
     }
   }
 
+  function onNameChange(v: string) {
+    setName(v)
+    const known = gazetteerCoords(v)
+    if (known) {
+      setLat(String(known[0]))
+      setLng(String(known[1]))
+      setAutoFor(v.trim())
+      setCoordNote(`Coordinates filled in automatically for ${v.trim()}. You can still edit them.`)
+    } else if (autoFor) {
+      setLat('')
+      setLng('')
+      setAutoFor(null)
+      setCoordNote('')
+    }
+  }
+
+  async function findCoordinates() {
+    const v = name.trim()
+    if (!v) return
+    setFinding(true)
+    setCoordNote('')
+    try {
+      const q = /nigeria/i.test(v) ? v : `${v}, Nigeria`
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,
+      )
+      const data = (await res.json().catch(() => null)) as
+        | Array<{ lat?: string; lon?: string }>
+        | null
+      const hit = Array.isArray(data) ? data[0] : null
+      const la = Number(hit?.lat)
+      const ln = Number(hit?.lon)
+      if (hit && Number.isFinite(la) && Number.isFinite(ln)) {
+        setLat(String(la))
+        setLng(String(ln))
+        setAutoFor(v)
+        setCoordNote(`Coordinates found for ${v}. Add the city to save them.`)
+      } else {
+        setCoordNote('We could not find coordinates for that name. You can type the latitude and longitude yourself.')
+      }
+    } catch {
+      setCoordNote('The coordinate lookup did not answer. You can type the latitude and longitude yourself.')
+    }
+    setFinding(false)
+  }
+
   function add() {
     const v = name.trim()
     if (!v) return
@@ -299,8 +351,12 @@ function CitiesEditor() {
     const ln = Number(lng)
     if (lat.trim() && lng.trim() && Number.isFinite(la) && Number.isFinite(ln)) {
       nextCoords[v] = [la, ln]
+    } else {
+      // Known city, blank fields: the gazetteer centre still lands.
+      const known = gazetteerCoords(v)
+      if (known) nextCoords[v] = known
     }
-    setName(''); setLat(''); setLng('')
+    setName(''); setLat(''); setLng(''); setAutoFor(null); setCoordNote('')
     void persist([...cities, v], nextCoords)
   }
 
@@ -320,8 +376,8 @@ function CitiesEditor() {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-neutral-500">
-          The cities companions can base themselves in. Add latitude and longitude for a new
-          city so the map can fly to it and pins can be placed there.
+          The cities companions can base themselves in. Coordinates fill in on their own for
+          known cities, so the map can fly to a new city and pins can be placed there.
         </p>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {cities.map((city) => (
@@ -340,13 +396,27 @@ function CitiesEditor() {
           ))}
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_110px_110px_auto]">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="City name, e.g. Asaba" className={inputCls} />
+          <input value={name} onChange={(e) => onNameChange(e.target.value)} placeholder="City name, e.g. Asaba" className={inputCls} />
           <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Lat" inputMode="decimal" className={inputCls} />
           <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Lng" inputMode="decimal" className={inputCls} />
           <button type="button" onClick={add} disabled={busy || !name.trim()} className="btn-luxe min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">
             <Plus aria-hidden className="h-4 w-4" /> Add city
           </button>
         </div>
+        {name.trim() && !gazetteerCoords(name) && (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void findCoordinates()}
+              disabled={finding || busy}
+              className="btn-soft min-h-[44px] px-4 py-2 text-sm disabled:opacity-50"
+            >
+              <MapPin aria-hidden className="h-4 w-4" /> {finding ? 'Looking…' : 'Find coordinates'}
+            </button>
+            <HelpTip text="Find coordinates looks the place up on OpenStreetMap and fills in its centre. Nothing is saved until you add the city." label="About finding coordinates" />
+          </div>
+        )}
+        {coordNote && <p className="mt-2 text-xs font-medium text-neutral-600">{coordNote}</p>}
         {note && <p className="mt-2 text-xs text-neutral-500">{note}</p>}
       </CardContent>
     </Card>

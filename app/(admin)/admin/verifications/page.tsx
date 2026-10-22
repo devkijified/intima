@@ -6,6 +6,7 @@ import { isAdmin } from '@/lib/admin/isAdmin'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { ShieldAlert, CheckCircle2, XCircle, Loader2, ExternalLink } from '@/lib/icons'
+import { VerifiedBadge } from '@/components/admin/VerifiedBadge'
 
 interface VerificationRow {
   id: string
@@ -189,6 +190,7 @@ export default function AdminVerificationsPage() {
             <CardHeader>
               <CardTitle className="text-base">
                 {row.profiles?.display_name || row.profiles?.full_name || 'Unnamed companion'}
+                {row.status === 'approved' && <VerifiedBadge className="ml-2" />}
                 <span className="ml-2 text-xs font-normal text-gray-500">
                   submitted {new Date(row.submitted_at).toLocaleString()}
                 </span>

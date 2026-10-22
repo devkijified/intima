@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Figtree } from 'next/font/google'
 import './globals.css'
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, OG_IMAGE_PATH } from '@/lib/seo'
 import { AgeGate } from '@/components/AgeGate'
 import { SplashDismiss } from '@/components/SplashDismiss'
 import PushAutoSubscribe from '@/components/PushAutoSubscribe'
@@ -30,8 +31,29 @@ const figtree = Figtree({
 export const viewport = { viewportFit: 'cover', themeColor: '#AC244D' };
 
 export const metadata: Metadata = {
-  title: 'Intima - Premium Companion Platform',
-  description: "The premier platform for verified companions.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'Intima · Premium Companion Platform',
+    template: '%s · Intima',
+  },
+  description: SITE_DESCRIPTION,
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    title: 'Intima · Premium Companion Platform',
+    description: SITE_DESCRIPTION,
+    url: '/',
+    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: 'Intima' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Intima · Premium Companion Platform',
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE_PATH],
+  },
   manifest: '/manifest.webmanifest',
   themeColor: '#AC244D',
   icons: {
@@ -66,6 +88,30 @@ export default function RootLayout({
         <style dangerouslySetInnerHTML={{ __html: `html,body{background:#FDF9F6;margin:0;padding:0;min-height:100dvh}#app-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#C22A57 0%,#8F1D40 100%)}` }} />
       </head>
       <body>
+        {/* Structured data: who Intima is, in the shape search engines read. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'Organization',
+                  name: SITE_NAME,
+                  url: SITE_URL,
+                  logo: `${SITE_URL}${OG_IMAGE_PATH}`,
+                  description: SITE_DESCRIPTION,
+                },
+                {
+                  '@type': 'WebSite',
+                  name: SITE_NAME,
+                  url: SITE_URL,
+                  description: SITE_DESCRIPTION,
+                },
+              ],
+            }),
+          }}
+        />
         {/* In-app splash: server-rendered so it paints before JS loads. */}
         <div id="app-splash">
           <div className="splash-mark">I</div>

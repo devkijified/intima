@@ -1,16 +1,21 @@
 import type { MetadataRoute } from 'next';
+import { SITE_URL } from '@/lib/seo';
 
-const BASE_URL = 'https://intima-snowy.vercel.app';
-
+/**
+ * Public content is crawlable; every signed-in, transactional or
+ * admin surface stays out of the index. The sitemap carries the
+ * canonical public list.
+ */
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: ['/', '/city', '/companion', '/c', '/comics', '/live'],
+      allow: '/',
       disallow: [
         '/api/',
         '/admin',
         '/dashboard',
+        '/auth',
         '/messages',
         '/profile',
         '/setup',
@@ -18,14 +23,16 @@ export default function robots(): MetadataRoute.Robots {
         '/coins',
         '/earnings',
         '/bookings',
+        '/board',
         '/channel',
         '/saved',
         '/notifications',
         '/verification',
         '/models',
         '/payments',
+        '/tickets',
       ],
     },
-    sitemap: `${BASE_URL}/sitemap.xml`,
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }

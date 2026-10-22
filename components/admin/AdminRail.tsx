@@ -1,14 +1,16 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Banknote, LayoutDashboard, Users, UserCheck, Video, Flag, Settings,
+  Banknote, LayoutDashboard, Users, UserCheck, Heart, Flag, Settings,
   LogOut, Radio, Mail, BookOpen, ShieldAlert, AlertTriangle, Lock,
   Trophy, Chart, ListChecks, Gift, Home, Tag, Ticket,
 } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { createClient } from '@/lib/supabase/client'
+import { formatCompactCount } from '@/lib/utils/helpers'
 
 const ADMIN_NAV = [
   { href: '/admin', label: 'Dashboard', Icon: LayoutDashboard },
@@ -17,7 +19,7 @@ const ADMIN_NAV = [
   { href: '/admin/verifications', label: 'Verifications', Icon: UserCheck },
   { href: '/admin/reports', label: 'Reports', Icon: Flag },
   { href: '/admin/errors', label: 'Errors', Icon: AlertTriangle },
-  { href: '/admin/models', label: 'Companions', Icon: Video },
+  { href: '/admin/models', label: 'Companions', Icon: Heart },
   { href: '/admin/live', label: 'Live streams', Icon: Radio },
   { href: '/admin/comics', label: 'Comics', Icon: BookOpen },
   { href: '/admin/snaps', label: 'Fans Only review', Icon: Lock },
@@ -33,13 +35,70 @@ const ADMIN_NAV = [
 ]
 
 /**
+ * How many items are waiting in each queue, read exactly the way
+ * each queue page reads its own waiting work:
+ * verifications status 'pending', reports status 'open', disputes
+ * the API's open list (connections with fee_state 'disputed'),
+ * cash-outs status 'pending', Fans Only the review queue itself,
+ * perks pendingEntries, board requests still 'open', support
+ * tickets status 'open'. A failed count simply shows no badge.
+ */
+async function fetchQueueCounts(): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {}
+  const supabase = createClient()
+  const json = async (url: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) return null
+      return (await res.json()) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+  const len = (v: unknown) => (Array.isArray(v) ? v.length : 0)
+
+  const [verifications, reports, disputes, cashouts, snaps, perks, board, tickets] =
+    await Promise.all([
+      supabase.from('verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'open'),
+      json('/api/admin/disputes'),
+      json('/api/admin/cashouts?status=pending'),
+      json('/api/admin/snaps'),
+      json('/api/admin/perks'),
+      json('/api/admin/board'),
+      json('/api/tickets?status=open'),
+    ])
+
+  if (typeof verifications.count === 'number') counts['/admin/verifications'] = verifications.count
+  if (typeof reports.count === 'number') counts['/admin/reports'] = reports.count
+  if (disputes) counts['/admin/disputes'] = len(disputes.open)
+  if (cashouts) counts['/admin/cashouts'] = len(cashouts.requests)
+  if (snaps) counts['/admin/snaps'] = len(snaps.snaps)
+  if (perks) counts['/admin/perks'] = len(perks.pendingEntries)
+  if (board) {
+    counts['/admin/board'] = (Array.isArray(board.requests) ? board.requests : [])
+      .filter((r) => (r as { status?: string }).status === 'open').length
+  }
+  if (tickets) counts['/admin/tickets'] = len(tickets.tickets)
+  return counts
+}
+
+/**
  * Admin navigation as a slim left icon rail, Muse desktop style:
  * icons only, the label rides in a tooltip on the right, the current
- * section wears a burgundy pill, and log out sits at the bottom.
- * The rail is fixed; the layout reserves its width with padding.
+ * section wears a burgundy pill, queue counts ride as small burgundy
+ * pills on the icons where work is waiting, and log out sits at the
+ * bottom. The rail is fixed; the layout reserves its width.
  */
 export function AdminRail() {
   const pathname = usePathname()
+  const [counts, setCounts] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    let live = true
+    fetchQueueCounts().then((c) => { if (live) setCounts(c) }).catch(() => {})
+    return () => { live = false }
+  }, [pathname])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -68,19 +127,30 @@ export function AdminRail() {
             href === '/admin'
               ? pathname === '/admin'
               : pathname === href || pathname.startsWith(`${href}/`)
+          const count = counts[href] ?? 0
           return (
-            <Tooltip key={href} label={label} side="right">
+            <Tooltip key={href} label={count > 0 ? `${label} · ${formatCompactCount(count)} waiting` : label} side="right">
               <Link
                 href={href}
-                aria-label={label}
+                aria-label={count > 0 ? `${label}, ${count} waiting` : label}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl transition-colors ${
+                className={`relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl transition-colors ${
                   active
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-gray-500 hover:bg-primary-muted hover:text-primary'
                 }`}
               >
                 <Icon className="h-5 w-5" />
+                {count > 0 && (
+                  <span
+                    aria-hidden
+                    className={`absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold ring-2 ${
+                      active ? 'bg-white text-primary ring-primary' : 'bg-primary text-white ring-white'
+                    }`}
+                  >
+                    {formatCompactCount(count)}
+                  </span>
+                )}
               </Link>
             </Tooltip>
           )

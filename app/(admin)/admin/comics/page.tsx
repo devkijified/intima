@@ -342,8 +342,8 @@ export default function AdminComicsPage() {
           { label: 'Unique readers', value: totals.readers },
           { label: 'Completions', value: totals.completed },
         ].map((s) => (
-          <div key={s.label} className="card-luxe p-3 text-center sm:p-4">
-            <p className="font-display text-2xl font-semibold text-charcoal sm:text-3xl">{formatCompactCount(s.value)}</p>
+          <div key={s.label} className="card-luxe min-w-0 p-3 text-center sm:p-4">
+            <p className="truncate font-display text-2xl font-semibold text-charcoal sm:text-3xl">{formatCompactCount(s.value)}</p>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">{s.label}</p>
           </div>
         ))}
@@ -378,8 +378,8 @@ export default function AdminComicsPage() {
           <div className="mt-4 flex flex-wrap items-center gap-1.5">
             <HelpTip text="Featuring puts one comic first on the shelf, in the big banner, so readers see it before everything else. Only one comic holds the spot at a time." />
             {comics.map((c) => (
-              <span key={c.id} className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-cream px-3 py-1.5 text-xs font-medium text-charcoal ring-1 ring-black/[0.05]">
-                {c.title} · {episodes.filter((e) => e.comic_id === c.id).length} episodes
+              <span key={c.id} className="inline-flex min-h-[44px] max-w-full flex-wrap items-center gap-2 rounded-2xl bg-cream px-3 py-1.5 text-xs font-medium text-charcoal ring-1 ring-black/[0.05] sm:rounded-full">
+                <span className="min-w-0 truncate">{c.title} · {episodes.filter((e) => e.comic_id === c.id).length} episodes</span>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${c.story_status === 'completed' ? 'bg-neutral-200 text-neutral-600' : 'bg-[#C9A84C]/25 text-[#8a6d2a]'}`}>
                   {c.story_status === 'completed' ? 'Completed' : 'Ongoing'}
                 </span>
@@ -489,7 +489,7 @@ export default function AdminComicsPage() {
           {pagePreview && comics.length === 0 && (
             <div className="mb-3 rounded-2xl bg-[#C9A84C]/15 p-3.5">
               <p className="text-xs leading-relaxed text-charcoal">There is no comic yet to receive these episodes, which is why the import button below stays off.</p>
-              <button type="button" onClick={createFromPreview} disabled={busy} className="btn-luxe mt-2.5 min-h-[44px] px-4 py-2 text-sm disabled:opacity-50">
+              <button type="button" onClick={createFromPreview} disabled={busy} className="btn-luxe mt-2.5 min-h-[44px] max-w-full whitespace-normal break-words px-4 py-2 text-left text-sm disabled:opacity-50">
                 Create “{pagePreview.title}” as a new comic
               </button>
             </div>
@@ -505,7 +505,7 @@ export default function AdminComicsPage() {
         </label>
         {pagePreview && pagePreview.kind === 'series' && (
           <div className="mt-4 space-y-2">
-            <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
             {pagePreview.coverUrl && (
               <div className="flex items-center gap-3">
                 <img src={pagePreview.coverUrl} alt="" className="h-20 w-14 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
@@ -535,7 +535,7 @@ export default function AdminComicsPage() {
         )}
         {pagePreview && pagePreview.kind === 'episode' && (
           <div className="mt-4 space-y-3">
-            <p className="text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
             {pagePreview.relay && (
               <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
             )}
@@ -562,7 +562,7 @@ export default function AdminComicsPage() {
         {importLog.length > 0 && (
           <div className="mt-3 space-y-1 rounded-xl bg-cream px-3 py-2">
             {importLog.map((line, i) => (
-              <p key={i} className="text-xs text-neutral-600">{line}</p>
+              <p key={i} className="break-words text-xs text-neutral-600">{line}</p>
             ))}
           </div>
         )}
@@ -578,10 +578,10 @@ export default function AdminComicsPage() {
           <div key={e.id} className="card-luxe flex flex-wrap items-center gap-3 p-4">
             <div className="min-w-0 flex-1 basis-48">
               <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-charcoal">
-                <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-primary">
+                <span className="max-w-full truncate rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-primary">
                   {comicTitle(e.comic_id)} · Ep {e.episode_no}
                 </span>
-                <span className="truncate">{e.title}</span>
+                <span className="min-w-0 truncate">{e.title}</span>
                 {e.status === 'published'
                   ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600"><CheckCircle2 aria-hidden className="h-3 w-3" /> Published</span>
                   : <span className="text-[11px] font-medium text-neutral-400">Draft</span>}
