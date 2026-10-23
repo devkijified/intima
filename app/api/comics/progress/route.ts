@@ -12,8 +12,10 @@ const READER_COOKIE = 'intima_reader_id';
  * durable guest cookie, else the reader's localStorage hint key.
  * The series page turns the answer into its main CTA:
  *   fresh    -> "Start reading: Episode 1"
- *   resume   -> an episode was opened but not finished
- *   continue -> the last finished episode's next chapter
+ *   resume   -> the episode the reader touched most recently
+ *               (their explicit pick wins over older unfinished
+ *               chapters), still unfinished
+ *   continue -> the chapter after the one they last finished
  *   finished -> every published episode completed
  * Also returns the opened and completed episode ids so the episode
  * list can stop calling chapters the reader already finished "NEW".
@@ -57,20 +59,24 @@ export async function GET(req: NextRequest) {
   }
 
   const epIds = episodes.map((e) => e.id);
-  // progress_pct arrives with migration 081; if the column is not
-  // there yet, retry without it so the endpoint never breaks.
-  const readReads = (withPct: boolean) => {
+  // progress_pct arrives with migration 081 and last_read_at with
+  // 083; if a column is not there yet, retry narrower so the
+  // endpoint never breaks.
+  const readReads = (cols: string) => {
     let q = svc.from('comic_reads')
-      .select(withPct ? 'episode_id, completed, progress_pct' : 'episode_id, completed')
+      .select(cols)
       .in('episode_id', epIds);
     q = user ? q.eq('user_id', user.id) : q.eq('viewer_key', guestId as string);
     return q;
   };
-  let { data: reads, error: readsErr } = await readReads(true);
+  let { data: reads, error: readsErr } = await readReads('episode_id, completed, progress_pct, last_read_at');
   if (readsErr) {
-    ({ data: reads } = await readReads(false));
+    ({ data: reads, error: readsErr } = await readReads('episode_id, completed, last_read_at'));
   }
-  type ReadRow = { episode_id: string; completed: boolean; progress_pct?: number | null };
+  if (readsErr) {
+    ({ data: reads } = await readReads('episode_id, completed'));
+  }
+  type ReadRow = { episode_id: string; completed: boolean; progress_pct?: number | null; last_read_at?: string | null };
   const readRows = (reads ?? []) as unknown as ReadRow[];
 
   const openedIds = readRows.map((r) => r.episode_id);
@@ -94,8 +100,49 @@ export async function GET(req: NextRequest) {
     completedIds.map((eid) => noById.get(eid)).filter((n): n is number => n !== undefined)
   );
 
-  // Mid-episode wins: the lowest-numbered chapter opened but never
-  // finished is where the reader actually stopped.
+  // The reader's own latest move wins (owner rule, 2026-10-23):
+  // the episode they touched most recently is their place, even
+  // when an earlier chapter is still unfinished. Tapping
+  // Episode 11 moves this button to Episode 11.
+  const stamped = readRows.filter((r) => r.last_read_at);
+  if (stamped.length > 0) {
+    const last = stamped.reduce((a, b) => (String(a.last_read_at) >= String(b.last_read_at) ? a : b));
+    const lastEp = episodes.find((e) => e.id === last.episode_id);
+    if (lastEp) {
+      if (!last.completed) {
+        return NextResponse.json({
+          state: 'resume',
+          episodeId: lastEp.id,
+          episodeNo: lastEp.episode_no,
+          openedIds,
+          completedIds,
+          progressById,
+        });
+      }
+      const after = episodes.find((e) => e.episode_no > lastEp.episode_no);
+      if (after) {
+        return NextResponse.json({
+          state: 'continue',
+          episodeId: after.id,
+          episodeNo: after.episode_no,
+          openedIds,
+          completedIds,
+          progressById,
+        });
+      }
+      return NextResponse.json({
+        state: 'finished',
+        episodeId: episodes[0].id,
+        episodeNo: episodes[0].episode_no,
+        openedIds,
+        completedIds,
+        progressById,
+      });
+    }
+  }
+
+  // No timestamps on record (rows older than migration 083):
+  // fall back to the lowest-numbered unfinished chapter.
   const inProgress = episodes.find(
     (e) => openedNos.includes(e.episode_no) && !completedNos.has(e.episode_no)
   );

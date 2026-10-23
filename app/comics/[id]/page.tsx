@@ -8,7 +8,8 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, ChevronRight, ChevronUp } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
-import { PhotoWatermark } from '@/components/media/PhotoWatermark'
+import { watermarkText } from '@/lib/site'
+import { getSetting } from '@/lib/settings/platformSettings'
 import { prefetchPanels, isSaveData } from '@/lib/comics/prefetch'
 
 interface Episode {
@@ -22,13 +23,6 @@ interface Episode {
   cover_url: string | null
 }
 
-/**
- * One reader panel: a fixed full-width cell on a dark ground, so a
- * panel that is still loading (or one that failed) never shifts the
- * column or leaves a broken hole. Every loaded panel carries the
- * platform watermark, straight at the bottom centre, like photos.
- * A failed panel swaps to a neat dark tile with a tap to retry.
- */
 /**
  * One stable reader hint per browser, shared by every tracking ping
  * on this page. The track route adopts it as the guest identity
@@ -60,44 +54,84 @@ function readerHint(): string {
   return hintCache
 }
 
-function PanelImage({ src, index, eager }: { src: string; index: number; eager: boolean }) {
+/**
+ * Panels render to a CANVAS, never an <img> (owner rule,
+ * 2026-10-23): a long press must not offer "save image", and the
+ * watermark is painted INTO the pixels at the lower centre, the
+ * same line photos carry, so any copy of a page, screenshot or
+ * otherwise, shows where it lives. A DOM overlay watermark did
+ * neither: it stayed behind when the raw file was saved. The
+ * canvas is display-only; nothing here ever exports it.
+ */
+function PanelImage({ src, index, watermark }: { src: string; index: number; watermark: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const liveSrc = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}cb=${attempt}`
 
+  useEffect(() => {
+    let live = true
+    setFailed(false)
+    setLoaded(false)
+    const img = new Image()
+    img.onload = () => {
+      if (!live) return
+      const canvas = canvasRef.current
+      const ctx = canvas?.getContext('2d')
+      if (!canvas || !ctx || img.naturalWidth === 0) { setFailed(true); return }
+      // Cap the bitmap at 1000px wide: the column never displays
+      // wider than 576 CSS px, so this stays visually lossless
+      // while keeping a long episode's memory sane.
+      const scale = Math.min(1, 1000 / img.naturalWidth)
+      const w = Math.round(img.naturalWidth * scale)
+      const h = Math.round(img.naturalHeight * scale)
+      canvas.width = w
+      canvas.height = h
+      ctx.drawImage(img, 0, 0, w, h)
+      const text = (watermark || '').trim().toLowerCase()
+      if (text) {
+        const fs = Math.max(13, Math.round(w * 0.026))
+        ctx.font = `600 ${fs}px system-ui, -apple-system, 'Segoe UI', sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        try {
+          ;(ctx as unknown as { letterSpacing?: string }).letterSpacing = `${Math.max(2, Math.round(fs * 0.22))}px`
+        } catch { /* older engines: spacing is cosmetic */ }
+        ctx.shadowColor = 'rgba(0,0,0,0.7)'
+        ctx.shadowBlur = 8
+        ctx.shadowOffsetY = 1
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'
+        ctx.fillText(text, w / 2, Math.round(h * 0.87))
+      }
+      setLoaded(true)
+    }
+    img.onerror = () => { if (live) setFailed(true) }
+    img.src = liveSrc
+    return () => { live = false }
+  }, [liveSrc, watermark])
+
   return (
-    <div className={`relative w-full bg-[#171017] ${loaded || failed ? '' : 'min-h-[320px]'}`}>
+    <div
+      className={`relative w-full select-none bg-[#171017] [-webkit-touch-callout:none] ${loaded || failed ? '' : 'min-h-[320px]'}`}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {failed ? (
         <button
           type="button"
-          onClick={() => { setAttempt((a) => a + 1); setFailed(false); setLoaded(false) }}
+          onClick={() => setAttempt((a) => a + 1)}
           className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 px-6 text-center"
         >
           <span className="font-display text-base font-semibold text-white/85">This page could not load</span>
           <span className="text-sm font-medium text-gold">Tap to retry</span>
         </button>
       ) : (
-        <>
-          {/* No spinner while a page loads: the cell stays a calm
-              dark page and the artwork fades in. The background
-              loader (lib/comics/prefetch) pulls the episode down
-              ahead of the reader, so a visible wait is the rare
-              exception, and a spinner per page made reading feel
-              broken even when it was only a beat behind. */}
-          <img
-            key={attempt}
-            src={liveSrc}
-            alt={`Panel ${index + 1}`}
-            loading={eager ? 'eager' : 'lazy'}
-            fetchPriority={eager ? 'high' : undefined}
-            onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
-            className={`block h-auto w-full transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-            draggable={false}
-          />
-          {loaded && <PhotoWatermark variant="edge" />}
-        </>
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label={`Panel ${index + 1}`}
+          className={`block h-auto w-full transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
       )}
     </div>
   )
@@ -112,6 +146,20 @@ export default function ComicReaderPage() {
   const [comicTitle, setComicTitle] = useState<string | null>(null)
   const [readPct, setReadPct] = useState(0)
   const [panelsReady, setPanelsReady] = useState(false)
+  const [gateCount, setGateCount] = useState(0)
+  // The watermark line painted into every panel: the admin's
+  // custom line when one is set, else the live domain, exactly
+  // like the photo watermark.
+  const [wmText, setWmText] = useState(() => watermarkText())
+  useEffect(() => {
+    let live = true
+    getSetting<string>('watermark_text', '').then((custom) => {
+      if (!live) return
+      const base = typeof custom === 'string' ? custom.trim() : ''
+      if (base) setWmText(base)
+    }).catch(() => {})
+    return () => { live = false }
+  }, [])
   const [notFound, setNotFound] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const latestPctRef = useRef(0)
@@ -148,6 +196,7 @@ export default function ComicReaderPage() {
     setEp(null)
     setNext(null)
     setPanelsReady(false)
+    setGateCount(0)
     setNotFound(false)
     let live = true
     ;(async () => {
@@ -199,32 +248,40 @@ export default function ComicReaderPage() {
     return () => { live = false }
   }, [id])
 
-  // Load gate: the panel column is revealed only once the first
-  // screen of panels has FULLY loaded, so the reader never watches
-  // half-painted images flicker in. Panels are cached by the service
-  // worker after the first read, so a return visit passes this gate
-  // almost instantly. A 6s escape keeps one dead panel from trapping
-  // the page; it shows its own retry tile instead.
+  // Load gate (owner rule, 2026-10-23): the episode page does
+  // not open until EVERY panel has fully loaded, so nobody
+  // starts scrolling and meets an empty page halfway down. A
+  // panel that fails still counts as settled: it shows its own
+  // retry tile in place, it never traps the whole episode. The
+  // preparing state counts the pages out loud so a long episode
+  // on a slow network reads as progress, not a hang. Panels are
+  // cached after the first read, so a return visit passes this
+  // gate almost instantly.
   useEffect(() => {
     if (!ep) return
-    const urls = ep.panel_urls.slice(0, 3)
+    const urls = ep.panel_urls
     if (urls.length === 0) { setPanelsReady(true); return }
     let live = true
-    const escape = setTimeout(() => { if (live) setPanelsReady(true) }, 6000)
+    let done = 0
+    setGateCount(0)
     Promise.allSettled(
       urls.map((u) => new Promise<boolean>((resolve) => {
         const img = new Image()
-        img.onload = () => resolve(true)
-        img.onerror = () => resolve(false)
+        const settle = (ok: boolean) => {
+          if (live) {
+            done += 1
+            setGateCount(done)
+          }
+          resolve(ok)
+        }
+        img.onload = () => settle(true)
+        img.onerror = () => settle(false)
         img.src = u
       })),
     ).then(() => {
-      if (live) {
-        clearTimeout(escape)
-        setPanelsReady(true)
-      }
+      if (live) setPanelsReady(true)
     })
-    return () => { live = false; clearTimeout(escape) }
+    return () => { live = false }
   }, [ep])
 
   // Background loading: once the first screen is ready, pull the
@@ -342,7 +399,7 @@ export default function ComicReaderPage() {
         <div className="relative overflow-hidden bg-[#1A1016] px-6 py-12 text-center">
           {ep.cover_url && (
             <>
-              <img src={ep.cover_url} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover opacity-25" />
+              <img src={ep.cover_url} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover opacity-25" />
               <div className="absolute inset-0 bg-gradient-to-b from-[#1A1016]/60 via-transparent to-[#1A1016]" />
             </>
           )}
@@ -367,12 +424,17 @@ export default function ComicReaderPage() {
           <div className="mx-auto flex w-full max-w-xl flex-col items-center justify-center gap-3 rounded-lg bg-[#171017] px-6 py-24 text-center">
             <div className="h-9 w-9 animate-spin rounded-full border-2 border-white/15 border-t-gold" />
             <p className="font-display text-base font-semibold text-white/85">Preparing your pages</p>
-            <p className="max-w-xs text-sm text-white/50">Your episode opens the moment its first pages are fully ready, with no flicker.</p>
+            <p className="max-w-xs text-sm text-white/50">
+              Your episode opens when every page is fully loaded, so you never scroll into an empty one.
+              {ep.panel_urls.length > 0 && (
+                <span className="mt-1 block font-semibold text-white/70">{gateCount} of {ep.panel_urls.length} pages ready</span>
+              )}
+            </p>
           </div>
         ) : (
-          <div className="mx-auto w-full max-w-xl overflow-hidden rounded-lg shadow-2xl">
+          <div className="mx-auto w-full max-w-xl select-none overflow-hidden rounded-lg shadow-2xl">
             {ep?.panel_urls.map((src, i) => (
-              <PanelImage key={`${i}-${src}`} src={src} index={i} eager={i < 3} />
+              <PanelImage key={`${i}-${src}`} src={src} index={i} watermark={wmText} />
             ))}
           </div>
         )}

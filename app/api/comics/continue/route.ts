@@ -14,10 +14,11 @@ const READER_COOKIE = 'intima_reader_id';
  *
  * Recency is comic_reads.last_read_at (migration 083): the most
  * recently touched series wins. Inside that series the state
- * matches the series page CTA: resume the lowest opened but
- * unfinished episode, else continue with the chapter after the
- * last finished one. A finished series falls through to the
- * next most recent series with something left to read.
+ * matches the series page CTA: resume the episode the reader
+ * touched most recently (their explicit pick wins over older
+ * unfinished chapters), else continue with the chapter after
+ * the one they last finished. A finished series falls through
+ * to the next most recent series with something left to read.
  */
 export async function GET(req: NextRequest) {
   const supabase = createClient();
@@ -94,6 +95,44 @@ export async function GET(req: NextRequest) {
     const completedNos = new Set(
       opened.filter((e) => readsByEpisode.get(e.id)?.completed).map((e) => e.episode_no as number)
     );
+
+    // The reader's latest touch inside this series is their
+    // place (owner rule): reads arrive newest first, so the
+    // first row belonging to this series decides. An unfinished
+    // one resumes; a finished one continues to its next chapter;
+    // a finished final chapter falls through to an older series.
+    const epIdSet = new Set(eps.map((e) => e.id));
+    const lastRow = reads.find((r) => epIdSet.has(r.episode_id));
+    const lastEp = lastRow ? eps.find((e) => e.id === lastRow.episode_id) : undefined;
+    if (lastEp && lastRow) {
+      if (!lastRow.completed) {
+        return NextResponse.json({
+          state: 'resume',
+          seriesId,
+          title: series.title,
+          coverUrl: lastEp.cover_url ?? series.cover_url,
+          episodeId: lastEp.id,
+          episodeNo: lastEp.episode_no,
+          totalEpisodes: eps.length,
+          progressPct:
+            typeof lastRow.progress_pct === 'number' ? lastRow.progress_pct : null,
+        });
+      }
+      const nextAfter = eps.find((e) => (e.episode_no as number) > (lastEp.episode_no as number));
+      if (nextAfter) {
+        return NextResponse.json({
+          state: 'continue',
+          seriesId,
+          title: series.title,
+          coverUrl: nextAfter.cover_url ?? series.cover_url,
+          episodeId: nextAfter.id,
+          episodeNo: nextAfter.episode_no,
+          totalEpisodes: eps.length,
+          progressPct: null,
+        });
+      }
+      continue;
+    }
 
     const inProgress = eps.find(
       (e) => readsByEpisode.has(e.id) && !completedNos.has(e.episode_no as number)
