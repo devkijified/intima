@@ -1726,9 +1726,11 @@ export default function StreamRoomPage() {
         </div>
       )}
 
-      {/* Top-left: host chip + LIVE + viewers */}
-      <div className="absolute left-3 top-3 flex items-center gap-2 lg:hidden">
-        <div className="flex items-center gap-2 rounded-full bg-black/50 py-1 pl-1 pr-3 backdrop-blur-sm">
+      {/* Top-left: one host chip. The LIVE tag rides inside it and
+          the watching count lives in the people pill below, so the
+          header stays a single uncluttered row at phone width. */}
+      <div className="absolute left-3 top-3 lg:hidden">
+        <div className="flex items-center gap-2 rounded-full bg-black/50 py-1 pl-1 pr-2 backdrop-blur-sm">
           {stream?.provider?.avatar_url ? (
             <img
               src={stream.provider.avatar_url}
@@ -1741,14 +1743,11 @@ export default function StreamRoomPage() {
               {hostName[0]?.toUpperCase() ?? 'H'}
             </div>
           )}
-          <span className="max-w-[110px] truncate text-xs font-semibold text-white">{hostName}</span>
+          <span className="max-w-[104px] truncate text-[13px] font-semibold text-white">{hostName}</span>
+          <span className="flex items-center gap-1 rounded-md bg-red-600 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-white">
+            <span className="h-1 w-1 animate-pulse rounded-full bg-white" /> LIVE
+          </span>
         </div>
-        <span className="flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold tracking-wide text-white">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
-        </span>
-        <span className="flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-          <Eye className="h-3 w-3" aria-hidden /> {formatCompactCount(viewerCount)}
-        </span>
       </div>
 
       {/* Audience pill: people icon + watching count + top gifter,
@@ -1803,12 +1802,12 @@ export default function StreamRoomPage() {
       <div ref={tilesRef} className="absolute right-3 top-24 z-10 flex flex-col gap-2" />
 
       {/* Top-right: PiP + share + close */}
-      <div className="absolute right-3 top-3 flex items-center gap-2">
+      <div className="absolute right-3 top-3 flex items-center gap-1.5">
         <Tooltip label="Stream controls" side="bottom">
           <button
             onClick={() => setPanelOpen(true)}
             aria-label="Stream controls"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
           >
             <Settings className="h-4 w-4" />
           </button>
@@ -1825,7 +1824,7 @@ export default function StreamRoomPage() {
                 router.push('/live')
               }}
               aria-label="Minimize player"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
             >
               <PictureInPicture2 className="h-4 w-4" />
             </button>
@@ -1836,7 +1835,7 @@ export default function StreamRoomPage() {
             <button
               onClick={togglePip}
               aria-label={pipActive ? 'Exit picture in picture' : 'Picture in picture'}
-              className={`flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
+              className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-sm active:scale-95 ${
                 pipActive ? 'bg-primary text-white' : 'bg-black/50 text-white'
               }`}
             >
@@ -1848,7 +1847,7 @@ export default function StreamRoomPage() {
           <button
             onClick={share}
             aria-label="Share stream"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
           >
             <ShareForward className="h-5 w-5" />
           </button>
@@ -1857,7 +1856,7 @@ export default function StreamRoomPage() {
           <Link
             href="/live"
             aria-label="Close stream"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
           >
             <X className="h-4 w-4" />
           </Link>
