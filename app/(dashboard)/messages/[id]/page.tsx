@@ -11,7 +11,8 @@ import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { formatCompactPrice, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { serviceTypeLabel } from '@/lib/connections/serviceType'
-import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, Image as ImageIcon } from '@/lib/icons'
+import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, X, Image as ImageIcon } from '@/lib/icons'
+import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
 import { reencodeImage } from '@/lib/uploads/reencode'
 import { showToast } from '@/lib/toast'
 import {
@@ -64,11 +65,16 @@ function dayLabel(iso: string): string {
  * (migration 052), under the sender's own folder. Images are
  * re-encoded first (EXIF stripped, capped size), like profile
  * photos. Returns the storage path stored on the message plus a
- * signed URL for the sender's own immediate render: storage has
- * no select policy at all, so even the uploader reads back
- * through signed URLs minted server-side.
+ * local object URL for the sender's own immediate render.
+ *
+ * The bucket deliberately has NO select policy (052), so the
+ * client cannot mint signed URLs for it: an earlier version of
+ * this helper tried, the sign call failed with a 400, and every
+ * chat upload died AFTER the file had landed. Signed URLs come
+ * from POST /api/chat/media-urls on the normal resolve path; the
+ * object URL covers only this session's instant preview.
  */
-async function uploadChatMedia(file: File): Promise<{ path: string; signedUrl: string }> {
+async function uploadChatMedia(file: File): Promise<{ path: string; previewUrl: string }> {
   const supabase = createClient()
   const {
     data: { user },
@@ -87,11 +93,7 @@ async function uploadChatMedia(file: File): Promise<{ path: string; signedUrl: s
     upsert: false,
   })
   if (error) throw error
-  const { data, error: signErr } = await supabase.storage
-    .from('chat-media')
-    .createSignedUrl(path, 3600)
-  if (signErr || !data?.signedUrl) throw signErr ?? new Error('Could not sign the upload')
-  return { path, signedUrl: data.signedUrl }
+  return { path, previewUrl: URL.createObjectURL(blob) }
 }
 
 export default function ThreadPage() {
@@ -113,8 +115,9 @@ export default function ThreadPage() {
   const [showTemplates, setShowTemplates] = useState(false)
   const [showPpv, setShowPpv] = useState(false)
   const [disappearing, setDisappearing] = useState(false)
-  const [ppvUrl, setPpvUrl] = useState('')
   const [ppvPrice, setPpvPrice] = useState('100')
+  const [ppvPreview, setPpvPreview] = useState<string | null>(null)
+  const [ppvViewOnce, setPpvViewOnce] = useState(false)
   const [templateTab, setTemplateTab] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -155,6 +158,11 @@ export default function ThreadPage() {
   const ppvFileRef = useRef<HTMLInputElement>(null)
   const ppvFileTypeRef = useRef('')
   const uploadUrlRef = useRef<string | null>(null)
+  // Bottom sheets for templates and locked media: the app-wide
+  // sheet pattern (drag handle, pull to dismiss), never boxed
+  // cards floating over the thread.
+  const templatesSheet = useSheetDrag(() => setShowTemplates(false))
+  const ppvSheet = useSheetDrag(() => setShowPpv(false))
 
   // Record that I viewed their media. Best effort: the primary key
   // makes repeats harmless, and duplicate errors are ignored.
@@ -457,7 +465,7 @@ export default function ThreadPage() {
     }
     setUploading(true)
     try {
-      const { path, signedUrl } = await uploadChatMedia(file)
+      const { path, previewUrl } = await uploadChatMedia(file)
       const supabase = createClient()
       const { data: row, error } = await supabase
         .from('messages')
@@ -475,9 +483,10 @@ export default function ThreadPage() {
         .single()
       if (!error && row) {
         const m = row as Msg
-        // Own upload: show it at once with the upload-time signed
-        // URL instead of waiting for a resolution round trip.
-        setSignedUrls((prev) => ({ ...prev, [m.id]: signedUrl }))
+        // Own upload: show it at once with the local preview URL
+        // instead of waiting for a resolution round trip. The
+        // server-minted signed URL takes over on the next resolve.
+        setSignedUrls((prev) => ({ ...prev, [m.id]: previewUrl }))
         setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
         if (other?.id) {
           void fetch('/api/push/notify', {
@@ -509,9 +518,10 @@ export default function ThreadPage() {
     }
     setUploading(true)
     try {
-      const { path, signedUrl } = await uploadChatMedia(file)
+      const { path, previewUrl } = await uploadChatMedia(file)
       ppvFileTypeRef.current = file.type
-      uploadUrlRef.current = signedUrl
+      uploadUrlRef.current = previewUrl
+      setPpvPreview(previewUrl)
       setPpvPath(path)
     } catch {
       showToast('Upload failed. Please try again.')
@@ -519,27 +529,26 @@ export default function ThreadPage() {
     setUploading(false)
   }
 
-  // Send the locked message: an uploaded private file when one is
-  // attached, otherwise the pasted URL exactly as before.
+  // Send the locked message with the uploaded private file. There
+  // is deliberately no paste-a-URL path: locked media lives in the
+  // private bucket, so nothing about it can leak or hotlink.
   const sendPpv = async () => {
     const price = parseInt(ppvPrice, 10)
     if (!price || price <= 0 || !me || sendingMedia) return
     const path = ppvPath
-    const url = ppvUrl.trim()
-    if (!path && !url) return
+    if (!path) return
     setSendingMedia(true)
-    const isVideo = path
-      ? ppvFileTypeRef.current.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(path)
-      : /\.mp4|\.webm/i.test(url)
+    const isVideo = ppvFileTypeRef.current.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(path)
     const { data: row, error } = await createClient()
       .from('messages')
       .insert({
         connection_id: connectionId,
         sender_id: me,
         body: 'Locked media',
-        media_url: path ?? url,
+        media_url: path,
         media_type: isVideo ? 'video' : 'image',
         ppv_price_coins: price,
+        view_once: ppvViewOnce,
       })
       .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
       .single()
@@ -554,7 +563,8 @@ export default function ThreadPage() {
         setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
       }
       uploadUrlRef.current = null
-      setPpvUrl('')
+      setPpvPreview(null)
+      setPpvViewOnce(false)
       setPpvPath(null)
       setShowPpv(false)
       if (other?.id) {
@@ -745,118 +755,197 @@ export default function ThreadPage() {
         </div>
       )}
 
-      {/* Templates (Lagos Life style) */}
+      {/* Templates sheet (Lagos Life style phrases): a bottom
+          sheet like every other sheet in the app, not a boxed card
+          over the thread. Tapping a phrase sends it and the sheet
+          closes (send() handles that). */}
       {showTemplates && active && (
-        <div className="mx-3 mb-1 shrink-0 rounded-3xl bg-white px-4 pb-2 pt-3 shadow-sm ring-1 ring-black/[0.04]">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {templates.map((g, i) => (
-              <button
-                key={g.id}
-                onClick={() => setTemplateTab(i)}
-                className={`flex min-h-[44px] shrink-0 items-center rounded-full px-4 py-1.5 text-xs font-semibold ${
-                  templateTab === i ? 'bg-charcoal text-white' : 'bg-cream text-neutral-600'
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-col gap-1.5 pb-1">
-            {templates[templateTab].phrases.map((p) => (
-              <button
-                key={p}
-                onClick={() => send(p)}
-                disabled={sending}
-                className="flex min-h-[44px] items-center rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-charcoal transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-              >
-                {p}
-              </button>
-            ))}
-            {quickReplies && (
-              <>
-                <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                  Quick replies
-                </p>
-                {quickReplies.map((p) => (
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black/50" onPointerDown={() => setShowTemplates(false)} />
+          <div
+            ref={templatesSheet.sheetRef}
+            className="absolute inset-x-0 bottom-0 flex max-h-[72%] flex-col rounded-t-3xl bg-white shadow-2xl"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div {...templatesSheet.handleProps} className="shrink-0 cursor-grab touch-none px-4 pb-1 pt-2.5 active:cursor-grabbing">
+              <div className="mx-auto h-1.5 w-11 rounded-full bg-neutral-300" />
+              <div className="mt-2.5 flex items-center justify-between">
+                <p className="font-display text-base font-semibold text-charcoal">Templates</p>
+                <button
+                  type="button"
+                  aria-label="Close templates"
+                  onClick={() => setShowTemplates(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-neutral-500"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-2 pt-1">
+              {templates.map((g, i) => (
+                <button
+                  key={g.id}
+                  onClick={() => setTemplateTab(i)}
+                  className={`flex min-h-[40px] shrink-0 items-center rounded-full px-4 py-1.5 text-xs font-semibold ${
+                    templateTab === i ? 'bg-charcoal text-white' : 'bg-cream text-neutral-600'
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+              <div className="divide-y divide-neutral-100">
+                {templates[templateTab].phrases.map((p) => (
                   <button
                     key={p}
                     onClick={() => send(p)}
                     disabled={sending}
-                    className="flex min-h-[44px] items-center rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-charcoal transition-colors hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+                    className="flex min-h-[52px] w-full items-center px-3 py-2.5 text-left text-[15px] text-charcoal transition-colors active:bg-cream disabled:opacity-50"
                   >
                     {p}
                   </button>
                 ))}
-              </>
-            )}
+              </div>
+              {quickReplies && (
+                <>
+                  <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                    Quick replies
+                  </p>
+                  <div className="divide-y divide-neutral-100">
+                    {quickReplies.map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => send(p)}
+                        disabled={sending}
+                        className="flex min-h-[52px] w-full items-center px-3 py-2.5 text-left text-[15px] text-charcoal transition-colors active:bg-cream disabled:opacity-50"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* PPV panel */}
+      {/* Locked media sheet: the app-standard bottom sheet.
+          Pick, preview, price, send. Files live in the private
+          bucket only, so there is no paste-a-URL path. */}
       {showPpv && active && (
-        <div className="mx-3 mb-1 shrink-0 rounded-3xl bg-white px-4 py-3 shadow-sm ring-1 ring-gold/30">
-          <p className="flex items-center gap-1 text-xs font-semibold text-charcoal">
-            Send locked media (PPV)
-            <HelpTip text="Locked media stays hidden until the other person pays your price in coins, once. Mark it view once and it can only be opened a single time before it disappears." />
-          </p>
-          <div className="mt-2 flex flex-col gap-2">
-            {ppvPath ? (
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate rounded-xl border border-gold/40 bg-white px-3 py-2 text-sm text-charcoal">
-                  {ppvPath.split('/').pop()}
-                </span>
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black/50" onPointerDown={() => setShowPpv(false)} />
+          <div
+            ref={ppvSheet.sheetRef}
+            className="absolute inset-x-0 bottom-0 flex max-h-[80%] flex-col overflow-y-auto rounded-t-3xl bg-white shadow-2xl"
+            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div {...ppvSheet.handleProps} className="shrink-0 cursor-grab touch-none px-4 pb-1 pt-2.5 active:cursor-grabbing">
+              <div className="mx-auto h-1.5 w-11 rounded-full bg-neutral-300" />
+              <div className="mt-2.5 flex items-center justify-between">
+                <p className="flex items-center gap-1.5 font-display text-base font-semibold text-charcoal">
+                  Send locked media
+                  <HelpTip text="Locked media stays hidden until the other person pays your price in coins, once. Mark it view once and it can only be opened a single time before it disappears." />
+                </p>
                 <button
-                  onClick={() => {
-                    setPpvPath(null)
-                    uploadUrlRef.current = null
-                  }}
-                  className="min-h-[44px] rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-500"
+                  type="button"
+                  aria-label="Close locked media"
+                  onClick={() => setShowPpv(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-cream text-neutral-500"
                 >
-                  Remove
+                  <X className="h-4 w-4" />
                 </button>
               </div>
-            ) : ppvUrl.trim() ? (
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-charcoal">
-                  {ppvUrl.trim()}
-                </span>
+            </div>
+            <div className="flex flex-col gap-3 px-4 pt-2">
+              {ppvPath ? (
+                <div>
+                  {ppvPreview && ppvFileTypeRef.current.startsWith('video/') ? (
+                    <video src={ppvPreview} className="h-44 w-full rounded-2xl object-cover" muted playsInline />
+                  ) : ppvPreview ? (
+                    <img src={ppvPreview} alt="" className="h-44 w-full rounded-2xl object-cover" draggable={false} />
+                  ) : (
+                    <div className="flex h-44 w-full items-center justify-center rounded-2xl bg-cream text-sm font-medium text-neutral-500">
+                      {ppvPath.split('/').pop()}
+                    </div>
+                  )}
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs text-neutral-500">{ppvPath.split('/').pop()}</span>
+                    <button
+                      onClick={() => {
+                        setPpvPath(null)
+                        setPpvPreview(null)
+                        uploadUrlRef.current = null
+                      }}
+                      className="shrink-0 text-sm font-semibold text-primary"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <button
-                  onClick={() => setPpvUrl('')}
-                  className="min-h-[44px] rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-500"
+                  onClick={() => ppvFileRef.current?.click()}
+                  disabled={uploading}
+                  className="flex min-h-[104px] w-full flex-col items-center justify-center gap-1.5 rounded-2xl bg-cream text-charcoal disabled:opacity-50"
                 >
-                  Remove
+                  <ImageIcon className="h-6 w-6 text-neutral-500" />
+                  <span className="text-sm font-semibold">{uploading ? 'Uploading…' : 'Choose a photo or video'}</span>
+                  <span className="px-6 text-center text-[11px] leading-snug text-neutral-500">
+                    It stays private until the client unlocks it
+                  </span>
                 </button>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="w-32 shrink-0">
+                  <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400" htmlFor="ppv-price">
+                    Price in coins
+                  </label>
+                  <input
+                    id="ppv-price"
+                    value={ppvPrice}
+                    onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="100"
+                    inputMode="numeric"
+                    className="mt-1 w-full rounded-xl bg-cream px-3 py-2.5 text-base text-charcoal outline-none focus:ring-2 focus:ring-gold/60 md:text-sm"
+                  />
+                </div>
+                <p className="pt-4 text-xs leading-snug text-neutral-500">
+                  {Number(ppvPrice) > 0
+                    ? <>Unlock price: <span className="font-semibold text-charcoal">{coinsWithNgn(Number(ppvPrice))}</span></>
+                    : 'Set the price the client pays to open it.'}
+                </p>
               </div>
-            ) : (
               <button
-                onClick={() => ppvFileRef.current?.click()}
-                disabled={uploading}
-                className="min-h-[44px] rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal disabled:opacity-50"
+                type="button"
+                onClick={() => setPpvViewOnce((v) => !v)}
+                aria-pressed={ppvViewOnce}
+                className="flex min-h-[48px] items-center justify-between gap-3 py-1 text-left"
               >
-                {uploading ? 'Uploading…' : 'Upload a photo or video'}
+                <span>
+                  <span className="block text-sm font-semibold text-charcoal">View once</span>
+                  <span className="block text-xs text-neutral-500">It disappears after the client opens it once</span>
+                </span>
+                <span className={`flex h-7 w-12 shrink-0 items-center rounded-full px-1 transition-colors ${ppvViewOnce ? 'justify-end bg-primary' : 'justify-start bg-neutral-200'}`}>
+                  <span className="h-5 w-5 rounded-full bg-white shadow" />
+                </span>
               </button>
-            )}
-            {!ppvPath && (
-              <input value={ppvUrl} onChange={(e) => setPpvUrl(e.target.value)} placeholder="Or paste a photo or video URL" className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-base outline-none focus:border-gold md:text-sm" />
-            )}
-            <div className="flex gap-2">
-              <input value={ppvPrice} onChange={(e) => setPpvPrice(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Coins" inputMode="numeric" className="w-28 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-base outline-none focus:border-gold md:text-sm" />
               <button
                 onClick={sendPpv}
-                disabled={sendingMedia || uploading || (!ppvPath && !ppvUrl.trim())}
-                className="min-h-[44px] flex-1 rounded-xl bg-gold px-4 py-2 text-sm font-bold text-charcoal disabled:opacity-50"
+                disabled={sendingMedia || uploading || !ppvPath}
+                className="min-h-[50px] w-full rounded-full bg-gold px-4 py-3 text-sm font-bold text-charcoal disabled:opacity-50"
               >
                 {sendingMedia ? 'Sending…' : 'Send locked'}
               </button>
-            </div>
-            {Number(ppvPrice) > 0 && (
-              <p className="text-[11px] text-neutral-500">
-                Unlock price: {coinsWithNgn(Number(ppvPrice))}
+              <p className="text-center text-[11px] leading-snug text-neutral-500">
+                Clients pay coins to view. You keep your share automatically.
               </p>
-            )}
+            </div>
           </div>
-          <p className="mt-1 text-[11px] text-neutral-500">Clients pay coins to view. Uploaded files stay private until a client unlocks them. You keep your share automatically.</p>
         </div>
       )}
 

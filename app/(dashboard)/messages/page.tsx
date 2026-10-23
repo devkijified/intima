@@ -5,7 +5,8 @@ import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { MessageCircle, ChevronRight } from '@/lib/icons'
+import { MessageCircle } from '@/lib/icons'
+import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface ThreadRow {
   connectionId: string
@@ -107,30 +108,38 @@ export default function MessagesPage() {
           </Link>
         </div>
       ) : (
-        <div className="mt-5 divide-y divide-neutral-100 overflow-hidden rounded-3xl border border-neutral-200/70 bg-white">
+        <div className="mt-3 divide-y divide-neutral-100">
           {threads.map((t) => (
             <Link
               key={t.connectionId}
               href={`/messages/${t.connectionId}`}
-              className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-cream/60"
+              className="flex items-center gap-3 px-1 py-3.5 transition-colors active:bg-cream/60"
             >
               {t.avatar ? (
-                <img src={t.avatar} alt="" className="h-12 w-12 rounded-full object-cover" />
+                <img src={t.avatar} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
               ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cream font-display text-lg text-neutral-400">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-cream font-display text-lg text-neutral-400">
                   {(t.name[0] ?? '?').toUpperCase()}
                 </div>
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate text-sm font-semibold text-charcoal">{t.name}</p>
-                  <span className="shrink-0 text-xs text-neutral-400">{timeAgo(t.lastAt)}</span>
+                  <p className="truncate text-[15px] font-semibold text-charcoal">{t.name}</p>
+                  <span className={`shrink-0 text-xs ${t.unread > 0 ? 'font-semibold text-primary' : 'text-neutral-400'}`}>
+                    {timeAgo(t.lastAt)}
+                  </span>
                 </div>
-                <p className="truncate text-sm text-neutral-500">
-                  {t.lastBody ?? 'Connection active. Say hello'}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`truncate text-sm ${t.unread > 0 ? 'font-semibold text-charcoal' : 'text-neutral-500'}`}>
+                    {t.lastBody ?? 'Connection active. Say hello'}
+                  </p>
+                  {t.unread > 0 && (
+                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">
+                      {formatCompactCount(t.unread)}
+                    </span>
+                  )}
+                </div>
               </div>
-              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-neutral-300" />
             </Link>
           ))}
         </div>
