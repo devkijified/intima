@@ -153,7 +153,6 @@ export default function StreamRoomPage() {
   // Swipe-up-to-next-live: transient feedback when there is no
   // next room, and the one-time discovery hint.
   const [nextMsg, setNextMsg] = useState<string | null>(null)
-  const [nextHintSeen, setNextHintSeen] = useState(false)
   const [myName, setMyName] = useState('Guest')
 
   const [giftOpen, setGiftOpen] = useState(false)
@@ -543,13 +542,6 @@ export default function StreamRoomPage() {
   const amHostRef = useRef(false)
   amHostRef.current = !!myId && !!hostId && myId === hostId
   useEffect(() => {
-    try {
-      if (localStorage.getItem('intima_nextlive_hint_seen') === '1') setNextHintSeen(true)
-    } catch {
-      /* storage unavailable: the hint simply shows */
-    }
-  }, [])
-  useEffect(() => {
     const el = stageRef.current
     if (!el || giftOpen || panelOpen || modTarget || cohostInvite) return
     let startX = 0
@@ -578,12 +570,6 @@ export default function StreamRoomPage() {
       if (dy > -70 || Math.abs(dy) < Math.abs(dx) * 1.4) return
       const next = railStreamsRef.current[0]
       if (next) {
-        try {
-          localStorage.setItem('intima_nextlive_hint_seen', '1')
-        } catch {
-          /* ignore */
-        }
-        setNextHintSeen(true)
         router.push(`/live/${next.id}`)
       } else {
         setNextMsg('No other companions are live right now')
@@ -2354,13 +2340,8 @@ export default function StreamRoomPage() {
           </span>
         </div>
       )}
-      {!isHostMe && !nextHintSeen && !nextMsg && railStreams.length > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-44 z-20 flex justify-center lg:hidden">
-          <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-3.5 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm">
-            <ChevronUp className="h-3.5 w-3.5 animate-bounce" aria-hidden /> Swipe up for the next live
-          </span>
-        </div>
-      )}
+      {/* No swipe-up teaching pill: the gesture is the habit users
+          already bring from TikTok, so the room just honours it. */}
 
       {/* Legibility scrim: comments float over the video */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
