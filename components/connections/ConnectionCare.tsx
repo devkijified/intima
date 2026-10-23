@@ -60,6 +60,17 @@ function Stars({ value, onPick }: { value: number; onPick?: (n: number) => void 
   )
 }
 
+/** Small read-only stars for the slim one-line review rows. */
+function StarsRow({ value }: { value: number }) {
+  return (
+    <span className="flex shrink-0 items-center gap-px" aria-label={`${value} of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} className={`h-3.5 w-3.5 ${n <= value ? 'text-gold' : 'text-neutral-300'}`} />
+      ))}
+    </span>
+  )
+}
+
 /**
  * Everything that protects a paid connection, in one strip inside the
  * chat thread:
@@ -98,6 +109,7 @@ export default function ConnectionCare({
 
   const [review, setReview] = useState<ReviewState | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
@@ -243,6 +255,9 @@ export default function ConnectionCare({
         // until a page reload.
         counterpartReview: data.counterpartReview ?? prev?.counterpartReview ?? null,
       }))
+      // Back to the slim row: the editor never sits open on the chat.
+      setEditing(false)
+      setReviewOpen(false)
     } catch (e) {
       setReviewError(e instanceof Error ? e.message : 'Could not save your review')
     }
@@ -256,22 +271,24 @@ export default function ConnectionCare({
   if (!showStrip) return null
 
   return (
-    <div className="border-b border-black/[0.05] bg-white px-4 py-3">
-      {/* Fee protection: a slim strip, not a card. The dispute
-          form still expands in place when it is tapped. */}
+    <div className="shrink-0 px-3 pt-2">
+      <div className="mx-auto w-full max-w-3xl space-y-2">
+      {/* Fee protection: ONE slim line in the chat, WhatsApp notice
+          style. The full explanation lives in the HelpTip and the
+          dispute form still expands in place when it is tapped. */}
       {fee === 'held' && windowOpen && (
-        <div className="rounded-2xl bg-emerald-50/70 px-3.5 py-2 ring-1 ring-emerald-100">
-          <div className="flex items-center gap-2.5">
-            <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-600" />
+        <div className="rounded-2xl bg-white px-3 py-1.5 shadow-sm ring-1 ring-black/[0.04]">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-[18px] w-[18px] shrink-0 text-emerald-600" />
             <p className="flex min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold leading-snug text-charcoal">
-              <span>
-                {viewerIsClient ? 'Your' : 'The'} {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
+              <span className="truncate">
+                {viewerIsClient ? 'Your' : 'The'}{feeNgn ? ` ₦${feeNgn.toLocaleString()}` : ''} fee is protected until {fmtDateTime(disputeDeadline)}
               </span>
               <HelpTip text="You have 24 hours from payment to open a dispute. Our team reviews both sides and decides on the connection fee only: it is either refunded to the client or released. The companion's own rate is never part of the dispute." />
             </p>
             {!showDispute && (
-              <button onClick={() => setShowDispute(true)} className="inline-flex min-h-[44px] shrink-0 items-center text-xs font-semibold text-primary">
-                Open a dispute
+              <button onClick={() => setShowDispute(true)} className="inline-flex min-h-[40px] shrink-0 items-center text-xs font-semibold text-primary">
+                Dispute
               </button>
             )}
           </div>
@@ -297,7 +314,7 @@ export default function ConnectionCare({
       )}
 
       {fee === 'disputed' && (
-        <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 px-3.5 py-3 ring-1 ring-amber-100">
+        <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 px-3 py-2.5 shadow-sm ring-1 ring-amber-100">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-semibold text-charcoal">Dispute open on this connection</p>
@@ -364,84 +381,99 @@ export default function ConnectionCare({
         </div>
       )}
 
-      {/* Reviews: collapsed to one slim row until tapped, so a
-          fresh thread opens on the conversation, not a form. The
-          full card appears once the viewer opens it or has a
-          review in. */}
+      {/* Reviews: ONE slim row in the chat, always. The editor
+          opens only on tap and closes back to the row on save, so
+          a thread never opens on a review form again. */}
       {review && review.canReview && !review.mine && !reviewOpen && (
         <button
           onClick={() => setReviewOpen(true)}
-          className={`flex min-h-[44px] w-full items-center justify-between rounded-2xl bg-cream/70 px-3.5 ring-1 ring-black/[0.04] ${fee === 'held' && windowOpen ? 'mt-2' : ''}`}
+          className="flex min-h-[44px] w-full items-center justify-between rounded-2xl bg-white px-3 shadow-sm ring-1 ring-black/[0.04]"
         >
           <span className="text-[13px] font-semibold text-charcoal">How was {otherName}?</span>
           <span className="text-xs font-semibold text-primary">Write a review</span>
         </button>
       )}
-      {review && review.canReview && (review.mine || reviewOpen) && (
-        <div className="mt-3 rounded-2xl bg-cream/70 px-3.5 py-3 ring-1 ring-black/[0.04]">
-          {!review.mine ? (
-            <div>
-              <p className="text-[13px] font-semibold text-charcoal">How was {otherName}?</p>
-              <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
-                <Clock className="h-3 w-3" />
-                Reviews are double-blind: yours stays hidden until {otherName} reviews you too, or 3 days pass.
-              </p>
-              <div className="mt-2"><Stars value={rating} onPick={setRating} /></div>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={2}
-                placeholder="Say it plainly. No phone numbers or social handles; reviews go public."
-                className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
-              />
-              {reviewError && <p className="mt-1.5 text-xs text-red-600">{reviewError}</p>}
-              <button onClick={submitReview} disabled={reviewBusy} className="btn-luxe mt-2 min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
-                {reviewBusy ? 'Saving…' : 'Submit review'}
-              </button>
-            </div>
-          ) : review.mine.status === 'published' ? (
-            <div>
-              <p className="text-[13px] font-semibold text-charcoal">Your review is live</p>
-              <div className="mt-1"><Stars value={review.mine.rating} /></div>
-              {review.counterpartReview ? (
-                <div className="mt-2.5 border-t border-black/[0.05] pt-2.5">
-                  <p className="text-xs font-semibold text-neutral-500">{otherName} reviewed you</p>
-                  <div className="mt-1"><Stars value={review.counterpartReview.rating} /></div>
-                  {review.counterpartReview.comment && (
-                    <p className="mt-1 text-[13px] leading-relaxed text-neutral-600">{review.counterpartReview.comment}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-1 text-xs text-neutral-500">Their review of you has not landed yet.</p>
-              )}
-            </div>
-          ) : (
-            <div>
-              <p className="text-[13px] font-semibold text-charcoal">Your review is in</p>
-              <div className="mt-1"><Stars value={review.mine.rating} /></div>
-              <p className="mt-1 text-xs leading-relaxed text-neutral-500">
-                {review.counterpartSubmitted
-                  ? 'Both reviews are in; yours will appear any moment.'
-                  : `It stays hidden until ${otherName} reviews you, or 3 days pass. You can still edit it until then.`}
-              </p>
-              {!review.counterpartSubmitted && (
-                <div className="mt-2">
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
-                  />
-                  {reviewError && <p className="mt-1.5 text-xs text-red-600">{reviewError}</p>}
-                  <button onClick={submitReview} disabled={reviewBusy} className="btn-soft mt-1.5 min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
-                    {reviewBusy ? 'Saving…' : 'Update review'}
-                  </button>
-                </div>
+      {review && review.canReview && !review.mine && reviewOpen && (
+        <div className="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-black/[0.04]">
+          <p className="text-[13px] font-semibold text-charcoal">How was {otherName}?</p>
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
+            <Clock className="h-3 w-3" />
+            Reviews are double-blind: yours stays hidden until {otherName} reviews you too, or 3 days pass.
+          </p>
+          <div className="mt-2"><Stars value={rating} onPick={setRating} /></div>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={2}
+            placeholder="Say it plainly. No phone numbers or social handles; reviews go public."
+            className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
+          />
+          {reviewError && <p className="mt-1.5 text-xs text-red-600">{reviewError}</p>}
+          <div className="mt-2 flex gap-2">
+            <button onClick={submitReview} disabled={reviewBusy} className="btn-luxe min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
+              {reviewBusy ? 'Saving…' : 'Submit review'}
+            </button>
+            <button onClick={() => setReviewOpen(false)} className="btn-soft min-h-[44px] px-5 py-2 text-xs">Cancel</button>
+          </div>
+        </div>
+      )}
+      {review && review.canReview && review.mine && !editing && (
+        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.04]">
+          <button
+            onClick={() => {
+              if (review.mine!.status !== 'published' && !review.counterpartSubmitted) setEditing(true)
+              else if (review.counterpartReview) setReviewOpen((v) => !v)
+            }}
+            className="flex min-h-[44px] w-full items-center gap-2 px-3 text-left"
+          >
+            <StarsRow value={review.mine.rating} />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-charcoal">
+              {review.mine.status === 'published' ? 'Your review is live' : 'Your review is in'}
+            </span>
+            {review.mine.status !== 'published' && !review.counterpartSubmitted && (
+              <span className="shrink-0 text-xs font-semibold text-primary">Edit</span>
+            )}
+            {review.mine.status === 'published' && review.counterpartReview && (
+              <span className="shrink-0 text-xs font-semibold text-primary">{reviewOpen ? 'Hide theirs' : 'See theirs'}</span>
+            )}
+          </button>
+          {review.mine.status === 'published' && reviewOpen && review.counterpartReview && (
+            <div className="border-t border-black/[0.05] px-3 py-2.5">
+              <p className="text-xs font-semibold text-neutral-500">{otherName} reviewed you</p>
+              <div className="mt-1"><StarsRow value={review.counterpartReview.rating} /></div>
+              {review.counterpartReview.comment && (
+                <p className="mt-1 text-[13px] leading-relaxed text-neutral-600">{review.counterpartReview.comment}</p>
               )}
             </div>
           )}
         </div>
       )}
+      {review && review.canReview && review.mine && editing && (
+        <div className="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-black/[0.04]">
+          <p className="text-[13px] font-semibold text-charcoal">Your review</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
+            {review.counterpartSubmitted
+              ? 'Both reviews are in; yours will appear any moment.'
+              : `It stays hidden until ${otherName} reviews you, or 3 days pass. You can still edit it until then.`}
+          </p>
+          <div className="mt-1"><Stars value={rating} onPick={setRating} /></div>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={2}
+            placeholder="Say it plainly. No phone numbers or social handles; reviews go public."
+            className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
+          />
+          {reviewError && <p className="mt-1.5 text-xs text-red-600">{reviewError}</p>}
+          <div className="mt-2 flex gap-2">
+            <button onClick={submitReview} disabled={reviewBusy} className="btn-luxe min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
+              {reviewBusy ? 'Saving…' : 'Update review'}
+            </button>
+            <button onClick={() => setEditing(false)} className="btn-soft min-h-[44px] px-5 py-2 text-xs">Cancel</button>
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   )
 }

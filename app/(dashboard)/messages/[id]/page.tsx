@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -45,6 +45,18 @@ interface Counterpart {
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/** WhatsApp-style day separators between message groups. */
+function dayKey(iso: string): string {
+  return new Date(iso).toDateString()
+}
+function dayLabel(iso: string): string {
+  const d = new Date(iso)
+  if (d.toDateString() === new Date().toDateString()) return 'Today'
+  const y = new Date(Date.now() - 24 * 3600 * 1000)
+  if (d.toDateString() === y.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /**
@@ -105,6 +117,16 @@ export default function ThreadPage() {
   const [ppvPrice, setPpvPrice] = useState('100')
   const [templateTab, setTemplateTab] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // WhatsApp-style composer: the typing pill grows with the text
+  // up to a cap, then scrolls inside itself.
+  useEffect(() => {
+    const ta = inputRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
+  }, [input])
 
   // Media privacy (migration 044): who has viewed shared media.
   const [mediaViews, setMediaViews] = useState<{ message_id: string; viewer_id: string }[]>([])
@@ -555,7 +577,7 @@ export default function ThreadPage() {
   const quickReplies = !other?.isProvider ? PROVIDER_QUICK_REPLIES : null
 
   return (
-    <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col">
+    <div className="-mx-4 -my-8 flex h-full min-h-0 flex-col bg-[#efe7db] sm:-mx-6">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3">
         <Tooltip label="Back" side="bottom" align="start">
@@ -610,7 +632,7 @@ export default function ThreadPage() {
       {/* What they want, plus screening answers: providers only, so
           she can see the intent and screen before chatting */}
       {viewerIsProvider && (intakeAnswers.length > 0 || serviceTypeLabel(connInfo?.serviceType) !== null || connInfo?.offerNgn != null) && (
-        <div className="shrink-0 border-b border-black/[0.05] bg-white px-4 py-3">
+        <div className="mx-auto mt-2 w-[calc(100%-1.5rem)] max-w-3xl shrink-0 rounded-2xl bg-white px-4 py-1 shadow-sm ring-1 ring-black/[0.04]">
           <button
             onClick={() => setShowIntake((v) => !v)}
             className="flex min-h-[44px] w-full items-center justify-between text-left"
@@ -649,8 +671,10 @@ export default function ThreadPage() {
         </div>
       )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-cream/40 px-4 py-4">
+      {/* Messages: WhatsApp layout. Warm beige ground, white
+          bubbles in, burgundy bubbles out, day pills between
+          days, time inside the bubble. */}
+      <div className="flex-1 overflow-y-auto px-3 py-3">
         {loading ? (
           <div data-page-loader className="flex h-full items-center justify-center">
             <IntimaLoader size="lg" />
@@ -663,39 +687,51 @@ export default function ThreadPage() {
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {msgs.map((m) => {
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
+            {msgs.map((m, i) => {
               const mine = m.sender_id === me
+              const showDay = i === 0 || dayKey(msgs[i - 1].created_at) !== dayKey(m.created_at)
+              const seen =
+                mine &&
+                !!m.media_url &&
+                mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me)
               return (
-                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                      mine
-                        ? 'rounded-br-md bg-primary text-white'
-                        : 'rounded-bl-md bg-white text-charcoal shadow-xs'
-                    }`}
-                  >
-                    <p>{m.body}</p>
-                    {m.media_url && (
-                      <PpvMedia
-                        msg={m}
-                        me={me}
-                        hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
-                        onOpen={openMediaViewer}
-                        onViewed={recordMediaView}
-                        signedUrl={signedUrls[m.id]}
-                      />
-                    )}
-                    <p className={`mt-1 text-right text-[11px] ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
-                      {fmtTime(m.created_at)}
-                    </p>
-                    {mine && m.media_url && mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me) && (
-                      <p className={`text-right text-[11px] font-medium ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
-                        Seen
+                <Fragment key={m.id}>
+                  {showDay && (
+                    <div className="flex justify-center py-1.5">
+                      <span className="rounded-lg bg-white/90 px-2.5 py-1 text-[11px] font-medium text-neutral-500 shadow-sm">
+                        {dayLabel(m.created_at)}
+                      </span>
+                    </div>
+                  )}
+                  <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[82%] rounded-xl px-2.5 pb-1.5 pt-2 text-[15px] leading-relaxed shadow-sm ${
+                        mine
+                          ? 'rounded-tr-sm bg-primary text-white'
+                          : 'rounded-tl-sm bg-white text-charcoal'
+                      }`}
+                    >
+                      {m.body.trim() && m.body !== 'Locked media' ? (
+                        <p className="whitespace-pre-wrap px-1">{m.body}</p>
+                      ) : null}
+                      {m.media_url && (
+                        <PpvMedia
+                          msg={m}
+                          me={me}
+                          hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
+                          onOpen={openMediaViewer}
+                          onViewed={recordMediaView}
+                          signedUrl={signedUrls[m.id]}
+                        />
+                      )}
+                      <p className={`mt-0.5 px-1 text-right text-[11px] leading-none ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
+                        {fmtTime(m.created_at)}
+                        {seen && <span className="font-semibold text-sky-200"> · Seen</span>}
                       </p>
-                    )}
+                    </div>
                   </div>
-                </div>
+                </Fragment>
               )
             })}
             <div ref={bottomRef} />
@@ -711,7 +747,7 @@ export default function ThreadPage() {
 
       {/* Templates (Lagos Life style) */}
       {showTemplates && active && (
-        <div className="shrink-0 border-t border-neutral-100 bg-white px-4 pb-2 pt-3">
+        <div className="mx-3 mb-1 shrink-0 rounded-3xl bg-white px-4 pb-2 pt-3 shadow-sm ring-1 ring-black/[0.04]">
           <div className="flex gap-2 overflow-x-auto pb-2">
             {templates.map((g, i) => (
               <button
@@ -759,7 +795,7 @@ export default function ThreadPage() {
 
       {/* PPV panel */}
       {showPpv && active && (
-        <div className="shrink-0 border-t border-neutral-100 bg-gold/5 px-4 py-3">
+        <div className="mx-3 mb-1 shrink-0 rounded-3xl bg-white px-4 py-3 shadow-sm ring-1 ring-gold/30">
           <p className="flex items-center gap-1 text-xs font-semibold text-charcoal">
             Send locked media (PPV)
             <HelpTip text="Locked media stays hidden until the other person pays your price in coins, once. Mark it view once and it can only be opened a single time before it disappears." />
@@ -848,67 +884,83 @@ export default function ThreadPage() {
         }}
       />
 
-      {/* Composer */}
-      <div className="shrink-0 border-t border-neutral-100 bg-white px-4 py-3">
+      {/* Composer: the WhatsApp bar. One white typing pill with
+          the actions inside it, and a round send button beside
+          it, floating on the chat background. */}
+      <div className="shrink-0 px-3 pb-3 pt-1">
         {!loading && !active && (
-          <p className="mb-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <p className="mx-auto mb-2 w-fit max-w-full rounded-full bg-amber-100 px-3.5 py-1.5 text-center text-xs font-medium text-amber-800">
             This connection is not active. Chat unlocks after payment.
           </p>
         )}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowTemplates((v) => !v)}
-            disabled={!active}
-            aria-label="Message templates"
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${
-              showTemplates ? 'bg-gold/20' : 'bg-cream'
-            } disabled:opacity-40`}
-          >
-            <Sparkles className="h-5 w-5 text-gold" />
-          </button>
-          <button
-            onClick={() => setDisappearing((v) => !v)}
-            aria-label="Disappearing messages"
-            title="Disappearing messages (24h)"
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'bg-cream'} disabled:opacity-40`}
-          >
-            <Timer className={`h-4 w-4 ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
-          </button>
-          <button
-            onClick={() => mediaFileRef.current?.click()}
-            disabled={!active || uploading}
-            aria-label="Attach a photo or video"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-cream disabled:opacity-40"
-          >
-            <ImageIcon className="h-5 w-5 text-neutral-500" />
-          </button>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send(input)}
-            placeholder={active ? 'Type a message...' : 'Chat locked'}
-            disabled={!active || sending}
-            maxLength={1000}
-            className="min-h-[44px] min-w-0 flex-1 rounded-full border border-neutral-200 bg-cream/60 px-4 py-2.5 text-base text-charcoal outline-none placeholder:text-neutral-400 focus:border-primary disabled:opacity-50 md:text-sm"
-          />
-          {!other?.isProvider && active && (
+        <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
+          <div className="flex min-w-0 flex-1 items-end rounded-[26px] bg-white px-1 py-1 shadow-sm ring-1 ring-black/[0.04]">
             <button
-              onClick={() => setShowPpv((v) => !v)}
-              aria-label="Send locked media"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/20 text-gold"
+              onClick={() => setShowTemplates((v) => !v)}
+              disabled={!active}
+              aria-label="Message templates"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${
+                showTemplates ? 'bg-gold/20' : 'hover:bg-cream'
+              } disabled:opacity-40`}
             >
-              <Lock className="h-4 w-4" />
+              <Sparkles className="h-5 w-5 text-gold" />
             </button>
-          )}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void send(input)
+                }
+              }}
+              placeholder={active ? 'Message' : 'Chat locked'}
+              disabled={!active || sending}
+              maxLength={1000}
+              rows={1}
+              className="max-h-[120px] min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-base leading-snug text-charcoal outline-none placeholder:text-neutral-400 disabled:opacity-50 md:text-sm"
+            />
+            <button
+              onClick={() => setDisappearing((v) => !v)}
+              aria-label="Disappearing messages"
+              title="Disappearing messages (24h)"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'hover:bg-cream'} disabled:opacity-40`}
+            >
+              <Timer className={`h-[18px] w-[18px] ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
+            </button>
+            <button
+              onClick={() => mediaFileRef.current?.click()}
+              disabled={!active || uploading}
+              aria-label="Attach a photo or video"
+              className="flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors hover:bg-cream disabled:opacity-40"
+            >
+              <ImageIcon className="h-5 w-5 text-neutral-500" />
+            </button>
+            {!other?.isProvider && active && (
+              <button
+                onClick={() => setShowPpv((v) => !v)}
+                aria-label="Send locked media"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${showPpv ? 'bg-gold/25' : 'hover:bg-gold/10'}`}
+              >
+                <Lock className="h-[18px] w-[18px] text-gold" />
+              </button>
+            )}
+          </div>
           <button
             onClick={() => send(input)}
             disabled={!active || sending || !input.trim()}
             aria-label="Send"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-md transition-opacity disabled:opacity-40"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-5 w-5" />
           </button>
         </div>
+        {disappearing && active && (
+          <p className="mt-1.5 text-center text-[11px] font-medium text-neutral-500">
+            Disappearing messages on: what you send vanishes after 24 hours
+          </p>
+        )}
       </div>
 
       {/* Media viewer overlay: the one place shared media opens big.
