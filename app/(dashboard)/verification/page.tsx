@@ -108,18 +108,28 @@ export default function VerificationPage() {
         uploadOne(files.idSelfie, 'id-selfie'),
         uploadOne(files.signSelfie, 'sign-selfie'),
       ])
-      const { error: insErr } = await supabase.from('verifications').insert({
+      const { data: inserted, error: insErr } = await supabase.from('verifications').insert({
         provider_id: userId,
         id_document_url: idDoc,
         selfie_url: idSelfie,
         sign_selfie_url: signSelfie,
         id_type: idType,
         status: 'pending',
-      })
+      }).select('id').single()
       if (insErr) throw insErr
       await supabase.from('profiles').update({ verification_status: 'pending' }).eq('id', userId)
       setStatus('pending')
       setDone(true)
+      // Automated check, fire and forget: a clean pass can approve
+      // within minutes, anything unclear stays with the review team.
+      // While the provider is not configured this simply no-ops.
+      if (inserted?.id) {
+        void fetch('/api/verification/dispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: inserted.id }),
+        }).catch(() => {})
+      }
     } catch (e) {
       setError('Something went wrong uploading. Please check your connection and try again.')
     }
@@ -155,7 +165,7 @@ export default function VerificationPage() {
         <div>
           <div className="flex items-center gap-2">
           <h1 className="font-display text-3xl font-semibold tracking-tight text-charcoal">Verification</h1>
-          <HelpTip text="We ask for a government ID and a selfie holding it to confirm you are a real adult and the photos are yours. Our team checks that the faces match. Once approved, your profile gets the verified badge and you can receive connections and go live." />
+          <HelpTip text="We ask for a government ID and a selfie holding it to confirm you are a real adult and the photos are yours. Most checks finish automatically within minutes. If anything is unclear, our review team takes a closer look. Once approved, your profile gets the verified badge and you can receive connections and go live." />
           </div>
           <p className="text-sm text-neutral-500">
             {role === 'model' ? 'Verified companions get the badge and clients trust.' : 'Verified clients unlock companions who only meet verified clients.'}
@@ -179,7 +189,7 @@ export default function VerificationPage() {
           <div>
             <p className="font-semibold text-charcoal">Under review</p>
             <p className="mt-1 text-sm text-neutral-500">
-              Submitted {latest ? new Date(latest.submitted_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'long' }) : ''}. Reviews usually take 1 to 2 days. We will notify you here.
+              Submitted {latest ? new Date(latest.submitted_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'long' }) : ''}. Most checks finish within minutes. If yours needs a closer look, it can take 1 to 2 days. We will notify you here.
             </p>
           </div>
         </div>
@@ -188,8 +198,8 @@ export default function VerificationPage() {
         <div className="card-luxe mt-6 flex items-start gap-3 border-emerald-100 bg-emerald-50/60 p-5">
           <BadgeCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-600" />
           <div>
-            <p className="font-semibold text-charcoal">Submitted for review</p>
-            <p className="mt-1 text-sm text-neutral-500">Reviews usually take 1 to 2 days. Your status will update here.</p>
+            <p className="font-semibold text-charcoal">Submitted for verification</p>
+            <p className="mt-1 text-sm text-neutral-500">Most checks finish within minutes. If yours needs a closer look, it can take 1 to 2 days. Your status will update here.</p>
           </div>
         </div>
       )}

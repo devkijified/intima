@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
       reviewed_by: admin.id,
       reviewed_at: new Date().toISOString(),
       review_notes: approve ? notes || null : notes,
+      decision_source: 'admin',
     })
     .eq('id', id);
   if (error) return NextResponse.json({ error: 'Could not save that decision' }, { status: 500 });

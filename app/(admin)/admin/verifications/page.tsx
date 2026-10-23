@@ -18,6 +18,10 @@ interface VerificationRow {
   id_type: string | null
   submitted_at: string
   review_notes: string | null
+  automation_status: string | null
+  provider: string | null
+  provider_confidence: number | string | null
+  decision_source: string | null
   profiles: { display_name: string | null; full_name: string | null } | null
 }
 
@@ -38,7 +42,7 @@ export default function AdminVerificationsPage() {
     const { data } = await supabase
       .from('verifications')
       .select(
-        'id, provider_id, status, id_document_url, selfie_url, sign_selfie_url, id_type, submitted_at, review_notes'
+        'id, provider_id, status, id_document_url, selfie_url, sign_selfie_url, id_type, submitted_at, review_notes, automation_status, provider, provider_confidence, decision_source'
       )
       .order('submitted_at', { ascending: true })
     if (data) {
@@ -238,6 +242,19 @@ export default function AdminVerificationsPage() {
                   <span className="text-xs font-medium text-gray-500">ID: {row.id_type}</span>
                 )}
               </div>
+
+              {row.automation_status && row.automation_status !== 'not_started' && (
+                <p className="mb-3 text-xs text-gray-500">
+                  Auto check{row.provider ? ` (${row.provider})` : ''}:{' '}
+                  {row.automation_status.replace(/_/g, ' ')}
+                  {row.provider_confidence !== null && row.provider_confidence !== undefined
+                    ? `, face match ${Math.round(Number(row.provider_confidence))}%`
+                    : ''}
+                  {row.decision_source
+                    ? `, source: ${row.decision_source === 'admin' ? 'review team' : row.decision_source}`
+                    : ''}
+                </p>
+              )}
 
               {row.status === 'pending' ? (
                 <div className="space-y-3">
