@@ -64,56 +64,104 @@ function readerHint(): string {
  * canvas is display-only; nothing here ever exports it.
  */
 function PanelImage({ src, index, watermark }: { src: string; index: number; watermark: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const nearRef = useRef(true)
   const [failed, setFailed] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [drawn, setDrawn] = useState(false)
+  const [aspect, setAspect] = useState<number | null>(null)
   const [attempt, setAttempt] = useState(0)
   const liveSrc = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}cb=${attempt}`
+
+  // Paint the held image into the canvas, watermark included.
+  // The bitmap is capped at 1000px wide: the column never
+  // displays wider than 576 CSS px, so this stays visually
+  // lossless while keeping a long episode's memory sane.
+  function paint() {
+    const img = imgRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!img || !canvas || !ctx || img.naturalWidth === 0) return
+    const scale = Math.min(1, 1000 / img.naturalWidth)
+    const w = Math.round(img.naturalWidth * scale)
+    const h = Math.round(img.naturalHeight * scale)
+    canvas.width = w
+    canvas.height = h
+    ctx.drawImage(img, 0, 0, w, h)
+    const text = (watermark || '').trim().toLowerCase()
+    if (text) {
+      const fs = Math.max(13, Math.round(w * 0.026))
+      ctx.font = `600 ${fs}px system-ui, -apple-system, 'Segoe UI', sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      try {
+        ;(ctx as unknown as { letterSpacing?: string }).letterSpacing = `${Math.max(2, Math.round(fs * 0.22))}px`
+      } catch { /* older engines: spacing is cosmetic */ }
+      ctx.shadowColor = 'rgba(0,0,0,0.7)'
+      ctx.shadowBlur = 8
+      ctx.shadowOffsetY = 1
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'
+      ctx.fillText(text, w / 2, Math.round(h * 0.87))
+    }
+    setDrawn(true)
+  }
 
   useEffect(() => {
     let live = true
     setFailed(false)
-    setLoaded(false)
+    setDrawn(false)
+    imgRef.current = null
     const img = new Image()
     img.onload = () => {
       if (!live) return
-      const canvas = canvasRef.current
-      const ctx = canvas?.getContext('2d')
-      if (!canvas || !ctx || img.naturalWidth === 0) { setFailed(true); return }
-      // Cap the bitmap at 1000px wide: the column never displays
-      // wider than 576 CSS px, so this stays visually lossless
-      // while keeping a long episode's memory sane.
-      const scale = Math.min(1, 1000 / img.naturalWidth)
-      const w = Math.round(img.naturalWidth * scale)
-      const h = Math.round(img.naturalHeight * scale)
-      canvas.width = w
-      canvas.height = h
-      ctx.drawImage(img, 0, 0, w, h)
-      const text = (watermark || '').trim().toLowerCase()
-      if (text) {
-        const fs = Math.max(13, Math.round(w * 0.026))
-        ctx.font = `600 ${fs}px system-ui, -apple-system, 'Segoe UI', sans-serif`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        try {
-          ;(ctx as unknown as { letterSpacing?: string }).letterSpacing = `${Math.max(2, Math.round(fs * 0.22))}px`
-        } catch { /* older engines: spacing is cosmetic */ }
-        ctx.shadowColor = 'rgba(0,0,0,0.7)'
-        ctx.shadowBlur = 8
-        ctx.shadowOffsetY = 1
-        ctx.fillStyle = 'rgba(255,255,255,0.6)'
-        ctx.fillText(text, w / 2, Math.round(h * 0.87))
-      }
-      setLoaded(true)
+      if (img.naturalWidth === 0) { setFailed(true); return }
+      imgRef.current = img
+      setAspect(img.naturalWidth / img.naturalHeight)
+      if (nearRef.current) paint()
     }
     img.onerror = () => { if (live) setFailed(true) }
     img.src = liveSrc
     return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveSrc, watermark])
+
+  // Bitmap windowing: a 150 page episode cannot hold 150 painted
+  // canvases in a phone's memory at once. Panels within two
+  // screens paint; panels far away release their bitmap (the
+  // wrapper keeps the aspect ratio, so nothing shifts) and
+  // repaint from the held image when they come back.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          nearRef.current = en.isIntersecting
+          if (en.isIntersecting) {
+            paint()
+          } else {
+            const canvas = canvasRef.current
+            if (canvas && (canvas.width !== 0 || canvas.height !== 0)) {
+              canvas.width = 0
+              canvas.height = 0
+            }
+            setDrawn(false)
+          }
+        }
+      },
+      { rootMargin: '200% 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watermark])
 
   return (
     <div
-      className={`relative w-full select-none bg-[#171017] [-webkit-touch-callout:none] ${loaded || failed ? '' : 'min-h-[320px]'}`}
+      ref={wrapRef}
+      className={`relative w-full select-none bg-[#171017] [-webkit-touch-callout:none] ${aspect || failed ? '' : 'min-h-[320px]'}`}
+      style={aspect ? { aspectRatio: `${aspect}` } : undefined}
       onContextMenu={(e) => e.preventDefault()}
     >
       {failed ? (
@@ -130,7 +178,7 @@ function PanelImage({ src, index, watermark }: { src: string; index: number; wat
           ref={canvasRef}
           role="img"
           aria-label={`Panel ${index + 1}`}
-          className={`block h-auto w-full transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          className={`block h-full w-full transition-opacity duration-300 ${drawn ? 'opacity-100' : 'opacity-0'}`}
         />
       )}
     </div>
