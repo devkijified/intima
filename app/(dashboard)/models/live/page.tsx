@@ -21,27 +21,65 @@ const CAMERA_PUBLISH_OPTIONS: TrackPublishOptions = {
   videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
 }
 
+type MediaDeviceKind = 'camera' | 'microphone'
+
+// Tag a media failure with the device that caused it, so the
+// message can name the actual problem instead of "camera or
+// microphone" (which left the companion guessing which one).
+function withDevice(err: unknown, device: MediaDeviceKind): unknown {
+  if (err && typeof err === 'object') {
+    ;(err as { device?: MediaDeviceKind }).device = device
+  }
+  return err
+}
+
+// Media failures also go to the error log with the browser's exact
+// error name: when a companion reports "it still blocks", the real
+// reason from her phone is on record instead of a guess.
+function logMediaFail(where: string, err: unknown) {
+  const e = err as { name?: string; message?: string; device?: string } | null
+  void fetch('/api/logs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: `studio media fail (${where}): device=${e?.device ?? '?'} name=${e?.name ?? 'unknown'} msg=${e?.message ?? ''} ua=${typeof navigator !== 'undefined' ? navigator.userAgent : ''}`,
+      route: '/models/live',
+    }),
+  }).catch(() => {})
+}
+
 // Camera and microphone failures reach the page as raw browser
 // DOMExceptions ("The request is not allowed by the user agent or
 // the platform in the current context..."). Those sentences are
-// never shown to a companion: map them to plain instructions.
-function friendlyMediaError(err: unknown): string {
+// never shown to a companion: map them to plain instructions that
+// name the device that actually failed.
+function friendlyMediaError(err: unknown, deviceArg?: MediaDeviceKind): string {
   const name = (err as { name?: string } | null)?.name ?? ''
   const msg = err instanceof Error ? err.message : ''
   const text = `${name} ${msg}`
+  const device: MediaDeviceKind =
+    deviceArg ?? (err as { device?: MediaDeviceKind } | null)?.device ?? 'camera'
   if (/NotAllowedError|user agent|denied permission|permission denied/i.test(text)) {
-    return 'Camera or microphone access was blocked. Allow camera and microphone for this site in your browser settings, then try again.'
+    return device === 'microphone'
+      ? 'Your microphone is blocked. If you are on a phone or WhatsApp call, end the call and try again. Otherwise allow microphone access for this site in your browser settings.'
+      : 'Your camera is blocked. Allow camera access for this site in your browser settings, then try again. If another app is using your camera, close it first.'
   }
   if (/NotFoundError|OverconstrainedError|DevicesNotFound/i.test(text)) {
-    return 'No camera or microphone was found on this device.'
+    return device === 'microphone'
+      ? 'No microphone was found on this device.'
+      : 'No camera was found on this device.'
   }
   if (/NotReadableError|TrackStartError/i.test(text)) {
-    return 'Your camera or microphone is busy in another app. Close that app and try again.'
+    return device === 'microphone'
+      ? 'Your microphone is busy. If you are on a phone or WhatsApp call, end the call and try again.'
+      : 'Your camera is busy in another app. Close that app and try again.'
   }
   if (/SecurityError/i.test(text)) {
-    return 'Camera access needs a secure connection. Open Intima from its usual address and try again.'
+    return 'Camera and microphone access needs a secure connection. Open Intima from its usual address and try again.'
   }
-  return 'The camera could not start. Check your camera and microphone, then try again.'
+  return device === 'microphone'
+    ? 'The microphone could not start. Check it and try again.'
+    : 'The camera could not start. Check it and try again.'
 }
 
 function humanStartError(err: unknown): string {
@@ -97,6 +135,8 @@ export default function GoLivePage() {
   // Safari refuses once the tap is spent on network round trips).
   const [previewOn, setPreviewOn] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [micWarning, setMicWarning] = useState<string | null>(null)
+  const [micBlocked, setMicBlocked] = useState(false)
   const [facing, setFacing] = useState<'user' | 'environment'>('user')
   const previewVideoEl = useRef<HTMLVideoElement>(null)
   const previewStream = useRef<MediaStream | null>(null)
@@ -157,25 +197,41 @@ export default function GoLivePage() {
 
   const startPreview = async () => {
     setPreviewError(null)
+    setMicWarning(null)
     if (!navigator.mediaDevices?.getUserMedia) {
       setPreviewError('Camera access needs a secure connection. Open Intima from its usual address and try again.')
       return
     }
+    // Camera and microphone are asked for SEPARATELY. As one bundle,
+    // a blocked microphone (an active phone call is the usual
+    // cause on iPhone) killed the camera too, and the error could
+    // not even say which device had failed.
+    // Called directly from the tap: iOS Safari ties the permission
+    // to the gesture, so nothing may be awaited first.
+    let videoStream: MediaStream
     try {
-      // Called directly from the tap: iOS Safari ties the camera
-      // permission to the gesture, so nothing may be awaited first.
-      const stream = await navigator.mediaDevices.getUserMedia({
+      videoStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: facing },
-        audio: true,
       })
-      previewStream.current = stream
-      setPreviewOn(true)
-      if (previewVideoEl.current) {
-        previewVideoEl.current.srcObject = stream
-        void previewVideoEl.current.play().catch(() => {})
-      }
     } catch (err) {
-      setPreviewError(friendlyMediaError(err))
+      logMediaFail('preview-camera', withDevice(err, 'camera'))
+      setPreviewError(friendlyMediaError(err, 'camera'))
+      return
+    }
+    const tracks = [...videoStream.getVideoTracks()]
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      tracks.push(...audioStream.getAudioTracks())
+    } catch (err) {
+      logMediaFail('preview-mic', withDevice(err, 'microphone'))
+      setMicWarning('Your microphone is blocked, so there is no sound. If you are on a phone or WhatsApp call, end it and turn the camera on again. You can still go live, but viewers will not hear you until the microphone works.')
+    }
+    const stream = new MediaStream(tracks)
+    previewStream.current = stream
+    setPreviewOn(true)
+    if (previewVideoEl.current) {
+      previewVideoEl.current.srcObject = stream
+      void previewVideoEl.current.play().catch(() => {})
     }
   }
 
@@ -205,22 +261,50 @@ export default function GoLivePage() {
         void previewVideoEl.current.play().catch(() => {})
       }
     } catch (err) {
-      setPreviewError(friendlyMediaError(err))
+      logMediaFail('preview-flip', withDevice(err, 'camera'))
+      setPreviewError(friendlyMediaError(err, 'camera'))
     }
   }
 
   // Tracks for publishing: reuse the running preview tracks when
   // the preview is on (the camera ask already happened on a direct
-  // tap, so Safari cannot refuse it here), otherwise ask now.
-  const acquireTracks = async (): Promise<{ cam: LocalVideoTrack; mic: LocalAudioTrack; fromPreview: boolean }> => {
+  // tap, so Safari cannot refuse it here), otherwise ask now. The
+  // microphone is best-effort: a blocked mic (an active call is the
+  // usual cause) must not stop the stream. She goes live on camera
+  // alone, with a notice in the room and a Try mic button.
+  const acquireTracks = async (): Promise<{ cam: LocalVideoTrack; mic: LocalAudioTrack | null; fromPreview: boolean }> => {
     const stream = previewStream.current
     const v = stream?.getVideoTracks()[0]
-    const a = stream?.getAudioTracks()[0]
-    if (stream && v && a && v.readyState === 'live' && a.readyState === 'live') {
-      return { cam: new LocalVideoTrack(v), mic: new LocalAudioTrack(a), fromPreview: true }
+    if (stream && v && v.readyState === 'live') {
+      const a = stream.getAudioTracks()[0]
+      let mic: LocalAudioTrack | null = null
+      if (a && a.readyState === 'live') {
+        mic = new LocalAudioTrack(a)
+      } else {
+        // The preview ran without a mic. Try once more now:
+        // whatever blocked it may have cleared since.
+        try {
+          mic = await createLocalAudioTrack()
+        } catch (err) {
+          logMediaFail('golive-mic-retry', withDevice(err, 'microphone'))
+          mic = null
+        }
+      }
+      return { cam: new LocalVideoTrack(v), mic, fromPreview: true }
     }
-    const cam = await createLocalVideoTrack({ facingMode: facing })
-    const mic = await createLocalAudioTrack()
+    let cam: LocalVideoTrack
+    try {
+      cam = await createLocalVideoTrack({ facingMode: facing })
+    } catch (err) {
+      throw withDevice(err, 'camera')
+    }
+    let mic: LocalAudioTrack | null = null
+    try {
+      mic = await createLocalAudioTrack()
+    } catch (err) {
+      logMediaFail('golive-mic', withDevice(err, 'microphone'))
+      mic = null
+    }
     return { cam, mic, fromPreview: false }
   }
 
@@ -344,18 +428,21 @@ export default function GoLivePage() {
       const mic = media.mic
       videoTrack.current = cam
       audioTrack.current = mic
+      setMicBlocked(!mic)
       if (videoEl.current) {
         cam.attach(videoEl.current)
       }
 
-      // Connect and publish.
+      // Connect and publish. Video always; audio only when a mic
+      // track exists (a blocked mic goes live silent, with the
+      // in-room notice, instead of not going live at all).
       const room = new Room()
       roomRef.current = room
       room.on('participantConnected', () => setViewerCount(room.remoteParticipants.size))
       room.on('participantDisconnected', () => setViewerCount(room.remoteParticipants.size))
       await room.connect(url, token)
       await room.localParticipant.publishTrack(cam, CAMERA_PUBLISH_OPTIONS)
-      await room.localParticipant.publishTrack(mic)
+      if (mic) await room.localParticipant.publishTrack(mic)
 
       // Notify past clients (best-effort, via the push+notification primitive).
       // Skipped for a resumed scheduled session: /api/live/go-live already
@@ -385,6 +472,7 @@ export default function GoLivePage() {
 
       setPhase('live')
     } catch (err: unknown) {
+      logMediaFail('golive', err)
       setError(humanStartError(err))
       setPhase('setup')
       // A stream that never reached live must not stay listed as
@@ -524,6 +612,22 @@ export default function GoLivePage() {
     setMuted(next)
   }
 
+  // Went live without a microphone (it was blocked at start). One
+  // tap asks again: if the blocker cleared (call ended, permission
+  // fixed), the mic publishes into the running stream.
+  const retryMic = async () => {
+    if (!roomRef.current) return
+    try {
+      const mic = await createLocalAudioTrack()
+      await roomRef.current.localParticipant.publishTrack(mic)
+      audioTrack.current = mic
+      setMicBlocked(false)
+      setMuted(false)
+    } catch (err) {
+      logMediaFail('live-retry-mic', withDevice(err, 'microphone'))
+    }
+  }
+
   const flipCamera = async () => {
     // Simplest reliable flip: restart the video track with the other facing mode.
     try {
@@ -612,6 +716,12 @@ export default function GoLivePage() {
             <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
               <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
               <p className="text-sm text-red-700">{previewError}</p>
+            </div>
+          )}
+          {micWarning && previewOn && (
+            <div className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <MicOff className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
+              <p className="text-sm text-amber-800">{micWarning}</p>
             </div>
           )}
 
@@ -739,6 +849,19 @@ export default function GoLivePage() {
           <Eye className="h-3.5 w-3.5" /> {viewerCount} watching
         </span>
       </div>
+      {/* Microphone blocked notice: live on camera, no sound */}
+      {micBlocked && (
+        <div className="absolute left-4 top-[6.75rem] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full bg-red-600/90 py-1.5 pl-3 pr-1.5 text-xs font-medium text-white backdrop-blur">
+          <MicOff className="h-3.5 w-3.5 flex-shrink-0" />
+          <span>Microphone blocked: viewers cannot hear you</span>
+          <button
+            onClick={retryMic}
+            className="flex-shrink-0 rounded-full bg-white px-2.5 py-1 font-bold text-red-700"
+          >
+            Try mic
+          </button>
+        </div>
+      )}
       {/* Gift earnings pill */}
       <div className="absolute left-4 top-16 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur">
         <Gift className="h-3.5 w-3.5 text-gold" />
