@@ -228,6 +228,27 @@ export default function ModelDetailPage() {
   // the gallery habit from Instagram and TikTok (45px, the same
   // threshold the story viewer uses). Buttons stay for discoverability.
   const lightboxTouchX = useRef<number | null>(null)
+  // The slide count is computed far below (after the loading and
+  // not-found early returns), so the keyboard effect up here reads
+  // it through a ref: a useEffect placed below those early returns
+  // would change the hook order between renders and crash the page.
+  const totalSlidesRef = useRef(0)
+
+  // Desktop half of the gallery habit: arrow keys move between
+  // slides and Escape closes while the lightbox is open.
+  useEffect(() => {
+    if (lightbox === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null)
+      const total = totalSlidesRef.current
+      if (total < 2) return
+      if (e.key === 'ArrowRight') setLightbox((cur) => (cur === null ? cur : (cur + 1) % total))
+      if (e.key === 'ArrowLeft')
+        setLightbox((cur) => (cur === null ? cur : (cur - 1 + total) % total))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox === null])
   const [reviews, setReviews] = useState<MockReview[]>([])
   const [connectionFee, setConnectionFee] = useState<number | null>(null)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -700,21 +721,7 @@ export default function ModelDetailPage() {
     ...provider.videos.map((src) => ({ kind: 'video' as const, src })),
   ]
   const totalSlides = slides.length
-
-  // Desktop half of the gallery habit: arrow keys move between
-  // slides and Escape closes while the lightbox is open.
-  useEffect(() => {
-    if (lightbox === null) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLightbox(null)
-      if (totalSlides < 2) return
-      if (e.key === 'ArrowRight') setLightbox((cur) => (cur === null ? cur : (cur + 1) % totalSlides))
-      if (e.key === 'ArrowLeft')
-        setLightbox((cur) => (cur === null ? cur : (cur - 1 + totalSlides) % totalSlides))
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox === null, totalSlides])
+  totalSlidesRef.current = totalSlides
 
   return (
     <div className="mx-auto max-w-2xl pb-28 md:pb-10">
