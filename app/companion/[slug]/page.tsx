@@ -1252,7 +1252,7 @@ export default function ModelDetailPage() {
       {/* Lightbox */}
       {lightbox !== null && slides[lightbox] && (
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/95"
+          className="fixed inset-0 z-[80] flex touch-none items-center justify-center bg-black/95"
           onClick={() => setLightbox(null)}
           onTouchStart={(e) => {
             lightboxTouchX.current = e.touches[0]?.clientX ?? null
