@@ -1331,6 +1331,21 @@ export default function StreamRoomPage() {
     [postChatLine]
   )
 
+  // Balance re-read for the gift panel's in-room recharge: after a
+  // top-up checkout completes in its tab, the panel polls this until
+  // the balance moves, then returns to the gifts on its own.
+  const refreshBalance = useCallback(async () => {
+    if (!myId) return null
+    const { data } = await supabase
+      .from('coin_balances')
+      .select('balance')
+      .eq('user_id', myId)
+      .maybeSingle()
+    const b = (data as { balance?: number } | null)?.balance ?? null
+    if (typeof b === 'number') setBalance(b)
+    return b
+  }, [myId, supabase])
+
   const stashGiftReturn = useCallback(
     (giftId: string | null) => {
       try {
@@ -2331,6 +2346,7 @@ export default function StreamRoomPage() {
           onSend={sendGiftTracked}
           onComboSummary={handleComboSummary}
           onBuyCoinsStart={stashGiftReturn}
+          onBalanceRefresh={refreshBalance}
           onClose={() => setGiftOpen(false)}
         />
       )}

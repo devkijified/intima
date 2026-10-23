@@ -69,6 +69,7 @@ export function GiftPanel({
   onSend,
   onComboSummary,
   onBuyCoinsStart,
+  onBalanceRefresh,
   onClose,
 }: {
   catalog: GiftCatalogItem[]
@@ -80,6 +81,7 @@ export function GiftPanel({
   onSend: (gift: GiftCatalogItem) => Promise<GiftSendResult>
   onComboSummary: (gift: GiftCatalogItem, count: number) => void
   onBuyCoinsStart: (giftId: string | null) => void
+  onBalanceRefresh?: () => Promise<number | null>
   onClose: () => void
 }) {
   const [view, setView] = useState<'gifts' | 'packages'>('gifts')
@@ -205,11 +207,44 @@ export function GiftPanel({
     }, 60)
   }
 
+  // TikTok-style recharge: checkout opens in a tab over the stream
+  // (pre-opened inside the tap so mobile browsers allow it), the room
+  // keeps playing behind this panel, and the balance polls until the
+  // top-up lands, then the panel returns to the gifts on its own. If
+  // the browser blocks the tab, fall back to the full-page checkout
+  // with the gift return stash, exactly as before.
+  const [awaitingPay, setAwaitingPay] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  const startBalancePoll = (startBalance: number) => {
+    if (!onBalanceRefresh) return
+    if (pollRef.current) clearInterval(pollRef.current)
+    let tries = 0
+    pollRef.current = setInterval(async () => {
+      tries += 1
+      if (tries > 40) { if (pollRef.current) clearInterval(pollRef.current); setAwaitingPay(false); return }
+      const b = await onBalanceRefresh().catch(() => null)
+      if (typeof b === 'number' && b > startBalance) {
+        if (pollRef.current) clearInterval(pollRef.current)
+        setAwaitingPay(false)
+        setBuying(null)
+        setBalancePulse(true)
+        setTimeout(() => setBalancePulse(false), 1600)
+        setView('gifts')
+      }
+    }, 3000)
+  }
+
   const buyPackage = async (packageId: string) => {
     if (buying) return
     setBuying(packageId)
     setBuyError('')
     onBuyCoinsStart(selectedId)
+    const startBalance = balance ?? 0
+    // Pre-open inside the tap: after an await, window.open loses the
+    // user-gesture allowance on mobile browsers.
+    const win = typeof window !== 'undefined' ? window.open('', '_blank') : null
     try {
       const res = await fetch('/api/coins/buy', {
         method: 'POST',
@@ -220,8 +255,16 @@ export function GiftPanel({
       if (!res.ok || !data.authorizationUrl) {
         throw new Error(data.error || 'Could not start checkout')
       }
-      window.location.href = data.authorizationUrl
+      if (win) {
+        win.location.href = data.authorizationUrl
+        setAwaitingPay(true)
+        setBuying(null)
+        startBalancePoll(startBalance)
+      } else {
+        window.location.href = data.authorizationUrl
+      }
     } catch (e) {
+      if (win) win.close()
       setBuyError(e instanceof Error ? e.message : 'Could not start checkout')
       setBuying(null)
     }
@@ -254,26 +297,51 @@ export function GiftPanel({
               <p className="text-sm font-bold text-white">Buy coins</p>
               <span className="w-[76px]" />
             </div>
-            <div className="space-y-2">
+            <div className="mb-3 flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3 ring-1 ring-white/10">
+              <span className="text-xs font-medium text-white/60">Your balance</span>
+              <span className={`text-sm font-bold ${balancePulse ? 'animate-pulse text-gold' : 'text-white'}`}>
+                {balance === null ? '...' : balance.toLocaleString()} coins
+                {balance !== null && <span className="ml-1.5 text-xs font-medium text-white/50">≈ ₦{(balance * 10).toLocaleString()}</span>}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               {COIN_PACKAGES.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => buyPackage(p.id)}
                   disabled={buying !== null}
-                  className="flex min-h-[56px] w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-all active:scale-[0.98] disabled:opacity-50"
+                  className={`relative rounded-2xl px-4 py-3.5 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
+                    p.id === 'popular'
+                      ? 'bg-gradient-to-br from-gold/25 to-gold/5 ring-2 ring-gold'
+                      : 'bg-white/5 ring-1 ring-white/10'
+                  }`}
                 >
-                  <span>
-                    <span className="block text-sm font-bold text-white">{p.label}</span>
-                    <span className="block text-xs text-white/50">{p.coins.toLocaleString()} coins</span>
+                  {p.id === 'popular' && (
+                    <span className="absolute -top-2 right-3 rounded-full bg-gold px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-charcoal">
+                      Most popular
+                    </span>
+                  )}
+                  <span className="block text-lg font-extrabold leading-tight text-white">
+                    {p.coins.toLocaleString()} <span className="text-xs font-bold text-white/60">coins</span>
                   </span>
-                  <span className="text-sm font-bold text-gold">₦{p.priceNgn.toLocaleString()}</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-gold">₦{p.priceNgn.toLocaleString()}</span>
+                  <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-white/40">{p.label}</span>
+                  {buying === p.id && <span className="mt-1 block text-[11px] font-semibold text-white/70">Opening checkout...</span>}
                 </button>
               ))}
             </div>
+            {awaitingPay && (
+              <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-gold/15 px-4 py-3 ring-1 ring-gold/50">
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-gold/30 border-t-gold" aria-hidden />
+                <p className="text-xs leading-relaxed text-white/85">
+                  Checkout is open in a new tab. Pay there and your coins appear here on their own.
+                  The stream keeps playing.
+                </p>
+              </div>
+            )}
             {buyError && <p className="mt-3 text-center text-xs font-medium text-red-300">{buyError}</p>}
             <p className="mt-3 text-center text-[11px] text-white/40">
-              Secure checkout by Paystack. Your coins land as soon as payment confirms, and you come
-              right back to this gift.
+              Secure checkout by Paystack: card, transfer, or USSD. Coins land as soon as payment confirms.
             </p>
           </>
         ) : (
