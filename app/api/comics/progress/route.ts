@@ -49,26 +49,43 @@ export async function GET(req: NextRequest) {
     .order('episode_no', { ascending: true });
   const episodes = eps ?? [];
   if (episodes.length === 0) {
-    return NextResponse.json({ state: 'fresh', openedIds: [], completedIds: [] });
+    return NextResponse.json({ state: 'fresh', openedIds: [], completedIds: [], progressById: {} });
   }
 
   if (!user && !guestId) {
-    return NextResponse.json({ state: 'fresh', openedIds: [], completedIds: [] });
+    return NextResponse.json({ state: 'fresh', openedIds: [], completedIds: [], progressById: {} });
   }
 
   const epIds = episodes.map((e) => e.id);
-  let readsQuery = svc.from('comic_reads')
-    .select('episode_id, completed')
-    .in('episode_id', epIds);
-  readsQuery = user
-    ? readsQuery.eq('user_id', user.id)
-    : readsQuery.eq('viewer_key', guestId as string);
-  const { data: reads } = await readsQuery;
+  // progress_pct arrives with migration 081; if the column is not
+  // there yet, retry without it so the endpoint never breaks.
+  const readReads = (withPct: boolean) => {
+    let q = svc.from('comic_reads')
+      .select(withPct ? 'episode_id, completed, progress_pct' : 'episode_id, completed')
+      .in('episode_id', epIds);
+    q = user ? q.eq('user_id', user.id) : q.eq('viewer_key', guestId as string);
+    return q;
+  };
+  let { data: reads, error: readsErr } = await readReads(true);
+  if (readsErr) {
+    ({ data: reads } = await readReads(false));
+  }
+  type ReadRow = { episode_id: string; completed: boolean; progress_pct?: number | null };
+  const readRows = (reads ?? []) as unknown as ReadRow[];
 
-  const openedIds = (reads ?? []).map((r) => r.episode_id as string);
-  const completedIds = (reads ?? []).filter((r) => r.completed).map((r) => r.episode_id as string);
+  const openedIds = readRows.map((r) => r.episode_id);
+  const completedIds = readRows.filter((r) => r.completed).map((r) => r.episode_id);
+  const progressById: Record<string, number> = {};
+  for (const r of readRows) {
+    const pct = r.completed
+      ? 100
+      : typeof r.progress_pct === 'number'
+        ? r.progress_pct
+        : null;
+    if (pct !== null) progressById[r.episode_id] = pct;
+  }
   if (openedIds.length === 0) {
-    return NextResponse.json({ state: 'fresh', openedIds, completedIds });
+    return NextResponse.json({ state: 'fresh', openedIds, completedIds, progressById });
   }
 
   const noById = new Map(episodes.map((e) => [e.id, e.episode_no as number]));
@@ -89,6 +106,7 @@ export async function GET(req: NextRequest) {
       episodeNo: inProgress.episode_no,
       openedIds,
       completedIds,
+      progressById,
     });
   }
 
@@ -101,6 +119,7 @@ export async function GET(req: NextRequest) {
       episodeNo: next.episode_no,
       openedIds,
       completedIds,
+      progressById,
     });
   }
 
@@ -110,5 +129,6 @@ export async function GET(req: NextRequest) {
     episodeNo: episodes[0].episode_no,
     openedIds,
     completedIds,
+    progressById,
   });
 }

@@ -112,7 +112,33 @@ export default function ComicReaderPage() {
   const [panelsReady, setPanelsReady] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
+  const latestPctRef = useRef(0)
+  const sentDecileRef = useRef(0)
   const supabase = createClient()
+
+  // Read strength reporting: as the reader crosses each tenth of
+  // the episode, save the fraction on this device (the series page
+  // draws its bars from it instantly) and ping the track route,
+  // which stores the furthest point server-side too. A final flush
+  // on pagehide catches wherever the reader actually stopped.
+  function persistProgress(frac: number) {
+    const pctInt = Math.round(frac * 100)
+    if (pctInt < 1) return
+    try {
+      const raw = window.localStorage.getItem('intima_episode_progress')
+      const map = (raw ? JSON.parse(raw) : {}) as Record<string, number>
+      if (pctInt > (map[id] ?? 0)) {
+        map[id] = pctInt
+        window.localStorage.setItem('intima_episode_progress', JSON.stringify(map))
+      }
+    } catch { /* storage refused: the server ping still carries it */ }
+    fetch('/api/comics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ episodeId: id, progress: frac, viewerKey: readerHint() }),
+    }).catch(() => {})
+  }
 
   useEffect(() => {
     // A fresh episode starts from a clean slate: no stale panels from
@@ -217,17 +243,40 @@ export default function ComicReaderPage() {
     return () => io.disconnect()
   }, [ep, id])
 
-  // Reading progress for the magazine-style progress hairline.
+  // Reading progress for the magazine-style progress hairline,
+  // plus the read-strength reporting: crossing a new tenth of the
+  // episode persists the fraction (see persistProgress).
   useEffect(() => {
+    latestPctRef.current = 0
+    sentDecileRef.current = 0
     const onScroll = () => {
       const doc = document.documentElement
       const max = doc.scrollHeight - window.innerHeight
-      setReadPct(max > 0 ? Math.min(1, window.scrollY / max) : 0)
+      const pct = max > 0 ? Math.min(1, window.scrollY / max) : 0
+      setReadPct(pct)
+      latestPctRef.current = pct
+      const decile = Math.floor(pct * 10)
+      if (decile > sentDecileRef.current && pct > 0 && pct < 1) {
+        sentDecileRef.current = decile
+        persistProgress(pct)
+      }
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ep])
+
+  // Final flush when the reader leaves mid-episode.
+  useEffect(() => {
+    const flush = () => {
+      const pct = latestPctRef.current
+      if (pct > 0 && pct < 1) persistProgress(pct)
+    }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
 
   if (notFound) {
     return (

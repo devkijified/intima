@@ -51,6 +51,9 @@ export default function ComicSeriesPage() {
     episodeNo?: number
   } | null>(null)
   const [openedIds, setOpenedIds] = useState<Set<string>>(new Set())
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  const [serverPct, setServerPct] = useState<Record<string, number>>({})
+  const [localPct, setLocalPct] = useState<Record<string, number>>({})
   const supabase = createClient()
 
   useEffect(() => {
@@ -127,6 +130,14 @@ export default function ComicSeriesPage() {
           setProgress({ state: json.state, episodeId: json.episodeId, episodeNo: json.episodeNo })
         }
         if (Array.isArray(json.openedIds)) setOpenedIds(new Set(json.openedIds as string[]))
+        if (Array.isArray(json.completedIds)) setCompletedIds(new Set(json.completedIds as string[]))
+        if (json.progressById && typeof json.progressById === 'object') {
+          setServerPct(json.progressById as Record<string, number>)
+        }
+        try {
+          const raw = window.localStorage.getItem('intima_episode_progress')
+          if (raw) setLocalPct(JSON.parse(raw) as Record<string, number>)
+        } catch { /* private mode: server values still apply */ }
       } catch { /* no progress: the CTA stays at Episode 1 */ }
     })()
     return () => { live = false }
@@ -267,7 +278,15 @@ export default function ComicSeriesPage() {
               The first episode is on its way. Check back soon.
             </p>
           ) : (
-            episodes.map((ep) => (
+            episodes.map((ep) => {
+              // Read strength for this episode: finished wins, then
+              // the furthest fraction from the server or this device.
+              // Opened with no fraction on record shows as Started.
+              const pct = completedIds.has(ep.id)
+                ? 100
+                : Math.max(serverPct[ep.id] ?? 0, localPct[ep.id] ?? 0)
+              const started = pct > 0 || openedIds.has(ep.id)
+              return (
               <Link
                 key={ep.id}
                 href={`/comics/${ep.id}`}
@@ -291,10 +310,24 @@ export default function ComicSeriesPage() {
                   <span className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
                     <Eye aria-hidden className="h-3 w-3" /> {formatCompactCount(ep.view_count)} views
                   </span>
+                  {started && (
+                    <span className="mt-2 flex items-center gap-2">
+                      <span className="h-1 w-24 shrink-0 overflow-hidden rounded-full bg-black/[0.08]">
+                        <span
+                          className={`block h-full rounded-full ${pct >= 100 ? 'bg-[#C9A84C]' : 'bg-primary'}`}
+                          style={{ width: `${pct > 0 ? pct : 8}%` }}
+                        />
+                      </span>
+                      <span className={`text-[11px] font-semibold ${pct >= 100 ? 'text-[#9A7B24]' : 'text-primary'}`}>
+                        {pct >= 100 ? 'Finished' : pct > 0 ? `${pct}% read` : 'Started'}
+                      </span>
+                    </span>
+                  )}
                 </span>
                 <ChevronRight aria-hidden className="h-5 w-5 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5" />
               </Link>
-            ))
+              )
+            })
           )}
         </div>
       </div>

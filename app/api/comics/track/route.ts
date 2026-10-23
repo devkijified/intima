@@ -29,9 +29,18 @@ export async function POST(req: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { episodeId, viewerKey, completed } = await req.json().catch(() => ({}));
+  const { episodeId, viewerKey, completed, progress } = await req.json().catch(() => ({}));
   if (typeof episodeId !== 'string' || !episodeId) {
     return NextResponse.json({ error: 'episodeId required' }, { status: 400 });
+  }
+  // Read strength: how far through the episode this reader got.
+  // Accepts a 0..1 fraction or a 0..100 percent; stored as an
+  // integer percent that only ever rises. A progress ping never
+  // claims 100 on its own (completion does that).
+  let progressPct: number | null = null;
+  if (typeof progress === 'number' && Number.isFinite(progress) && progress > 0) {
+    const pct = progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
+    progressPct = Math.min(99, Math.max(1, pct));
   }
 
   // Resolve (or mint) the durable guest identity.
@@ -133,6 +142,28 @@ export async function POST(req: NextRequest) {
   }
   // Any other insert error leaves the counter untouched: an
   // unrecorded read must never inflate the view count.
+
+  // Read strength, best effort: raise the stored fraction when this
+  // ping reports a further point (completion counts as 100). Runs
+  // whenever the read row exists (fresh insert or already counted).
+  // The progress_pct column arrives with migration 081; until it
+  // lands the select errors and this quietly no-ops, so shipping
+  // the code first is safe.
+  const strength = completed ? 100 : progressPct;
+  if (strength !== null && (!insertError || insertError.code === '23505')) {
+    const { data: row, error: selErr } = await svc.from('comic_reads')
+      .select('progress_pct')
+      .match({ episode_id: episodeId, viewer_id: readerId })
+      .maybeSingle();
+    if (!selErr && row) {
+      const current = typeof row.progress_pct === 'number' ? row.progress_pct : 0;
+      if (strength > current) {
+        await svc.from('comic_reads')
+          .update({ progress_pct: strength })
+          .match({ episode_id: episodeId, viewer_id: readerId });
+      }
+    }
+  }
 
   return respond({ ok: true });
 }
