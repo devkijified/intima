@@ -251,7 +251,9 @@ export default function StreamRoomPage() {
   /* ------------------------------ helpers --------------------------------- */
 
   const pushMessage = useCallback((m: ChatMsg) => {
-    setMessages((prev) => [...prev.slice(-CHAT_MAX + 1), m])
+    // Dedupe by id: a comment must land exactly once, even if a data
+    // packet or realtime row is delivered twice.
+    setMessages((prev) => (prev.some((p) => p.id === m.id) ? prev : [...prev.slice(-CHAT_MAX + 1), m]))
   }, [])
 
   // Video routing for multiple publishers: the host track fills the
@@ -1533,7 +1535,7 @@ export default function StreamRoomPage() {
     !!pkBattle && !!pkBattle.opponent && pkBattle.winnerSessionId === pkBattle.opponent.sessionId
 
   return (
-    <div className="relative mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-md bg-black md:h-[calc(100dvh-5rem)] lg:max-w-none">
+    <div className="fixed inset-0 z-[70] flex w-full bg-black lg:relative lg:mx-auto lg:h-[calc(100dvh-5rem)] lg:max-w-none">
       {/* Discovery rail: other rooms live now (desktop theatre) */}
       <aside className="hidden w-[264px] shrink-0 flex-col border-r border-white/10 bg-[#0B0B0F] lg:flex">
         <p className="px-4 pb-2 pt-4 text-[11px] font-bold uppercase tracking-widest text-white/50">
