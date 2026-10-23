@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, ChevronRight, ChevronUp } from '@/lib/icons'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { PhotoWatermark } from '@/components/media/PhotoWatermark'
+import { prefetchPanels, isSaveData } from '@/lib/comics/prefetch'
 
 interface Episode {
   id: string
@@ -78,11 +79,12 @@ function PanelImage({ src, index, eager }: { src: string; index: number; eager: 
         </button>
       ) : (
         <>
-          {!loaded && (
-            <div aria-hidden className="absolute inset-0 flex items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-gold" />
-            </div>
-          )}
+          {/* No spinner while a page loads: the cell stays a calm
+              dark page and the artwork fades in. The background
+              loader (lib/comics/prefetch) pulls the episode down
+              ahead of the reader, so a visible wait is the rare
+              exception, and a spinner per page made reading feel
+              broken even when it was only a beat behind. */}
           <img
             key={attempt}
             src={liveSrc}
@@ -224,6 +226,19 @@ export default function ComicReaderPage() {
     })
     return () => { live = false; clearTimeout(escape) }
   }, [ep])
+
+  // Background loading: once the first screen is ready, pull the
+  // whole episode down in reading order, then the next episode
+  // behind it, so scrolling never waits on the network. The queue
+  // lives at module level (lib/comics/prefetch), so stepping into
+  // the next episode finds its pages already on the device. A
+  // data-saver connection still gets the current episode, just not
+  // the speculative next one.
+  useEffect(() => {
+    if (!panelsReady || !ep) return
+    prefetchPanels(ep.panel_urls)
+    if (next && !isSaveData()) prefetchPanels(next.panel_urls)
+  }, [panelsReady, ep, next])
 
   // Completion: reader reaches the end marker. The observer arms
   // only once the panels are actually on screen: before that the
