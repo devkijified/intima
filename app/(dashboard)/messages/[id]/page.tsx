@@ -19,7 +19,7 @@ import {
   noteMediaUnlocked,
   resolveMediaUrls,
   useMediaUrl,
-  MediaViewerOverlay,
+  MediaGalleryOverlay,
 } from '@/components/chat/MediaImage'
 
 interface Msg {
@@ -108,7 +108,17 @@ export default function ThreadPage() {
 
   // Media privacy (migration 044): who has viewed shared media.
   const [mediaViews, setMediaViews] = useState<{ message_id: string; viewer_id: string }[]>([])
-  const [viewerMsg, setViewerMsg] = useState<Msg | null>(null)
+  // The media gallery: every openable photo in the thread, in
+  // order, with the position currently on screen. viewerMsg is
+  // derived from these two, so the screenshot guard and the
+  // overlay both key off whatever is actually being looked at.
+  const [viewerItems, setViewerItems] = useState<Msg[]>([])
+  const [viewerIndex, setViewerIndex] = useState(0)
+  const viewerMsg = viewerItems[viewerIndex] ?? null
+  const closeViewer = () => {
+    setViewerItems([])
+    setViewerIndex(0)
+  }
   const [screenshotNotice, setScreenshotNotice] = useState(false)
 
   // Private chat media (migration 052): signed URLs resolved for
@@ -150,7 +160,54 @@ export default function ThreadPage() {
     // media, including a paid message the viewer just unlocked:
     // the signed URL endpoint may mint for this open.
     noteMediaUnlocked(msg.id)
-    setViewerMsg(msg)
+    // The gallery is every photo in this conversation that is
+    // open to me, in thread order, so swiping moves through the
+    // conversation's media the way WhatsApp does. Locked items
+    // are excluded outright (the server mints them no URL in
+    // any case), regular videos stay inline in the thread, and
+    // view-once items I have already opened are gone for good.
+    const items = msgs.filter((m) => {
+      if (!m.media_url) return false
+      const mineM = m.sender_id === me
+      const openM = mineM || (m.unlocked_by ?? []).includes(me ?? '') || (m.ppv_price_coins ?? 0) <= 0
+      if (!openM) return false
+      if (
+        !mineM &&
+        m.view_once &&
+        mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)
+      ) {
+        return false
+      }
+      return m.view_once ? true : m.media_type !== 'video'
+    })
+    // The tapped item opened from a bubble that judged it open,
+    // so it belongs in the gallery even if the list filter and
+    // the bubble disagree for a moment (a just-recorded unlock).
+    const withMsg = items.some((m) => m.id === msg.id)
+      ? items
+      : [...items, msg].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    setViewerItems(withMsg)
+    setViewerIndex(Math.max(0, withMsg.findIndex((m) => m.id === msg.id)))
+  }
+
+  // Moving inside the gallery. Landing on an item is its view:
+  // the view is recorded, and the signed URL endpoint may mint
+  // for it. Leaving a view-once item that is not mine consumes
+  // it: it drops out of the gallery, exactly as it drops out of
+  // the thread once opened.
+  const handleViewerIndex = (next: number) => {
+    const target = viewerItems[next]
+    if (!target) return
+    void recordMediaView(target)
+    noteMediaUnlocked(target.id)
+    const current = viewerItems[viewerIndex]
+    if (current && current.id !== target.id && current.view_once && current.sender_id !== me) {
+      const remaining = viewerItems.filter((m) => m.id !== current.id)
+      setViewerItems(remaining)
+      setViewerIndex(Math.max(0, remaining.findIndex((m) => m.id === target.id)))
+      return
+    }
+    setViewerIndex(next)
   }
 
   // Screenshot deterrent while the viewer is open: a PrintScreen
@@ -160,7 +217,7 @@ export default function ThreadPage() {
   useEffect(() => {
     if (!viewerMsg) return
     const flagAttempt = () => {
-      setViewerMsg(null)
+      closeViewer()
       setScreenshotNotice(true)
       setTimeout(() => setScreenshotNotice(false), 5000)
     }
@@ -859,7 +916,12 @@ export default function ThreadPage() {
           Private media renders through the signed URL overlay, so
           the raw value on the message is never a usable address. */}
       {viewerMsg && viewerMsg.media_url && (
-        <MediaViewerOverlay msg={viewerMsg} onClose={() => setViewerMsg(null)} />
+        <MediaGalleryOverlay
+          items={viewerItems}
+          index={viewerIndex}
+          onIndex={handleViewerIndex}
+          onClose={closeViewer}
+        />
       )}
     </div>
   )

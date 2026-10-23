@@ -15,7 +15,7 @@ import Link from 'next/link'
 import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, VideoPresets, createLocalVideoTrack, createLocalAudioTrack, type RemoteTrackPublication, type TrackPublishOptions } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
-import { Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
+import { ChevronUp, Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
   PictureInPicture2, Smartphone } from '@/lib/icons'
 import { formatCompactCount, ngnForCoins } from '@/lib/utils/helpers'
 
@@ -129,6 +129,7 @@ export default function StreamRoomPage() {
   const [showConnectModal, setShowConnectModal] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const [pipActive, setPipActive] = useState(false)
   const [pipSupported] = useState(
     () => typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
@@ -142,6 +143,15 @@ export default function StreamRoomPage() {
   const [draft, setDraft] = useState('')
   const [likes, setLikes] = useState(0)
   const [hearts, setHearts] = useState<FloatingHeart[]>([])
+  // Double-tap bursts: one big heart that pops at the exact
+  // point the finger landed. The float lane above is the room's
+  // ambient feedback; the burst is the tapper's own.
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number; tilt: number }[]>([])
+  const burstIdRef = useRef(0)
+  // Swipe-up-to-next-live: transient feedback when there is no
+  // next room, and the one-time discovery hint.
+  const [nextMsg, setNextMsg] = useState<string | null>(null)
+  const [nextHintSeen, setNextHintSeen] = useState(false)
   const [myName, setMyName] = useState('Guest')
 
   const [giftOpen, setGiftOpen] = useState(false)
@@ -457,6 +467,72 @@ export default function StreamRoomPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  // Swipe up on the stage jumps to the next live room (the
+  // discovery list above, newest first): the TikTok feed habit,
+  // for viewers. Native listeners, the lightbox lesson: React
+  // synthetic touch props proved unreliable under real touch.
+  // The host never swipes away from her own room, and the
+  // gesture stands down while any sheet or panel is open.
+  const railStreamsRef = useRef(railStreams)
+  railStreamsRef.current = railStreams
+  const amHostRef = useRef(false)
+  amHostRef.current = !!myId && !!hostId && myId === hostId
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('intima_nextlive_hint_seen') === '1') setNextHintSeen(true)
+    } catch {
+      /* storage unavailable: the hint simply shows */
+    }
+  }, [])
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el || giftOpen || panelOpen || modTarget || cohostInvite) return
+    let startX = 0
+    let startY = 0
+    let startT = 0
+    let tracking = false
+    const onStart = (e: TouchEvent) => {
+      const t = e.changedTouches[0]
+      const target = e.target as HTMLElement | null
+      if (!t || amHostRef.current || (target && target.closest('button, a, input, textarea, select'))) {
+        tracking = false
+        return
+      }
+      startX = t.clientX
+      startY = t.clientY
+      startT = Date.now()
+      tracking = true
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (!tracking) return
+      tracking = false
+      const t = e.changedTouches[0]
+      if (!t || Date.now() - startT > 700) return
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      if (dy > -70 || Math.abs(dy) < Math.abs(dx) * 1.4) return
+      const next = railStreamsRef.current[0]
+      if (next) {
+        try {
+          localStorage.setItem('intima_nextlive_hint_seen', '1')
+        } catch {
+          /* ignore */
+        }
+        setNextHintSeen(true)
+        router.push(`/live/${next.id}`)
+      } else {
+        setNextMsg('No other companions are live right now')
+        window.setTimeout(() => setNextMsg(null), 2600)
+      }
+    }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchend', onEnd)
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchend', onEnd)
+    }
+  }, [giftOpen, panelOpen, modTarget, cohostInvite, router])
 
   // Rail chat follows new comments while the reader is near the
   // bottom, and stays put when they have scrolled up to read.
@@ -1093,13 +1169,32 @@ export default function StreamRoomPage() {
     setCohostInvite(null)
   }, [id])
 
-  const handleVideoTap = useCallback(() => {
-    const now = Date.now()
-    if (now - lastTapRef.current < 320) {
-      tapLike(6)
-    }
-    lastTapRef.current = now
-  }, [tapLike])
+  const handleVideoTap = useCallback(
+    (e: React.MouseEvent<HTMLVideoElement>) => {
+      const now = Date.now()
+      if (now - lastTapRef.current < 320) {
+        tapLike(6)
+        // Burst a heart at the tap point itself (percentages of
+        // the stage, so it lands in the same place on any screen).
+        const rect = e.currentTarget.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          const burstId = ++burstIdRef.current
+          const burst = {
+            id: burstId,
+            x: Math.min(94, Math.max(6, ((e.clientX - rect.left) / rect.width) * 100)),
+            y: Math.min(90, Math.max(8, ((e.clientY - rect.top) / rect.height) * 100)),
+            tilt: Math.round(Math.random() * 24 - 12),
+          }
+          setBursts((prev) => [...prev.slice(-5), burst])
+          window.setTimeout(() => {
+            setBursts((prev) => prev.filter((b) => b.id !== burstId))
+          }, 1000)
+        }
+      }
+      lastTapRef.current = now
+    },
+    [tapLike]
+  )
 
   const sendingGiftRef = useRef<string | null>(null)
   // One-deep queue behind the in-flight send: a tap that lands while
@@ -1471,7 +1566,7 @@ export default function StreamRoomPage() {
 
       {/* Centre column: the stage, with the gift bar under it */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="relative min-w-0 flex-1 overflow-hidden">
+        <div ref={stageRef} className="relative min-w-0 flex-1 overflow-hidden">
       <GiftLeaderboard sessionId={id} />
       {/* Video layer */}
       <video
@@ -2010,7 +2105,40 @@ export default function StreamRoomPage() {
             <Heart className="h-7 w-7 fill-primary text-primary drop-shadow-lg" />
           </span>
         ))}
+        {bursts.map((b) => (
+          <span
+            key={b.id}
+            className="burst-heart absolute"
+            style={
+              {
+                left: `${b.x}%`,
+                top: `${b.y}%`,
+                '--tilt': `${b.tilt}deg`,
+              } as React.CSSProperties
+            }
+          >
+            <Heart className="h-20 w-20 fill-primary text-white drop-shadow-2xl" />
+          </span>
+        ))}
       </div>
+
+      {/* Swipe-up discovery: one-time hint, plus the no-next-room
+          note. Mobile viewers only; the desktop rail is the
+          discovery surface there. */}
+      {!isHostMe && nextMsg && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-44 z-20 flex justify-center lg:hidden">
+          <span className="rounded-full bg-black/70 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+            {nextMsg}
+          </span>
+        </div>
+      )}
+      {!isHostMe && !nextHintSeen && !nextMsg && railStreams.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-44 z-20 flex justify-center lg:hidden">
+          <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-3.5 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm">
+            <ChevronUp className="h-3.5 w-3.5 animate-bounce" aria-hidden /> Swipe up for the next live
+          </span>
+        </div>
+      )}
 
       {/* Legibility scrim: comments float over the video */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
@@ -2143,6 +2271,28 @@ export default function StreamRoomPage() {
       <style jsx>{`
         .float-heart {
           animation: floatUp 1.4s ease-out forwards;
+        }
+        .burst-heart {
+          animation: burstPop 0.95s ease-out forwards;
+          will-change: transform, opacity;
+        }
+        @keyframes burstPop {
+          0% {
+            transform: translate(-50%, -50%) scale(0) rotate(0deg);
+            opacity: 0;
+          }
+          16% {
+            transform: translate(-50%, -50%) scale(1.3) rotate(var(--tilt, 0deg));
+            opacity: 1;
+          }
+          30% {
+            transform: translate(-50%, -50%) scale(0.95) rotate(var(--tilt, 0deg));
+            opacity: 1;
+          }
+          100% {
+            transform: translate(-50%, -150%) scale(1.05) rotate(var(--tilt, 0deg));
+            opacity: 0;
+          }
         }
         @keyframes floatUp {
           0% {
