@@ -857,7 +857,7 @@ export default function IntimaMap() {
       markersRef.current.forEach((m) => m.remove());
       pinElsRef.current.clear();
       markersRef.current = filtered.map((p) => {
-        const el = markerElement(p, selectPin);
+        const el = markerElement(p, previewProvider);
         pinElsRef.current.set(p.id, el);
         return new lib.Marker({ element: el, anchor: 'bottom' } as any)
           .setLngLat([p.lng, p.lat])
@@ -994,9 +994,17 @@ export default function IntimaMap() {
     setSelected(p);
   };
 
-  /** Every selection path (pin, list card, nearby tray) marks the
-      pin selected first, so its name plate shows on the map, then
-      follows the normal profile path. */
+  /** Map-surface selections (pin tap, nearby tray) open the preview
+      sheet first, the way every map app behaves: the map stays put,
+      she is previewed in the sheet, and the full profile is one more
+      deliberate tap on View profile. List cards are a browsing
+      surface, so they keep going straight to the full profile. */
+  const previewProvider = (p: MapProvider) => {
+    setSelectedPinId(p.id);
+    setSelected(p);
+  };
+
+  /** List selection: mark the pin, then the normal profile path. */
   const selectPin = (p: MapProvider) => {
     setSelectedPinId(p.id);
     goToProfile(p);
@@ -1272,7 +1280,7 @@ export default function IntimaMap() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => selectPin(p)}
+                onClick={() => previewProvider(p)}
                 className="flex w-14 shrink-0 flex-col items-center gap-1"
                 aria-label={`${p.displayName}, ${p.area}`}
               >
