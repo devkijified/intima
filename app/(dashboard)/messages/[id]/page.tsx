@@ -555,7 +555,7 @@ export default function ThreadPage() {
   const quickReplies = !other?.isProvider ? PROVIDER_QUICK_REPLIES : null
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-2xl flex-col md:h-[calc(100dvh-5rem)]">
+    <div className="mx-auto flex h-full min-h-0 max-w-2xl flex-col">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3">
         <Tooltip label="Back" side="bottom" align="start">

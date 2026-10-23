@@ -97,6 +97,7 @@ export default function ConnectionCare({
   const [evidenceError, setEvidenceError] = useState('')
 
   const [review, setReview] = useState<ReviewState | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
@@ -248,47 +249,50 @@ export default function ConnectionCare({
     setReviewBusy(false)
   }
 
+  // Nothing to show (fee settled, no dispute, no review due):
+  // render nothing at all, not even an empty bordered strip.
+  const showStrip =
+    (fee === 'held' && !!windowOpen) || fee === 'disputed' || !!(review && review.canReview)
+  if (!showStrip) return null
+
   return (
     <div className="border-b border-black/[0.05] bg-white px-4 py-3">
-      {/* Fee protection */}
+      {/* Fee protection: a slim strip, not a card. The dispute
+          form still expands in place when it is tapped. */}
       {fee === 'held' && windowOpen && (
-        <div className="rounded-2xl bg-emerald-50/70 px-3.5 py-3 ring-1 ring-emerald-100">
-          <div className="flex items-start gap-2.5">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1 text-[13px] font-semibold text-charcoal">
-                <span>
-                  {viewerIsClient ? 'Your' : 'The'} {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
-                </span>
-                <HelpTip text="You have 24 hours from payment to open a dispute. Our team reviews both sides and decides on the connection fee only: it is either refunded to the client or released. The companion's own rate is never part of the dispute." />
-              </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
-                If anything goes wrong, open a dispute and our team will review it. The fee stays frozen until they decide.
-              </p>
-              {!showDispute ? (
-                <button onClick={() => setShowDispute(true)} className="mt-1 inline-flex min-h-[44px] items-center text-xs font-semibold text-primary">
-                  Open a dispute
-                </button>
-              ) : (
-                <div className="mt-2.5">
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    rows={3}
-                    placeholder="Tell us what happened…"
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
-                  />
-                  {disputeError && <p className="mt-1.5 text-xs text-red-600">{disputeError}</p>}
-                  <div className="mt-2 flex gap-2">
-                    <button onClick={openDispute} disabled={disputeBusy} className="btn-luxe min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
-                      {disputeBusy ? 'Sending…' : 'Send dispute'}
-                    </button>
-                    <button onClick={() => setShowDispute(false)} className="btn-soft min-h-[44px] px-5 py-2 text-xs">Cancel</button>
-                  </div>
-                </div>
-              )}
-            </div>
+        <div className="rounded-2xl bg-emerald-50/70 px-3.5 py-2 ring-1 ring-emerald-100">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-600" />
+            <p className="flex min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold leading-snug text-charcoal">
+              <span>
+                {viewerIsClient ? 'Your' : 'The'} {feeNgn ? `₦${feeNgn.toLocaleString()} ` : ''}connection fee is protected until {fmtDateTime(disputeDeadline)}
+              </span>
+              <HelpTip text="You have 24 hours from payment to open a dispute. Our team reviews both sides and decides on the connection fee only: it is either refunded to the client or released. The companion's own rate is never part of the dispute." />
+            </p>
+            {!showDispute && (
+              <button onClick={() => setShowDispute(true)} className="inline-flex min-h-[44px] shrink-0 items-center text-xs font-semibold text-primary">
+                Open a dispute
+              </button>
+            )}
           </div>
+          {showDispute && (
+            <div className="mt-2">
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="Tell us what happened…"
+                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-base outline-none focus:border-primary md:text-sm"
+              />
+              {disputeError && <p className="mt-1.5 text-xs text-red-600">{disputeError}</p>}
+              <div className="mt-2 flex gap-2">
+                <button onClick={openDispute} disabled={disputeBusy} className="btn-luxe min-h-[44px] px-5 py-2 text-xs disabled:opacity-50">
+                  {disputeBusy ? 'Sending…' : 'Send dispute'}
+                </button>
+                <button onClick={() => setShowDispute(false)} className="btn-soft min-h-[44px] px-5 py-2 text-xs">Cancel</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -360,8 +364,20 @@ export default function ConnectionCare({
         </div>
       )}
 
-      {/* Reviews */}
-      {review && review.canReview && (
+      {/* Reviews: collapsed to one slim row until tapped, so a
+          fresh thread opens on the conversation, not a form. The
+          full card appears once the viewer opens it or has a
+          review in. */}
+      {review && review.canReview && !review.mine && !reviewOpen && (
+        <button
+          onClick={() => setReviewOpen(true)}
+          className={`flex min-h-[44px] w-full items-center justify-between rounded-2xl bg-cream/70 px-3.5 ring-1 ring-black/[0.04] ${fee === 'held' && windowOpen ? 'mt-2' : ''}`}
+        >
+          <span className="text-[13px] font-semibold text-charcoal">How was {otherName}?</span>
+          <span className="text-xs font-semibold text-primary">Write a review</span>
+        </button>
+      )}
+      {review && review.canReview && (review.mine || reviewOpen) && (
         <div className="mt-3 rounded-2xl bg-cream/70 px-3.5 py-3 ring-1 ring-black/[0.04]">
           {!review.mine ? (
             <div>

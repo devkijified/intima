@@ -147,8 +147,11 @@ export default function LiveFeedPage() {
     }
   }, [supabase])
 
-  useEffect(() => {
-    async function fetchScheduled() {
+  // Component level so scheduling can refetch the list: a freshly
+  // scheduled row must come back with its provider_id and provider
+  // profile, or the owner check fails and the host sees a Notify me
+  // button on her own stream.
+  async function fetchScheduled() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setMyId(user.id)
@@ -212,7 +215,8 @@ export default function LiveFeedPage() {
         setInterests(map)
       }
     }
-    fetchScheduled()
+  useEffect(() => {
+    void fetchScheduled()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -271,13 +275,10 @@ export default function LiveFeedPage() {
       setSchedMsg('Scheduled. It will show in Upcoming until you go live.')
       setSchedTitle('')
       setSchedWhen('')
-      if (j.session) {
-        setScheduled((prev) =>
-          [...prev, { ...j.session, scheduled_for: j.session.scheduled_for, provider: null }].sort(
-            (a, b) => +new Date(a.scheduled_for) - +new Date(b.scheduled_for)
-          )
-        )
-      }
+      // Refetch instead of appending locally: the appended row
+      // missed provider_id, so the host's own new stream rendered
+      // with a Notify me button instead of Go live until a reload.
+      await fetchScheduled()
     } catch (e) {
       setSchedMsg(e instanceof Error ? e.message : 'Could not schedule')
     } finally {
@@ -322,6 +323,25 @@ export default function LiveFeedPage() {
     <div className="mx-auto max-w-md">
       {showHeader && (
         <div className="px-4 pb-2 pt-4">
+          {/* Host: go live right now. Instant is the primary path;
+              scheduling further down is the optional one. */}
+          {isModel && (
+            <section className="card-luxe mb-4 p-5">
+              <h3 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight text-charcoal">
+                <Radio className="h-5 w-5 text-red-600" aria-hidden /> Go live now
+              </h3>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                Start streaming right away. No schedule needed: set your title, check your camera, and you are live.
+              </p>
+              <Link
+                href="/models/live"
+                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full bg-red-600 py-2.5 text-sm font-bold text-white shadow-soft transition-all hover:bg-red-700 active:scale-[0.98]"
+              >
+                Go live now
+              </Link>
+            </section>
+          )}
+
           {/* Upcoming scheduled streams */}
           {scheduled.length > 0 && (
             <section>
@@ -424,7 +444,7 @@ export default function LiveFeedPage() {
           {/* Host: schedule a stream for later */}
           {isModel && (
             <section className="card-luxe mt-4 p-5">
-              <h3 className="font-display text-base font-semibold tracking-tight text-charcoal">Schedule a stream</h3>
+              <h3 className="font-display text-base font-semibold tracking-tight text-charcoal">Or schedule for later</h3>
               <p className="mt-0.5 text-xs text-neutral-500">
                 Announce it now, go live when the time comes. Your scheduled streams are the ones
                 above with a Go live button.
@@ -437,7 +457,7 @@ export default function LiveFeedPage() {
                 className="mt-3 w-full rounded-2xl border border-neutral-200 bg-white px-3.5 py-2.5 text-base outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15 md:text-sm"
               />
               <label className="mt-3 block text-xs font-medium text-neutral-500">
-                Schedule for later
+                Date and time
                 <input
                   type="datetime-local"
                   value={schedWhen}
@@ -472,12 +492,22 @@ export default function LiveFeedPage() {
           <p className="mt-2 text-sm text-neutral-500">
             When companions go live, their streams appear here. Check back soon.
           </p>
-          <Link
-            href="/"
-            className="btn-luxe mt-6 min-h-[44px] px-6 py-2.5 text-sm"
-          >
-            Browse companions
-          </Link>
+          <div className="flex flex-col items-center">
+            {isModel && (
+              <Link
+                href="/models/live"
+                className="mt-6 inline-flex min-h-[44px] items-center rounded-full bg-red-600 px-6 py-2.5 text-sm font-bold text-white shadow-soft transition-all hover:bg-red-700 active:scale-[0.98]"
+              >
+                Go live now
+              </Link>
+            )}
+            <Link
+              href="/"
+              className="btn-luxe mt-6 min-h-[44px] px-6 py-2.5 text-sm"
+            >
+              Browse companions
+            </Link>
+          </div>
         </div>
       ) : (
         <div

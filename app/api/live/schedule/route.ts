@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         scheduled_for: when.toISOString(),
         access_mode: mode,
       })
-      .select('id, title, scheduled_for, price_ngn, access_mode')
+      .select('id, provider_id, title, scheduled_for, price_ngn, access_mode')
       .single();
     if (error) throw error;
 
