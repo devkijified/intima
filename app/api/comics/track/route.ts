@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
     ip_hash: ipHash,
     completed: !!completed,
     completed_at: completed ? new Date().toISOString() : null,
+    last_read_at: new Date().toISOString(),
   });
 
   if (!insertError) {
@@ -135,7 +136,11 @@ export async function POST(req: NextRequest) {
     // still worth recording.
     if (completed) {
       await svc.from('comic_reads')
-        .update({ completed: true, completed_at: new Date().toISOString() })
+        .update({
+          completed: true,
+          completed_at: new Date().toISOString(),
+          last_read_at: new Date().toISOString(),
+        })
         .match({ episode_id: episodeId, viewer_id: readerId })
         .eq('completed', false);
     }
@@ -159,7 +164,7 @@ export async function POST(req: NextRequest) {
       const current = typeof row.progress_pct === 'number' ? row.progress_pct : 0;
       if (strength > current) {
         await svc.from('comic_reads')
-          .update({ progress_pct: strength })
+          .update({ progress_pct: strength, last_read_at: new Date().toISOString() })
           .match({ episode_id: episodeId, viewer_id: readerId });
       }
     }

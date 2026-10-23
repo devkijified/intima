@@ -28,6 +28,7 @@ import { formatCompactCount } from '@/lib/utils/helpers';
 import { useCities } from '@/lib/citiesLive';
 import { GAZETTEER_COORDS } from '@/lib/cities';
 import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
+import { emptySpecFilter, matchesSpec, type SpecFilter } from '@/lib/spec';
 import { ComicRibbon } from '@/components/comics/ComicRibbon';
 import { ProviderSheet } from './ProviderSheet';
 import { FilterSheet } from './FilterSheet';
@@ -113,6 +114,8 @@ export interface Filters {
   budget: number | null;
   /** Selected service catalog ids. Empty = no service filter. AND logic. */
   services: string[];
+  /** Her spec, from lib/spec.ts. Empty groups = no spec filter. */
+  spec: SpecFilter;
 }
 
 interface ToastState {
@@ -344,6 +347,7 @@ const EMPTY_FILTERS: Filters = {
   city: '',
   budget: null,
   services: [],
+  spec: emptySpecFilter(),
 };
 
 const CITY_STORAGE_KEY = 'intima_city';
@@ -476,7 +480,9 @@ export default function IntimaMap() {
             p.rateShortTime <= filters.budget) &&
           // Services use AND logic: she must offer everything selected.
           (filters.services.length === 0 ||
-            filters.services.every((s) => p.services.includes(s))),
+            filters.services.every((s) => p.services.includes(s))) &&
+          // Spec: alternatives inside a group, strict across groups.
+          matchesSpec(p.spec, filters.spec),
       ),
     [providers, filters],
   );
@@ -910,9 +916,14 @@ export default function IntimaMap() {
   const clearFilters = () =>
     setFilters((f) => ({ ...EMPTY_FILTERS, city: f.city }));
 
-  /** Active budget + service filters, shown as a badge on the Filters button. */
+  /** Active sheet filters, shown as a badge on the Filters button. */
   const sheetFilterCount =
-    (filters.budget !== null ? 1 : 0) + filters.services.length;
+    (filters.budget !== null ? 1 : 0) +
+    filters.services.length +
+    filters.spec.complexions.length +
+    filters.spec.bodyTypes.length +
+    filters.spec.heights.length +
+    filters.spec.tags.length;
 
   const goSignup = () => router.push('/signup?next=/');
 

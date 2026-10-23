@@ -38,6 +38,8 @@ export interface MockProvider {
       offers video calls or threesomes, and one provider lists nothing. */
   services: string[];
   vibes?: string[];
+  /** Declared spec (lib/spec.ts). Deliberately varied, some unset. */
+  spec?: import('@/lib/spec').SpecValues;
   /** ISO timestamp for the recency chip. Deliberately varied. */
   lastActiveAt: string;
   /** False = fixed rates, not open to offers. Deliberately varied. */
@@ -182,6 +184,21 @@ const BOOKING_COUNTS: Record<string, number> = {
   'mock-12': 11,
 };
 
+/** Declared specs for the preview pins, deliberately varied so the
+ *  spec filter has something to find before real companions join. */
+const SPECS: Record<string, import('@/lib/spec').SpecValues> = {
+  'mock-01': { complexion: 'chocolate', bodyType: 'curvy', height: 'average', tags: ['hourglass'] },
+  'mock-02': { complexion: 'caramel', bodyType: 'slim', height: 'tall', tags: ['long-legs'] },
+  'mock-03': { complexion: 'chocolate', bodyType: 'thick', height: 'average', tags: ['big-butt', 'busty'] },
+  'mock-04': { complexion: 'ebony', bodyType: 'curvy', height: 'short', tags: [] },
+  'mock-05': { complexion: 'fair', bodyType: 'slim', height: 'average', tags: ['toned'] },
+  'mock-07': { complexion: 'caramel', bodyType: 'curvy', height: 'tall', tags: ['hourglass', 'flat-tummy'] },
+  'mock-08': { complexion: 'chocolate', bodyType: 'plus-size', height: 'average', tags: ['busty'] },
+  'mock-09': { complexion: 'fair', bodyType: 'petite', height: 'short', tags: [] },
+  'mock-10': { complexion: 'ebony', bodyType: 'thick', height: 'tall', tags: ['big-butt'] },
+  'mock-11': { complexion: 'caramel', bodyType: 'slim', height: 'average', tags: ['long-legs', 'toned'] },
+};
+
 export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   id: s.id,
   displayName: s.displayName,
@@ -201,6 +218,7 @@ export const MOCK_PROVIDERS: MockProvider[] = SEEDS.map((s) => ({
   avatar: `https://i.pravatar.cc/600?img=${s.img}`,
   userId: null,
   services: s.services,
+  spec: SPECS[s.id],
   lastActiveAt: hoursAgo(RECENCY_HOURS[s.id] ?? 24),
   ratesNegotiable: RATES_NEGOTIABLE[s.id] ?? true,
   gallery: galleryFor(s.id),

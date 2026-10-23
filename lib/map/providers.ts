@@ -11,6 +11,9 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { MOCK_PROVIDERS, type MockProvider } from './mockProviders';
+import { cleanSpec, type SpecValues } from '@/lib/spec';
+
+const EMPTY_SPEC: SpecValues = { complexion: null, bodyType: null, height: null, tags: [] };
 
 export interface MapProvider {
   id: string;
@@ -41,6 +44,8 @@ export interface MapProvider {
   services: string[];
   /** Vibe tags from lib/vibes.ts, admin presets or her own words. */
   vibes: string[];
+  /** Her declared spec from lib/spec.ts (all unset = empty spec). */
+  spec: SpecValues;
   avatar: string;
   userId: string | null; // null for mock/preview pins
   username: string | null;
@@ -111,6 +116,7 @@ export function mockToMapProvider(m: MockProvider): MapProvider {
     rateWeekend: m.rateWeekend,
     services: m.services,
     vibes: m.vibes ?? [],
+    spec: m.spec ?? EMPTY_SPEC,
     avatar: m.avatar,
     userId: m.userId,
     username: null,
@@ -150,6 +156,7 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
     rateWeekend: row.rate_weekend_ngn,
     services: row.services ?? [],
     vibes: row.vibes ?? [],
+    spec: EMPTY_SPEC,
     avatar: row.avatar_url || `https://i.pravatar.cc/600?img=${hashToImg(row.provider_id)}`,
     userId: row.provider_id,
     username: row.username ?? null,
@@ -200,6 +207,26 @@ export async function fetchMapProviders(): Promise<MapProvider[]> {
       for (const t of (tours ?? []) as { provider_id: string; city: string; start_date: string; end_date: string }[]) {
         const p = mapped.find((x) => x.id === `db-${t.provider_id}`);
         if (p && !p.nextTour) p.nextTour = { city: t.city, start: t.start_date, end: t.end_date };
+      }
+      // Specs: declared on profiles (migration 082), merged the
+      // same way as boosts and tours. Best effort: before the
+      // migration lands the select errors and every spec simply
+      // stays unset, so an active spec filter matches nobody
+      // rather than crashing the map.
+      const { data: specRows } = await supabase
+        .from('profiles')
+        .select('id, spec_complexion, spec_body_type, spec_height, spec_tags')
+        .in('id', rows.map((r) => r.provider_id));
+      for (const s of (specRows ?? []) as { id: string; spec_complexion: string | null; spec_body_type: string | null; spec_height: string | null; spec_tags: string[] | null }[]) {
+        const p = mapped.find((x) => x.id === `db-${s.id}`);
+        if (p) {
+          p.spec = cleanSpec({
+            complexion: s.spec_complexion,
+            bodyType: s.spec_body_type,
+            height: s.spec_height,
+            tags: s.spec_tags ?? [],
+          });
+        }
       }
       mapped.sort((a, b) => Number(b.boosted ?? false) - Number(a.boosted ?? false));
       return mapped;

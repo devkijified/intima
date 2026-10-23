@@ -11,6 +11,7 @@ import { Eye, Star, Calendar, ShieldCheck, ArrowUpRight, Sparkles, Video, Wallet
   Banknote, BookOpen, Gift, ListChecks } from '@/lib/icons'
 import { formatCompactCount, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { ReferralCard } from '@/components/referrals/ReferralCard'
+import { ContinueReadingCard } from '@/components/comics/ContinueReadingCard'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 export default function DashboardPage() {
@@ -244,6 +245,9 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Continue reading: only renders when a comic is in progress. */}
+      <ContinueReadingCard />
 
       {/* CONDITIONAL CONTENT */}
       {isModel ? (

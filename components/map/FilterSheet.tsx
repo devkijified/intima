@@ -3,6 +3,15 @@
 import { X } from '@/lib/icons';
 import { HelpTip } from '@/components/ui/Tooltip';
 import { SERVICE_CATALOG, type ServiceCategory } from '@/lib/services';
+import {
+  SPEC_BODY_TYPES,
+  SPEC_COMPLEXIONS,
+  SPEC_HEIGHTS,
+  SPEC_TAGS,
+  emptySpecFilter,
+  type SpecFilter,
+  type SpecOption,
+} from '@/lib/spec';
 import { cn } from '@/lib/utils/helpers';
 import type { Filters } from './IntimaMap';
 
@@ -40,8 +49,19 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
         : [...filters.services, id],
     });
 
+  const toggleSpec = (group: keyof SpecFilter, id: string) =>
+    onChange({
+      ...filters,
+      spec: {
+        ...filters.spec,
+        [group]: filters.spec[group].includes(id)
+          ? filters.spec[group].filter((s) => s !== id)
+          : [...filters.spec[group], id],
+      },
+    });
+
   const clearAll = () =>
-    onChange({ ...filters, budget: null, services: [] });
+    onChange({ ...filters, budget: null, services: [], spec: emptySpecFilter() });
 
   const grouped = CATEGORY_ORDER.map((category) => ({
     category,
@@ -104,6 +124,46 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
                   >
                     {opt.label}
                   </button>
+                ))}
+              </div>
+
+              {/* Her spec: the look she declares on her own profile. */}
+              <p className="mb-2 mt-5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                Her spec
+                <HelpTip text="Filter by the look you like. Companions set their own spec on their profiles. Choices in one row are alternatives; the rows combine." />
+              </p>
+              <div className="space-y-4">
+                {(
+                  [
+                    { group: 'complexions', label: 'Complexion', options: SPEC_COMPLEXIONS },
+                    { group: 'bodyTypes', label: 'Body type', options: SPEC_BODY_TYPES },
+                    { group: 'heights', label: 'Height', options: SPEC_HEIGHTS },
+                    { group: 'tags', label: 'Figure', options: SPEC_TAGS },
+                  ] as Array<{ group: keyof SpecFilter; label: string; options: SpecOption[] }>
+                ).map(({ group, label, options }) => (
+                  <div key={group}>
+                    <p className="mb-1.5 text-xs font-semibold text-neutral-500">{label}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {options.map((o) => {
+                        const active = filters.spec[group].includes(o.id);
+                        return (
+                          <button
+                            key={o.id}
+                            onClick={() => toggleSpec(group, o.id)}
+                            aria-pressed={active}
+                            className={cn(
+                              'inline-flex min-h-[44px] items-center justify-center rounded-full px-3.5 py-2 text-sm font-medium transition-all active:scale-95',
+                              active
+                                ? 'bg-primary text-white shadow-md shadow-primary/25'
+                                : 'bg-white text-charcoal ring-1 ring-black/10 hover:ring-black/20',
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
 

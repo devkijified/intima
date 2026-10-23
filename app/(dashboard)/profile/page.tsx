@@ -42,6 +42,15 @@ import { coordsFor } from '@/lib/cities'
 import { getSetting } from '@/lib/settings/platformSettings'
 import { DEFAULT_VIBES, MAX_VIBES, customVibeProblem } from '@/lib/vibes'
 import { LANGUAGE_OPTIONS, MAX_LANGUAGES } from '@/lib/languages'
+import {
+  SPEC_BODY_TYPES,
+  SPEC_COMPLEXIONS,
+  SPEC_HEIGHTS,
+  SPEC_TAGS,
+  MAX_SPEC_TAGS,
+  cleanSpec,
+  type SpecValues,
+} from '@/lib/spec'
 
 /** Screening questions companions ask again and again. One tap adds one to her list. */
 const COMMON_QUESTIONS = [
@@ -62,6 +71,7 @@ interface ProviderForm {
   rateWeekend: string
   services: string[]
   vibes: string[]
+  spec: SpecValues
   languages: string[]
   ratesNegotiable: boolean
   whatsappNumber: string
@@ -82,6 +92,7 @@ const EMPTY_FORM: ProviderForm = {
   rateWeekend: '',
   services: [],
   vibes: [],
+  spec: { complexion: null, bodyType: null, height: null, tags: [] },
   languages: [],
   ratesNegotiable: true,
     whatsappNumber: '',
@@ -137,7 +148,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, username, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, languages, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
+          'role, display_name, avatar_url, username, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, spec_complexion, spec_body_type, spec_height, spec_tags, languages, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -162,6 +173,12 @@ export default function ProfilePage() {
           rateWeekend: profile?.rate_weekend_ngn?.toString() ?? '',
           services: profile?.services ?? [],
           vibes: (profile as { vibes?: string[] } | null)?.vibes ?? [],
+          spec: cleanSpec({
+            complexion: (profile as any)?.spec_complexion ?? null,
+            bodyType: (profile as any)?.spec_body_type ?? null,
+            height: (profile as any)?.spec_height ?? null,
+            tags: (profile as any)?.spec_tags ?? [],
+          }),
           languages: (profile as { languages?: string[] } | null)?.languages ?? [],
           ratesNegotiable: profile?.rates_negotiable ?? true,
     whatsappNumber: profile?.whatsapp_number ?? '',
@@ -342,6 +359,10 @@ export default function ProfilePage() {
           rate_weekend_ngn: parseRate(form.rateWeekend),
           services: form.services,
           vibes: form.vibes,
+          spec_complexion: cleanSpec(form.spec).complexion,
+          spec_body_type: cleanSpec(form.spec).bodyType,
+          spec_height: cleanSpec(form.spec).height,
+          spec_tags: cleanSpec(form.spec).tags,
           languages: form.languages,
           rates_negotiable: form.ratesNegotiable,
           whatsapp_number: form.whatsappNumber.trim() || null,
@@ -892,6 +913,93 @@ export default function ProfilePage() {
                   {customVibeMsg}
                 </p>
               )}
+            </div>
+          </div>
+
+          {/* ---- Your spec ---- */}
+          <div className="card-luxe p-6">
+            <h2 className="mb-1 flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-charcoal">
+              Your spec
+              <HelpTip text="Clients can filter companions by spec, the same way they would describe what they want. Set yours honestly: the clients who find you will be the ones looking for your look. Anything can stay blank." />
+            </h2>
+            <p className="mb-4 text-xs text-neutral-500">
+              The look clients search for. It shows on your profile and powers the spec filter on
+              the map.
+            </p>
+            {(
+              [
+                { key: 'complexion', label: 'Complexion', options: SPEC_COMPLEXIONS },
+                { key: 'bodyType', label: 'Body type', options: SPEC_BODY_TYPES },
+                { key: 'height', label: 'Height', options: SPEC_HEIGHTS },
+              ] as const
+            ).map(({ key, label, options }) => (
+              <div key={key} className="mb-4">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                  {label}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {options.map((o) => {
+                    const active = form.spec[key] === o.id
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            spec: { ...f.spec, [key]: active ? null : o.id },
+                          }))
+                        }
+                        className={`inline-flex min-h-[44px] items-center rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                          active
+                            ? 'border-[#AC244D] bg-[#AC244D] text-white'
+                            : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                Figure, up to {MAX_SPEC_TAGS}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {SPEC_TAGS.map((o) => {
+                  const active = form.spec.tags.includes(o.id)
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          spec: {
+                            ...f.spec,
+                            tags: active
+                              ? f.spec.tags.filter((t) => t !== o.id)
+                              : f.spec.tags.length >= MAX_SPEC_TAGS
+                                ? f.spec.tags
+                                : [...f.spec.tags, o.id],
+                          },
+                        }))
+                      }
+                      className={`inline-flex min-h-[44px] items-center rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
+                        active
+                          ? 'border-[#AC244D] bg-[#AC244D] text-white'
+                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
 
