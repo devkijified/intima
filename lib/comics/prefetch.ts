@@ -17,6 +17,12 @@
  */
 
 const MAX_CONCURRENT = 3;
+// A panel request that hangs (a proxy or source CDN keeping the
+// connection open with no answer) must never hold its slot for
+// good: after the timeout the slot frees and the queue moves on.
+// The panel itself is not lost, it simply loads on demand when
+// the reader reaches it, like panels always did.
+const PANEL_TIMEOUT_MS = 20_000;
 
 const done = new Set<string>();
 const queued = new Set<string>();
@@ -34,11 +40,22 @@ function drain() {
     } catch {
       /* older engines: the queue order still does the job */
     }
-    img.onload = img.onerror = () => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
       done.add(url);
       queued.delete(url);
       active -= 1;
       drain();
+    };
+    const watchdog = window.setTimeout(() => {
+      img.src = '';
+      finish();
+    }, PANEL_TIMEOUT_MS);
+    img.onload = img.onerror = () => {
+      window.clearTimeout(watchdog);
+      finish();
     };
     img.src = url;
   }
