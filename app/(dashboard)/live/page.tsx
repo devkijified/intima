@@ -320,22 +320,32 @@ export default function LiveFeedPage() {
   const showHeader = scheduled.length > 0 || isModel
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="-mx-4 -my-8 flex h-full min-h-0 flex-col bg-[#faf7f2] sm:-mx-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col">
       {showHeader && (
-        <div className="px-4 pb-2 pt-4">
+        <div className="shrink-0 px-4 pb-2 pt-4">
           {/* Host: go live right now. Instant is the primary path;
-              scheduling further down is the optional one. */}
+              scheduling further down is the optional one. The hero
+              is a red gradient so the live action reads first. */}
           {isModel && (
-            <section className="card-luxe mb-4 p-5">
-              <h3 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight text-charcoal">
-                <Radio className="h-5 w-5 text-red-600" aria-hidden /> Go live now
+            <section className="relative mb-4 overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-[#c22a4d] to-primary p-5 shadow-lg shadow-red-600/20">
+              <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" />
+              <div className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-black/10" />
+              <h3 className="relative flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                  <Radio className="h-5 w-5 text-white" aria-hidden />
+                </span>
+                Go live now
+                <span className="ml-auto flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[10px] font-bold tracking-widest text-white">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> LIVE
+                </span>
               </h3>
-              <p className="mt-0.5 text-xs text-neutral-500">
+              <p className="relative mt-1.5 max-w-[270px] text-xs leading-relaxed text-white/85">
                 Start streaming right away. No schedule needed: set your title, check your camera, and you are live.
               </p>
               <Link
                 href="/models/live"
-                className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-full bg-red-600 py-2.5 text-sm font-bold text-white shadow-soft transition-all hover:bg-red-700 active:scale-[0.98]"
+                className="relative mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full bg-white py-3 text-sm font-bold text-red-700 shadow-md transition-all hover:bg-red-50 active:scale-[0.98]"
               >
                 Go live now
               </Link>
@@ -347,6 +357,9 @@ export default function LiveFeedPage() {
             <section>
               <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-charcoal">
                 <Calendar className="h-5 w-5 text-primary" aria-hidden /> Upcoming live
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                  {scheduled.length}
+                </span>
               </h2>
               <p className="mt-1 text-xs leading-5 text-neutral-500">
                 Tap Notify me and we will ping you the moment a stream starts.
@@ -484,13 +497,13 @@ export default function LiveFeedPage() {
       )}
 
       {streams.length === 0 ? (
-        <div className="px-4 py-16 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-muted">
-            <Radio className="h-7 w-7 text-[#AC244D]" />
+        <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-red-600/15 to-primary/15 ring-1 ring-primary/10">
+            <Radio className="h-9 w-9 text-[#AC244D]" />
           </div>
           <h1 className="mt-4 font-display text-2xl font-semibold tracking-tight text-charcoal">No one is live</h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            When companions go live, their streams appear here. Check back soon.
+          <p className="mt-2 max-w-[260px] text-sm leading-relaxed text-neutral-500">
+            When companions go live, their streams fill this screen. Check back soon.
           </p>
           <div className="flex flex-col items-center">
             {isModel && (
@@ -513,7 +526,7 @@ export default function LiveFeedPage() {
         <div
           ref={feedRef}
           onScroll={handleScroll}
-          className="flex h-[calc(100dvh-120px)] snap-y snap-mandatory flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative flex min-h-0 flex-1 snap-y snap-mandatory flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {streams.map((s, i) => (
             <div key={s.id} className="relative h-full w-full shrink-0 snap-start bg-charcoal">
@@ -635,6 +648,7 @@ export default function LiveFeedPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

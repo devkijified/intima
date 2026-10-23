@@ -669,8 +669,8 @@ export default function GoLivePage() {
 
   if (phase === 'setup' || phase === 'publishing') {
     return (
-      <div className="mx-auto max-w-xl px-4 py-8 pb-28 md:pb-10">
-        <div className="rounded-3xl border border-neutral-200/80 bg-white p-6 shadow-sm">
+      <div className="-mx-4 -my-8 min-h-full bg-[#121016] px-4 py-8 pb-28 sm:-mx-6 md:pb-10">
+        <div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white p-6 shadow-2xl">
           <h1 className="flex items-center gap-2 font-display text-2xl font-semibold text-charcoal">
             <Video className="h-6 w-6 text-primary" /> Go Live
           </h1>
@@ -681,12 +681,12 @@ export default function GoLivePage() {
           {/* Pre-live preview: check the picture before anyone sees
               it. Nothing streams from here; publishing starts only
               at Go live now, reusing these same tracks. */}
-          <div className="relative mt-6 h-72 w-full overflow-hidden rounded-2xl bg-neutral-900">
+          <div className="relative mt-6 h-80 w-full overflow-hidden rounded-2xl bg-neutral-900 ring-1 ring-black/20">
             <video ref={previewVideoEl} autoPlay playsInline muted className="h-full w-full object-cover" />
             {!previewOn && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-t from-black/60 via-transparent to-black/30 p-6 text-center">
                 <button type="button" onClick={startPreview}
-                  className="flex min-h-[44px] items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-charcoal transition-transform active:scale-[0.98]">
+                  className="flex min-h-[48px] items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-transform active:scale-[0.98]">
                   <Video className="h-4 w-4" /> Turn on camera
                 </button>
                 <p className="max-w-xs text-xs leading-relaxed text-white/70">
@@ -803,7 +803,8 @@ export default function GoLivePage() {
               </div>
             )}
             <button type="submit" disabled={phase === 'publishing'}
-              className="flex min-h-[48px] w-full items-center justify-center rounded-full bg-primary py-3 text-sm font-bold text-white disabled:opacity-50">
+              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-red-600 py-3 text-[15px] font-bold text-white shadow-lg shadow-red-600/25 transition-all hover:bg-red-700 active:scale-[0.99] disabled:opacity-50">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
               {phase === 'publishing' ? 'Going live...' : 'Go live now'}
             </button>
             <div className="rounded-2xl border border-neutral-200 p-4">
@@ -872,29 +873,30 @@ export default function GoLivePage() {
           text="This is your share of the gifts from this stream. Intima keeps half of every gift, so a 100 coin gift adds 50 coins here."
         />
       </div>
-      {/* Bottom controls */}
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-4 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <Tooltip label={muted ? 'Unmute' : 'Mute'}>
-          <button onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur active:scale-95">
-            {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-          </button>
-        </Tooltip>
-        <Tooltip label="Flip camera">
-          <button onClick={flipCamera} aria-label="Flip camera"
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur active:scale-95">
-            <RefreshCw className="h-5 w-5" />
-          </button>
-        </Tooltip>
-        <Tooltip label="End stream">
-          <button onClick={endStream} disabled={ending} aria-label="End stream"
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg active:scale-95 disabled:opacity-50">
-            <XCircle className="h-7 w-7" />
-          </button>
-        </Tooltip>
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white/0">
-          <Camera className="hidden h-5 w-5" />
-        </span>
+      {/* Bottom controls: one glass control bar over a scrim */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center gap-1.5 rounded-full bg-black/55 p-2 shadow-2xl ring-1 ring-white/15 backdrop-blur-md">
+          <Tooltip label={muted ? 'Unmute' : 'Mute'}>
+            <button onClick={toggleMute} aria-label={muted ? 'Unmute' : 'Mute'}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white transition-transform active:scale-95">
+              {muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            </button>
+          </Tooltip>
+          <Tooltip label="Flip camera">
+            <button onClick={flipCamera} aria-label="Flip camera"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white transition-transform active:scale-95">
+              <RefreshCw className="h-5 w-5" />
+            </button>
+          </Tooltip>
+          <span className="mx-1 h-6 w-px bg-white/20" />
+          <Tooltip label="End stream">
+            <button onClick={endStream} disabled={ending} aria-label="End stream"
+              className="flex h-12 items-center gap-2 rounded-full bg-red-600 px-5 text-sm font-bold text-white shadow-lg transition-transform active:scale-95 disabled:opacity-50">
+              <XCircle className="h-5 w-5" /> End
+            </button>
+          </Tooltip>
+        </div>
       </div>
     </div>
   )

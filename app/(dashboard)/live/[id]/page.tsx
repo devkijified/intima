@@ -2150,8 +2150,8 @@ export default function StreamRoomPage() {
       {/* Comments */}
       <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden lg:hidden">
         {visibleMessages.map((m) => (
-          <div key={m.id} className="w-fit max-w-full">
-            <p className="pointer-events-auto text-[13px] leading-snug text-white drop-shadow">
+          <div key={m.id} className="w-fit max-w-full rounded-2xl bg-black/35 px-2.5 py-1.5 backdrop-blur-[2px]">
+            <p className="pointer-events-auto text-[13px] leading-snug text-white">
               {typeof m.level === 'number' && (
                 <span className="mr-1 rounded-full bg-gold px-1.5 py-px align-middle text-[9px] font-bold text-charcoal">
                   FAN {m.level}
@@ -2214,8 +2214,8 @@ export default function StreamRoomPage() {
       )}
 
       {/* Bottom bar */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 px-3 pb-5 pt-2 lg:hidden">
-        <div className="flex min-w-0 flex-1 items-center rounded-full bg-black/50 backdrop-blur-sm">
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 lg:hidden">
+        <div className="flex min-w-0 flex-1 items-center rounded-full bg-black/50 shadow-lg ring-1 ring-white/10 backdrop-blur-sm">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
