@@ -13,6 +13,7 @@ import {
   type ServiceType,
 } from '@/lib/connections/serviceType'
 import { HelpTip } from '@/components/ui/Tooltip'
+import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
 
 interface RequestConnectionModalProps {
   providerId: string
@@ -62,6 +63,12 @@ export function RequestConnectionModal({
 }: RequestConnectionModalProps) {
   const [fee, setFee] = useState<number | null>(null)
   const [step, setStep] = useState<Step>('summary')
+  // Drag the header down to dismiss, the sheet habit from the map
+  // sheets. The closer honours the same guard as the backdrop: a
+  // payment in flight (processing) can never be dragged away.
+  const { sheetRef, handleProps } = useSheetDrag(() => {
+    if (step !== 'processing') onClose()
+  })
   const [error, setError] = useState('')
   /** inDrive-style: client proposes a rate when she is open to offers. */
   const [proposedRate, setProposedRate] = useState('')
@@ -721,10 +728,14 @@ export function RequestConnectionModal({
           scroller, and the safe-area bottom padding lives on the body
           so the last action never hides behind the home indicator. */}
       <div
+        ref={sheetRef}
         className="flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[92dvh] sm:max-w-md sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-start justify-between px-6 pb-4 pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-6">
+        <div
+          {...handleProps}
+          className="flex shrink-0 cursor-grab touch-none select-none items-start justify-between px-6 pb-4 pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-6"
+        >
           <h2 className="text-xl font-bold text-charcoal">Request connection</h2>
           <button
             onClick={onClose}

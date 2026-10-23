@@ -5,6 +5,7 @@ import { COIN_PACKAGES } from '@/lib/coins/packages'
 import { GIFT_CATEGORY_CHIPS, GIFT_CATEGORY_OF, type GiftCategoryKey } from '@/lib/gifts/categories'
 import { ngnForCoins } from '@/lib/utils/helpers'
 import { ChevronLeft, Star, X } from '@/lib/icons'
+import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
 import type { GiftCatalogItem } from './giftTypes'
 import GiftObjectIcon from './GiftObjectIcon'
 
@@ -138,6 +139,15 @@ export function GiftPanel({
     []
   )
 
+  // Closing always ends an open combo first, whichever way the user
+  // closes: backdrop, X, or a drag on the sheet handle (the sheet
+  // drag habit from the map sheets, wired to the same closer).
+  const handleClose = () => {
+    endCombo(true)
+    onClose()
+  }
+  const { sheetRef, handleProps } = useSheetDrag(handleClose)
+
   const flagInsufficient = (gift: GiftCatalogItem) => {
     setNeedTopup(true)
     setShakeId(gift.id)
@@ -217,19 +227,19 @@ export function GiftPanel({
     }
   }
 
-  const handleClose = () => {
-    endCombo(true)
-    onClose()
-  }
-
   const comboGift = combo?.gift ?? null
   const comboBusy = !!comboGift && sendingId === comboGift.id
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
-      <div className="giftfx-panel relative animate-sheet-up rounded-t-[28px] bg-[#141419] px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 shadow-sheet">
-        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/20" />
+      <div
+        ref={sheetRef}
+        className="giftfx-panel relative animate-sheet-up rounded-t-[28px] bg-[#141419] px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 shadow-sheet"
+      >
+        <div {...handleProps} className="cursor-grab touch-none select-none pb-1">
+          <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/20" />
+        </div>
 
         {view === 'packages' ? (
           <>

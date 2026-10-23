@@ -224,6 +224,10 @@ export default function ModelDetailPage() {
   // club price set). The owner always sees the tab.
   const [privateTabVisible, setPrivateTabVisible] = useState(false)
   const [lightbox, setLightbox] = useState<number | null>(null)
+  // Lightbox swipe tracking: horizontal swipe moves between slides,
+  // the gallery habit from Instagram and TikTok (45px, the same
+  // threshold the story viewer uses). Buttons stay for discoverability.
+  const lightboxTouchX = useRef<number | null>(null)
   const [reviews, setReviews] = useState<MockReview[]>([])
   const [connectionFee, setConnectionFee] = useState<number | null>(null)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -696,6 +700,21 @@ export default function ModelDetailPage() {
     ...provider.videos.map((src) => ({ kind: 'video' as const, src })),
   ]
   const totalSlides = slides.length
+
+  // Desktop half of the gallery habit: arrow keys move between
+  // slides and Escape closes while the lightbox is open.
+  useEffect(() => {
+    if (lightbox === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null)
+      if (totalSlides < 2) return
+      if (e.key === 'ArrowRight') setLightbox((cur) => (cur === null ? cur : (cur + 1) % totalSlides))
+      if (e.key === 'ArrowLeft')
+        setLightbox((cur) => (cur === null ? cur : (cur - 1 + totalSlides) % totalSlides))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox === null, totalSlides])
 
   return (
     <div className="mx-auto max-w-2xl pb-28 md:pb-10">
@@ -1225,7 +1244,25 @@ export default function ModelDetailPage() {
 
       {/* Lightbox */}
       {lightbox !== null && slides[lightbox] && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/95" onClick={() => setLightbox(null)}>
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/95"
+          onClick={() => setLightbox(null)}
+          onTouchStart={(e) => {
+            lightboxTouchX.current = e.touches[0]?.clientX ?? null
+          }}
+          onTouchEnd={(e) => {
+            const startX = lightboxTouchX.current
+            lightboxTouchX.current = null
+            if (startX === null || totalSlides < 2) return
+            const dx = (e.changedTouches[0]?.clientX ?? startX) - startX
+            if (Math.abs(dx) < 45) return
+            setLightbox(
+              dx < 0
+                ? (lightbox + 1) % totalSlides
+                : (lightbox - 1 + totalSlides) % totalSlides
+            )
+          }}
+        >
           <Tooltip label="Close" wrapperClassName="absolute right-4 top-4">
           <button
             onClick={(e) => { e.stopPropagation(); setLightbox(null) }}
