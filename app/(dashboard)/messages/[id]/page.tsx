@@ -722,7 +722,9 @@ export default function ThreadPage() {
                           : 'rounded-tl-sm bg-white text-charcoal'
                       }`}
                     >
-                      {m.body.trim() && m.body !== 'Locked media' ? (
+                      {m.body.trim() &&
+                      m.body !== 'Locked media' &&
+                      !(m.media_url && (m.body === 'Photo' || m.body === 'Video')) ? (
                         <p className="whitespace-pre-wrap px-1">{m.body}</p>
                       ) : null}
                       {m.media_url && (
