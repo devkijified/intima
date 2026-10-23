@@ -226,8 +226,40 @@ export default function ModelDetailPage() {
   const [lightbox, setLightbox] = useState<number | null>(null)
   // Lightbox swipe tracking: horizontal swipe moves between slides,
   // the gallery habit from Instagram and TikTok (45px, the same
-  // threshold the story viewer uses). Buttons stay for discoverability.
-  const lightboxTouchX = useRef<number | null>(null)
+  // threshold the story viewer uses). Buttons stay for
+  // discoverability. The listeners are native (attached in the
+  // effect below), not React synthetic props: the synthetic touch
+  // handlers on the lightbox root never fired under real touch in
+  // the rig, while native listeners on the same element received
+  // every event, so the swipe goes through the native path.
+  const lightboxRootRef = useRef<HTMLDivElement | null>(null)
+  const lightboxIndexRef = useRef<number | null>(null)
+  lightboxIndexRef.current = lightbox
+
+  useEffect(() => {
+    if (lightbox === null) return
+    const el = lightboxRootRef.current
+    if (!el) return
+    let startX: number | null = null
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0]?.clientX ?? null
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (startX === null) return
+      const dx = (e.changedTouches[0]?.clientX ?? startX) - startX
+      startX = null
+      const total = totalSlidesRef.current
+      const cur = lightboxIndexRef.current
+      if (Math.abs(dx) < 45 || total < 2 || cur === null) return
+      setLightbox(dx < 0 ? (cur + 1) % total : (cur - 1 + total) % total)
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchend', onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [lightbox === null])
   // The slide count is computed far below (after the loading and
   // not-found early returns), so the keyboard effect up here reads
   // it through a ref: a useEffect placed below those early returns
@@ -1252,23 +1284,9 @@ export default function ModelDetailPage() {
       {/* Lightbox */}
       {lightbox !== null && slides[lightbox] && (
         <div
+          ref={lightboxRootRef}
           className="fixed inset-0 z-[80] flex touch-none items-center justify-center bg-black/95"
           onClick={() => setLightbox(null)}
-          onTouchStart={(e) => {
-            lightboxTouchX.current = e.touches[0]?.clientX ?? null
-          }}
-          onTouchEnd={(e) => {
-            const startX = lightboxTouchX.current
-            lightboxTouchX.current = null
-            if (startX === null || totalSlides < 2) return
-            const dx = (e.changedTouches[0]?.clientX ?? startX) - startX
-            if (Math.abs(dx) < 45) return
-            setLightbox(
-              dx < 0
-                ? (lightbox + 1) % totalSlides
-                : (lightbox - 1 + totalSlides) % totalSlides
-            )
-          }}
         >
           <Tooltip label="Close" wrapperClassName="absolute right-4 top-4">
           <button
