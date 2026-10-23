@@ -248,6 +248,11 @@ export default function GoLivePage() {
     })
     mediaPromise.catch(() => { /* observed for real at the await below */ })
     const supabase = createClient()
+    // Set once this attempt has created (or flipped live) a
+    // session row, so a failure can put the row right instead of
+    // leaving a ghost LIVE listing behind.
+    let startedSessionId: string | null = null
+    let startedWasResumed = false
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
@@ -315,6 +320,8 @@ export default function GoLivePage() {
         session = startJson.session
       }
       setSessionId(session.id)
+      startedSessionId = session.id
+      startedWasResumed = resumed
 
       // Mint a publisher token.
       const tokRes = await fetch('/api/live/token', {
@@ -380,6 +387,23 @@ export default function GoLivePage() {
     } catch (err: unknown) {
       setError(humanStartError(err))
       setPhase('setup')
+      // A stream that never reached live must not stay listed as
+      // LIVE (a blocked camera used to leave exactly that ghost
+      // behind). A fresh session is ended; a resumed scheduled
+      // one goes back to scheduled for its real time.
+      if (startedSessionId) {
+        try {
+          if (startedWasResumed) {
+            await supabase.from('live_sessions')
+              .update({ status: 'scheduled' })
+              .eq('id', startedSessionId).eq('status', 'live')
+          } else {
+            await supabase.from('live_sessions')
+              .update({ status: 'ended', ended_at: new Date().toISOString() })
+              .eq('id', startedSessionId).eq('status', 'live')
+          }
+        } catch { /* best-effort; the row can still be ended by hand */ }
+      }
       roomRef.current?.disconnect()
       roomRef.current = null
       if (handedOff) {
