@@ -12,7 +12,9 @@ import { formatCompactCount } from '@/lib/utils/helpers'
  * slot. The badge counts unread messages across the member's active
  * connections (same counting the messages page uses per thread).
  * It shares the docked player's perch on mobile and hides while
- * the member is already in Messages.
+ * the member is already in Messages, and on the full-screen live
+ * surfaces (a stream room, the host studio) where it floated over
+ * the stage and the sheets.
  */
 export function MessagesFab() {
   const pathname = usePathname()
@@ -45,6 +47,7 @@ export function MessagesFab() {
   }, [load, pathname])
 
   if (pathname.startsWith('/messages')) return null
+  if (pathname === '/models/live' || /^\/live\/[^/]+/.test(pathname)) return null
 
   return (
     <Link
