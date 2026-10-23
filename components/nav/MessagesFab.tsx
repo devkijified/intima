@@ -43,7 +43,16 @@ export function MessagesFab() {
   useEffect(() => {
     load()
     const t = setInterval(load, 60000)
-    return () => clearInterval(t)
+    // Reading a thread then coming back should clear this badge
+    // immediately, not at the next minute tick.
+    const onVis = () => { if (document.visibilityState === 'visible') void load() }
+    window.addEventListener('focus', load)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('focus', load)
+      document.removeEventListener('visibilitychange', onVis)
+    }
   }, [load, pathname])
 
   if (pathname.startsWith('/messages')) return null

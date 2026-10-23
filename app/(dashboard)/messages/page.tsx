@@ -79,6 +79,17 @@ export default function MessagesPage() {
 
   useEffect(() => {
     loadThreads()
+    // Coming back from a thread (or back to the tab) must show
+    // true counts at once: the router can restore this page
+    // without a remount, which used to leave stale badges up.
+    const refresh = () => { void loadThreads() }
+    const onVis = () => { if (document.visibilityState === 'visible') refresh() }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVis)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

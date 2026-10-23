@@ -272,28 +272,32 @@ export default function ConnectionCare({
 
   return (
     <div className="shrink-0 px-3 pt-2">
-      <div className="mx-auto w-full max-w-3xl space-y-2">
-      {/* Fee protection: ONE slim line in the chat, WhatsApp notice
-          style. The full explanation lives in the HelpTip and the
-          dispute form still expands in place when it is tapped. */}
-      {fee === 'held' && windowOpen && (
-        <div className="rounded-2xl bg-white px-3 py-1.5 shadow-sm ring-1 ring-black/[0.04]">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-[18px] w-[18px] shrink-0 text-emerald-600" />
-            <p className="flex min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold leading-snug text-charcoal">
-              <span className="truncate">
-                {viewerIsClient ? 'Your' : 'The'}{feeNgn ? ` ₦${feeNgn.toLocaleString()}` : ''} fee is protected until {fmtDateTime(disputeDeadline)}
-              </span>
-              <HelpTip text="You have 24 hours from payment to open a dispute. Our team reviews both sides and decides on the connection fee only: it is either refunded to the client or released. The companion's own rate is never part of the dispute." />
-            </p>
-            {!showDispute && (
-              <button onClick={() => setShowDispute(true)} className="inline-flex min-h-[40px] shrink-0 items-center text-xs font-semibold text-primary">
-                Dispute
-              </button>
-            )}
-          </div>
-          {showDispute && (
-            <div className="mt-2">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-1.5">
+      {/* Fee protection: a WhatsApp-style system notice pill in
+          the flow (pale, small, centered), never a white card.
+          The explanation lives in the HelpTip; the dispute form
+          opens as a card only when summoned. */}
+      {fee === 'held' && windowOpen && !showDispute && (
+        <div className="flex w-fit max-w-full items-center gap-1.5 rounded-lg bg-[#fdf3c6] px-2.5 py-1.5 shadow-sm">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+          <p className="flex min-w-0 items-center gap-1 text-[11px] font-medium leading-snug text-neutral-600">
+            <span className="truncate">
+              {viewerIsClient ? 'Your' : 'The'}{feeNgn ? ` ₦${feeNgn.toLocaleString()}` : ''} fee is protected until {fmtDateTime(disputeDeadline)}
+            </span>
+            <HelpTip text="You have 24 hours from payment to open a dispute. Our team reviews both sides and decides on the connection fee only: it is either refunded to the client or released. The companion's own rate is never part of the dispute." />
+          </p>
+          <button onClick={() => setShowDispute(true)} className="shrink-0 py-1 text-[11px] font-bold text-primary">
+            Dispute
+          </button>
+        </div>
+      )}
+      {fee === 'held' && windowOpen && showDispute && (
+        <div className="w-full self-stretch rounded-2xl bg-white px-3.5 py-3 shadow-sm">
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold text-charcoal">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+            Open a dispute
+          </p>
+          <div className="mt-2">
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -308,13 +312,12 @@ export default function ConnectionCare({
                 </button>
                 <button onClick={() => setShowDispute(false)} className="btn-soft min-h-[44px] px-5 py-2 text-xs">Cancel</button>
               </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
       {fee === 'disputed' && (
-        <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 px-3 py-2.5 shadow-sm ring-1 ring-amber-100">
+        <div className="flex w-full items-start gap-2.5 self-stretch rounded-2xl bg-amber-50 px-3 py-2.5 shadow-sm ring-1 ring-amber-100">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-semibold text-charcoal">Dispute open on this connection</p>
@@ -387,14 +390,14 @@ export default function ConnectionCare({
       {review && review.canReview && !review.mine && !reviewOpen && (
         <button
           onClick={() => setReviewOpen(true)}
-          className="flex min-h-[44px] w-full items-center justify-between rounded-2xl bg-white px-3 shadow-sm ring-1 ring-black/[0.04]"
+          className="flex w-fit max-w-full items-center gap-2 rounded-lg bg-white/90 px-2.5 py-1.5 shadow-sm"
         >
-          <span className="text-[13px] font-semibold text-charcoal">How was {otherName}?</span>
-          <span className="text-xs font-semibold text-primary">Write a review</span>
+          <span className="text-xs font-semibold text-charcoal">How was {otherName}?</span>
+          <span className="text-xs font-bold text-primary">Write a review</span>
         </button>
       )}
       {review && review.canReview && !review.mine && reviewOpen && (
-        <div className="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-black/[0.04]">
+        <div className="w-full self-stretch rounded-2xl bg-white px-3.5 py-3 shadow-sm">
           <p className="text-[13px] font-semibold text-charcoal">How was {otherName}?</p>
           <p className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
             <Clock className="h-3 w-3" />
@@ -418,27 +421,27 @@ export default function ConnectionCare({
         </div>
       )}
       {review && review.canReview && review.mine && !editing && (
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.04]">
+        <>
           <button
             onClick={() => {
               if (review.mine!.status !== 'published' && !review.counterpartSubmitted) setEditing(true)
               else if (review.counterpartReview) setReviewOpen((v) => !v)
             }}
-            className="flex min-h-[44px] w-full items-center gap-2 px-3 text-left"
+            className="flex w-fit max-w-full items-center gap-2 rounded-lg bg-white/90 px-2.5 py-1.5 shadow-sm"
           >
             <StarsRow value={review.mine.rating} />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-charcoal">
+            <span className="min-w-0 truncate text-xs font-semibold text-charcoal">
               {review.mine.status === 'published' ? 'Your review is live' : 'Your review is in'}
             </span>
             {review.mine.status !== 'published' && !review.counterpartSubmitted && (
-              <span className="shrink-0 text-xs font-semibold text-primary">Edit</span>
+              <span className="shrink-0 text-xs font-bold text-primary">Edit</span>
             )}
             {review.mine.status === 'published' && review.counterpartReview && (
-              <span className="shrink-0 text-xs font-semibold text-primary">{reviewOpen ? 'Hide theirs' : 'See theirs'}</span>
+              <span className="shrink-0 text-xs font-bold text-primary">{reviewOpen ? 'Hide theirs' : 'See theirs'}</span>
             )}
           </button>
           {review.mine.status === 'published' && reviewOpen && review.counterpartReview && (
-            <div className="border-t border-black/[0.05] px-3 py-2.5">
+            <div className="w-full self-stretch rounded-2xl bg-white px-3.5 py-3 shadow-sm">
               <p className="text-xs font-semibold text-neutral-500">{otherName} reviewed you</p>
               <div className="mt-1"><StarsRow value={review.counterpartReview.rating} /></div>
               {review.counterpartReview.comment && (
@@ -446,10 +449,10 @@ export default function ConnectionCare({
               )}
             </div>
           )}
-        </div>
+        </>
       )}
       {review && review.canReview && review.mine && editing && (
-        <div className="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-black/[0.04]">
+        <div className="w-full self-stretch rounded-2xl bg-white px-3.5 py-3 shadow-sm">
           <p className="text-[13px] font-semibold text-charcoal">Your review</p>
           <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">
             {review.counterpartSubmitted

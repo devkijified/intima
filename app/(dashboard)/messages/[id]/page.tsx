@@ -34,6 +34,7 @@ interface Msg {
   unlocked_by?: string[]
   expires_at?: string | null
   view_once?: boolean | null
+  read_at?: string | null
 }
 
 interface Counterpart {
@@ -348,7 +349,7 @@ export default function ThreadPage() {
 
       const { data: history } = await supabase
         .from('messages')
-        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
+        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at')
         .eq('connection_id', connectionId)
         .order('created_at', { ascending: true })
       const fresh = (history ?? []).filter((m: any) => !m.expires_at || new Date(m.expires_at).getTime() > Date.now())
@@ -387,7 +388,8 @@ export default function ThreadPage() {
         .is('read_at', null)
         .then(() => {})
 
-      // Realtime: new messages in this thread.
+      // Realtime: new messages in this thread, plus read flips so
+      // the sender's Seen lands live.
       const channel = supabase
         .channel(`thread-${connectionId}`)
         .on(
@@ -401,7 +403,32 @@ export default function ThreadPage() {
             // own signed URL from the id alone, and the server
             // refuses when the media is locked and unpaid.
             if (isPrivateMediaPath(m.media_url) && m.sender_id !== user.id) m.media_url = null
+            if (m.sender_id !== user.id) {
+              // The thread is open on my screen: this message is
+              // read the moment it lands. Mark it (policy 085 lets
+              // a party update read_at on messages sent to them)
+              // so the badges agree with what I am looking at.
+              m.read_at = new Date().toISOString()
+              supabase
+                .from('messages')
+                .update({ read_at: m.read_at })
+                .eq('id', m.id)
+                .is('read_at', null)
+                .then(() => {})
+            }
             if (live) setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages', filter: `connection_id=eq.${connectionId}` },
+          (payload) => {
+            const m = payload.new as Msg
+            if (live) {
+              setMsgs((prev) =>
+                prev.map((x) => (x.id === m.id ? { ...x, read_at: m.read_at ?? x.read_at } : x))
+              )
+            }
           }
         )
         .subscribe()
@@ -424,7 +451,7 @@ export default function ThreadPage() {
       sender_id: me,
       body: text.slice(0, 1000),
       ...(disappearing ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() } : {}),
-    }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once').single()
+    }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at').single()
     setSending(false)
     if (!error) {
       // Show the message immediately from the insert result. Relying on
@@ -479,7 +506,7 @@ export default function ThreadPage() {
             ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() }
             : {}),
         })
-        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
+        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at')
         .single()
       if (!error && row) {
         const m = row as Msg
@@ -550,7 +577,7 @@ export default function ThreadPage() {
         ppv_price_coins: price,
         view_once: ppvViewOnce,
       })
-      .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once')
+      .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at')
       .single()
     setSendingMedia(false)
     if (!error) {
@@ -645,19 +672,19 @@ export default function ThreadPage() {
       {/* What they want, plus screening answers: providers only, so
           she can see the intent and screen before chatting */}
       {viewerIsProvider && (intakeAnswers.length > 0 || serviceTypeLabel(connInfo?.serviceType) !== null || connInfo?.offerNgn != null) && (
-        <div className="mx-auto mt-2 w-[calc(100%-1.5rem)] max-w-3xl shrink-0 rounded-2xl bg-white px-4 py-1 shadow-sm ring-1 ring-black/[0.04]">
+        <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-col items-center px-3 pt-2">
           <button
             onClick={() => setShowIntake((v) => !v)}
-            className="flex min-h-[44px] w-full items-center justify-between text-left"
+            className="flex w-fit max-w-full items-center gap-2 rounded-lg bg-white/90 px-2.5 py-1.5 shadow-sm"
             aria-expanded={showIntake}
           >
-            <span className="text-[13px] font-semibold text-charcoal">
+            <span className="text-xs font-semibold text-charcoal">
               {intakeAnswers.length > 0 ? 'Client answers' : 'Their request'}
             </span>
-            <span className="text-xs font-medium text-primary">{showIntake ? 'Hide' : 'View'}</span>
+            <span className="text-xs font-semibold text-primary">{showIntake ? 'Hide' : 'View'}</span>
           </button>
           {showIntake && (
-            <div className="mt-2 space-y-2.5">
+            <div className="mt-1.5 w-full space-y-2.5 rounded-2xl bg-white px-4 py-3 shadow-sm">
               {(serviceTypeLabel(connInfo?.serviceType) !== null || connInfo?.offerNgn != null) && (
                 <div className="rounded-xl bg-primary/5 px-3 py-2.5">
                   <p className="text-sm text-charcoal">
@@ -704,10 +731,23 @@ export default function ThreadPage() {
             {msgs.map((m, i) => {
               const mine = m.sender_id === me
               const showDay = i === 0 || dayKey(msgs[i - 1].created_at) !== dayKey(m.created_at)
+              // Read state is read_at (policy 085 made marking
+              // possible at last); media views still count for
+              // legacy rows that predate receipts.
               const seen =
                 mine &&
+                (!!m.read_at ||
+                  (!!m.media_url &&
+                    mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me)))
+              // A media message with no real caption hugs its
+              // media, WhatsApp style: a thin frame, no padded
+              // card around the photo.
+              const mediaOnly =
                 !!m.media_url &&
-                mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me)
+                (!m.body.trim() ||
+                  m.body === 'Locked media' ||
+                  m.body === 'Photo' ||
+                  m.body === 'Video')
               return (
                 <Fragment key={m.id}>
                   {showDay && (
@@ -719,28 +759,34 @@ export default function ThreadPage() {
                   )}
                   <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[82%] rounded-xl px-2.5 pb-1.5 pt-2 text-[15px] leading-relaxed shadow-sm ${
-                        mine
-                          ? 'rounded-tr-sm bg-primary text-white'
-                          : 'rounded-tl-sm bg-white text-charcoal'
-                      }`}
+                      className={
+                        mediaOnly
+                          ? `w-[78%] max-w-[290px] overflow-hidden rounded-xl p-[3px] shadow-sm ${
+                              mine ? 'rounded-tr-sm bg-primary text-white' : 'rounded-tl-sm bg-white text-charcoal'
+                            }`
+                          : `max-w-[82%] rounded-xl px-2.5 pb-1.5 pt-2 text-[15px] leading-relaxed shadow-sm ${
+                              mine
+                                ? 'rounded-tr-sm bg-primary text-white'
+                                : 'rounded-tl-sm bg-white text-charcoal'
+                            }`
+                      }
                     >
-                      {m.body.trim() &&
-                      m.body !== 'Locked media' &&
-                      !(m.media_url && (m.body === 'Photo' || m.body === 'Video')) ? (
+                      {!mediaOnly && m.body.trim() && m.body !== 'Locked media' ? (
                         <p className="whitespace-pre-wrap px-1">{m.body}</p>
                       ) : null}
                       {m.media_url && (
-                        <PpvMedia
-                          msg={m}
-                          me={me}
-                          hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
-                          onOpen={openMediaViewer}
-                          onViewed={recordMediaView}
-                          signedUrl={signedUrls[m.id]}
-                        />
+                        <div className={mediaOnly ? '' : 'mt-2'}>
+                          <PpvMedia
+                            msg={m}
+                            me={me}
+                            hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
+                            onOpen={openMediaViewer}
+                            onViewed={recordMediaView}
+                            signedUrl={signedUrls[m.id]}
+                          />
+                        </div>
                       )}
-                      <p className={`mt-0.5 px-1 text-right text-[11px] leading-none ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
+                      <p className={`text-right text-[11px] leading-none ${mediaOnly ? 'px-1.5 pb-1 pt-1' : 'mt-0.5 px-1'} ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
                         {fmtTime(m.created_at)}
                         {seen && <span className="font-semibold text-sky-200"> · Seen</span>}
                       </p>
@@ -1141,7 +1187,7 @@ function PpvMedia({
       <button
         onClick={unlock}
         disabled={busy}
-        className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800 text-left"
+        className="relative block h-44 w-full overflow-hidden rounded-xl bg-neutral-800 text-left"
       >
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60 backdrop-blur-md">
           <span className="text-sm font-semibold text-white">Locked {msg.media_type === 'video' ? 'video' : 'photo'}</span>
@@ -1162,7 +1208,7 @@ function PpvMedia({
   // The sender keeps her normal view of her own media below.
   if (!isMine && msg.view_once && hasViewed) {
     return (
-      <div className="relative mt-2 flex h-44 w-56 items-center justify-center overflow-hidden rounded-xl bg-neutral-800 px-4 text-center">
+      <div className="relative flex h-44 w-full items-center justify-center overflow-hidden rounded-xl bg-neutral-800 px-4 text-center">
         <span className="text-xs font-semibold text-white">
           Already viewed. View once media can only be opened once.
         </span>
@@ -1179,7 +1225,7 @@ function PpvMedia({
     return (
       <button
         onClick={() => onOpen(msg)}
-        className="relative mt-2 block h-44 w-56 overflow-hidden rounded-xl bg-neutral-800 text-left"
+        className="relative block h-44 w-full overflow-hidden rounded-xl bg-neutral-800 text-left"
       >
         {legacy &&
           (msg.media_type === 'video' ? (
@@ -1199,7 +1245,7 @@ function PpvMedia({
 
   if (!url) {
     return (
-      <div className="mt-2 flex h-44 w-56 items-center justify-center rounded-xl bg-neutral-800">
+      <div className="flex h-44 w-full items-center justify-center rounded-xl bg-neutral-800">
         <span className="text-xs font-medium text-white/60">Loading media…</span>
       </div>
     )
@@ -1211,7 +1257,7 @@ function PpvMedia({
         src={url}
         controls
         onPlay={() => onViewed(msg)}
-        className="mt-2 max-h-64 w-56 rounded-xl object-cover"
+        className="max-h-72 w-full rounded-xl object-cover"
       />
     )
   }
@@ -1220,7 +1266,7 @@ function PpvMedia({
       src={url}
       alt=""
       onClick={() => onOpen(msg)}
-      className="mt-2 max-h-64 w-56 cursor-pointer rounded-xl object-cover"
+      className="max-h-72 w-full cursor-pointer rounded-xl object-cover"
       draggable={false}
     />
   )
