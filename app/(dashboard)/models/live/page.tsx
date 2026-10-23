@@ -835,9 +835,12 @@ export default function GoLivePage() {
     )
   }
 
-  // Live host view.
+  // Live host view. z-[70], deliberately above the dashboard's
+  // z-40 header and bottom nav: at z-40 the nav (later in the DOM)
+  // painted over this stage and buried the Mute, Flip and End
+  // controls under it, so the host could not tap End on her phone.
   return (
-    <div className="fixed inset-0 z-40 bg-black">
+    <div className="fixed inset-0 z-[70] bg-black">
       <video ref={videoEl} autoPlay playsInline muted className="h-full w-full object-cover" />
       {/* Gift FX: the same tiered effects her viewers see */}
       <GiftFxLayer ref={fxRef} myId={null} />
