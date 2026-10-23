@@ -45,6 +45,12 @@ export default function ComicSeriesPage() {
   const [signedIn, setSignedIn] = useState(false)
   const [following, setFollowing] = useState(false)
   const [followBusy, setFollowBusy] = useState(false)
+  const [progress, setProgress] = useState<{
+    state: string
+    episodeId?: string
+    episodeNo?: number
+  } | null>(null)
+  const [openedIds, setOpenedIds] = useState<Set<string>>(new Set())
   const supabase = createClient()
 
   useEffect(() => {
@@ -97,6 +103,31 @@ export default function ComicSeriesPage() {
           }).catch(() => {})
         }
       } catch { /* the button simply stays in its off state */ }
+    })()
+    return () => { live = false }
+  }, [id])
+
+  // Reading progress drives the main CTA: a returning reader gets
+  // Resume or Continue at the chapter they stopped at, not a blind
+  // "Start reading: Episode 1". Identity matches the track route:
+  // signed-in user, else the durable reader cookie, else the
+  // localStorage hint the reader page maintains.
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      try {
+        let hint = ''
+        try { hint = window.localStorage.getItem('intima_reader_hint') ?? '' } catch { /* private mode */ }
+        const qs = new URLSearchParams({ series: id })
+        if (hint) qs.set('viewerKey', hint)
+        const res = await fetch(`/api/comics/progress?${qs.toString()}`)
+        const json = await res.json().catch(() => null)
+        if (!live || !json) return
+        if (typeof json.state === 'string') {
+          setProgress({ state: json.state, episodeId: json.episodeId, episodeNo: json.episodeNo })
+        }
+        if (Array.isArray(json.openedIds)) setOpenedIds(new Set(json.openedIds as string[]))
+      } catch { /* no progress: the CTA stays at Episode 1 */ }
     })()
     return () => { live = false }
   }, [id])
@@ -204,15 +235,30 @@ export default function ComicSeriesPage() {
           </button>
           <HelpTip text="We will send you a push and a notification when a new episode of this series lands." />
         </div>
-        {first && (
-          <Link
-            href={`/comics/${first.id}`}
-            className="btn-luxe mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 px-6 py-3 text-[15px]"
-          >
-            <Play aria-hidden className="h-4 w-4" />
-            Start reading: Episode {first.episode_no}
-          </Link>
-        )}
+        {first && (() => {
+          const cta = progress?.episodeId
+            ? {
+                href: `/comics/${progress.episodeId}`,
+                label:
+                  progress.state === 'resume'
+                    ? `Resume: Episode ${progress.episodeNo}`
+                    : progress.state === 'continue'
+                      ? `Continue: Episode ${progress.episodeNo}`
+                      : progress.state === 'finished'
+                        ? `Read again: Episode ${progress.episodeNo}`
+                        : `Start reading: Episode ${first.episode_no}`,
+              }
+            : { href: `/comics/${first.id}`, label: `Start reading: Episode ${first.episode_no}` }
+          return (
+            <Link
+              href={cta.href}
+              className="btn-luxe mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 px-6 py-3 text-[15px]"
+            >
+              <Play aria-hidden className="h-4 w-4" />
+              {cta.label}
+            </Link>
+          )
+        })()}
 
         <h2 className="t-section-title mt-7 text-charcoal">Episodes</h2>
         <div className="mt-3 space-y-2.5">
@@ -239,7 +285,7 @@ export default function ComicSeriesPage() {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary">Episode {ep.episode_no}</span>
-                    {isNew(ep.published_at) && <span className="badge-elite">NEW</span>}
+                    {isNew(ep.published_at) && !openedIds.has(ep.id) && <span className="badge-elite">NEW</span>}
                   </span>
                   <span className="mt-0.5 block truncate font-display text-[15px] font-semibold tracking-tight text-charcoal">{ep.title}</span>
                   <span className="mt-0.5 flex items-center gap-1 text-xs text-neutral-500">
