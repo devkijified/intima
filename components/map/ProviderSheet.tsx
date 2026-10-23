@@ -8,6 +8,7 @@ import { ServiceChips } from '@/components/services/ServiceChips';
 import { VibeChips } from '@/components/services/VibeChips';
 import { SpecChips } from '@/components/services/SpecChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
+import { useSheetDrag } from '@/lib/hooks/useSheetDrag';
 import { formatRecency } from '@/lib/utils/recency';
 import { formatCompactCount, formatCompactPrice } from '@/lib/utils/helpers';
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings';
@@ -47,6 +48,7 @@ export function ProviderSheet({
   callsDisabledNote,
   showViewProfile,
 }: ProviderSheetProps) {
+  const { sheetRef, handleProps } = useSheetDrag(onClose);
   const [connectionFee, setConnectionFee] = useState<number | null>(null);
   // Why a call cannot start, shown in place when a dimmed call button
   // is tapped. A hard-disabled button explains nothing on a phone.
@@ -398,14 +400,16 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
       />
       {/* Bottom sheet */}
       <div
+        ref={sheetRef}
         data-protect
         className="fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-[28px] bg-white shadow-sheet animate-sheet-up sm:mx-auto sm:max-w-lg"
         role="dialog"
         aria-modal="true"
         aria-label={`${provider.displayName} profile`}
       >
-        {/* Drag handle + close */}
-        <div className="relative shrink-0 pt-2">
+        {/* Drag handle + close: the whole strip is the drag zone,
+            pull down to dismiss like every familiar bottom sheet. */}
+        <div {...handleProps} className="relative shrink-0 cursor-grab touch-none select-none pb-1 pt-2 active:cursor-grabbing">
           <div className="mx-auto h-1.5 w-14 rounded-full bg-neutral-200/90" />
           <button
             onClick={onClose}

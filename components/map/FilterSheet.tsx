@@ -12,6 +12,7 @@ import {
   type SpecFilter,
   type SpecOption,
 } from '@/lib/spec';
+import { useSheetDrag } from '@/lib/hooks/useSheetDrag';
 import { cn } from '@/lib/utils/helpers';
 import type { Filters } from './IntimaMap';
 
@@ -39,6 +40,7 @@ const CATEGORY_ORDER: ServiceCategory[] = ['Calls', 'Dates', 'Experiences'];
  * count on the confirm button. Keeps the map chrome to a single row.
  */
 export function FilterSheet({ open, filters, onChange, resultCount, onClose }: FilterSheetProps) {
+  const { sheetRef, handleProps } = useSheetDrag(onClose);
   if (!open) return null;
 
   const toggleService = (id: string) =>
@@ -75,10 +77,10 @@ export function FilterSheet({ open, filters, onChange, resultCount, onClose }: F
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="animate-sheet-up absolute inset-x-0 bottom-0 z-40">
+      <div ref={sheetRef} className="animate-sheet-up absolute inset-x-0 bottom-0 z-40">
         <div className="mx-auto max-w-md px-3 pb-3 sm:px-6 sm:pb-6">
           <div className="overflow-hidden rounded-[28px] bg-cream shadow-2xl">
-            <div className="flex justify-center pt-2.5">
+            <div {...handleProps} className="flex cursor-grab touch-none select-none justify-center pb-1 pt-2.5 active:cursor-grabbing">
               <div className="h-1 w-10 rounded-full bg-neutral-300" />
             </div>
 
