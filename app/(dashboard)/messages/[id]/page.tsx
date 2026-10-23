@@ -617,9 +617,16 @@ export default function ThreadPage() {
   const quickReplies = viewerIsProvider ? PROVIDER_QUICK_REPLIES : null
 
   return (
-    <div className="-mx-4 -my-8 flex h-full min-h-0 flex-col bg-[#efe7db] sm:-mx-6">
+    // Full screen on mobile, WhatsApp style: the thread covers
+    // the whole viewport edge to edge, so no shell background
+    // band sits under the composer. Desktop keeps the in-shell
+    // column it has always had.
+    <div className="fixed inset-0 z-[70] flex h-[100dvh] flex-col bg-[#efe7db] lg:relative lg:inset-auto lg:z-auto lg:-mx-6 lg:-my-8 lg:h-full lg:min-h-0">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3">
+      <div
+        className="flex shrink-0 items-center gap-3 border-b border-neutral-100 bg-white px-4 py-3"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+      >
         <Tooltip label="Back" side="bottom" align="start">
           <button onClick={() => router.back()} aria-label="Back" className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-cream">
             <ArrowLeft className="h-5 w-5 text-charcoal" />
