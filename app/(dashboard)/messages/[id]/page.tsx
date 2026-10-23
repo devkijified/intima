@@ -121,6 +121,7 @@ export default function ThreadPage() {
   const [ppvViewOnce, setPpvViewOnce] = useState(false)
   const [templateTab, setTemplateTab] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // WhatsApp-style composer: the typing pill grows with the text
@@ -441,6 +442,24 @@ export default function ThreadPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [msgs])
 
+  // Photos and videos grow their bubbles when they finish
+  // loading, after the scroll above has already run, which
+  // left the newest bubble's tail clipped under the composer.
+  // While the reader is at (or near) the bottom, re-pin on
+  // every media load.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onLoad = (e: Event) => {
+      const t = e.target as HTMLElement | null
+      if (!t || (t.tagName !== 'IMG' && t.tagName !== 'VIDEO')) return
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 180
+      if (nearBottom) bottomRef.current?.scrollIntoView()
+    }
+    el.addEventListener('load', onLoad, true)
+    return () => el.removeEventListener('load', onLoad, true)
+  }, [])
+
   const send = async (body: string) => {
     const text = body.trim()
     if (!text || !me || sending || !active) return
@@ -721,7 +740,7 @@ export default function ThreadPage() {
       {/* Messages: WhatsApp layout. Warm beige ground, white
           bubbles in, burgundy bubbles out, day pills between
           days, time inside the bubble. */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3">
         {loading ? (
           <div data-page-loader className="flex h-full items-center justify-center">
             <IntimaLoader size="lg" />
