@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Room, createLocalVideoTrack, createLocalAudioTrack, VideoPresets, type LocalVideoTrack, type LocalAudioTrack, type TrackPublishOptions } from 'livekit-client'
+import { Room, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack, VideoPresets, type TrackPublishOptions } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { GiftFxLayer, type GiftFxHandle } from '@/components/live/GiftFx'
 import { GiftMenuEditor } from '@/components/live/GiftMenuEditor'
@@ -19,6 +19,46 @@ import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 const CAMERA_PUBLISH_OPTIONS: TrackPublishOptions = {
   simulcast: true,
   videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+}
+
+// Camera and microphone failures reach the page as raw browser
+// DOMExceptions ("The request is not allowed by the user agent or
+// the platform in the current context..."). Those sentences are
+// never shown to a companion: map them to plain instructions.
+function friendlyMediaError(err: unknown): string {
+  const name = (err as { name?: string } | null)?.name ?? ''
+  const msg = err instanceof Error ? err.message : ''
+  const text = `${name} ${msg}`
+  if (/NotAllowedError|user agent|denied permission|permission denied/i.test(text)) {
+    return 'Camera or microphone access was blocked. Allow camera and microphone for this site in your browser settings, then try again.'
+  }
+  if (/NotFoundError|OverconstrainedError|DevicesNotFound/i.test(text)) {
+    return 'No camera or microphone was found on this device.'
+  }
+  if (/NotReadableError|TrackStartError/i.test(text)) {
+    return 'Your camera or microphone is busy in another app. Close that app and try again.'
+  }
+  if (/SecurityError/i.test(text)) {
+    return 'Camera access needs a secure connection. Open Intima from its usual address and try again.'
+  }
+  return 'The camera could not start. Check your camera and microphone, then try again.'
+}
+
+function humanStartError(err: unknown): string {
+  const name = (err as { name?: string } | null)?.name ?? ''
+  const raw = err instanceof Error ? err.message : ''
+  if (
+    err instanceof DOMException ||
+    /NotAllowedError|NotFoundError|NotReadableError|OverconstrainedError|SecurityError/.test(name) ||
+    /user agent|denied permission|getUserMedia/i.test(raw)
+  ) {
+    return friendlyMediaError(err)
+  }
+  if (raw === 'Not logged in') return 'Your session has expired. Sign in again, then go live.'
+  if (/connect|websocket|signal/i.test(raw) && raw.length > 60) {
+    return 'Could not connect to the streaming server. Check your internet connection and try again.'
+  }
+  return raw || 'Something went wrong starting your stream. Please try again.'
 }
 
 type Phase = 'setup' | 'publishing' | 'live'
@@ -50,6 +90,17 @@ export default function GoLivePage() {
   const [scheduling, setScheduling] = useState(false)
   const [schedMsg, setSchedMsg] = useState('')
 
+  // Pre-live preview: the camera starts on the setup screen, from a
+  // direct tap, so the companion sees herself before anything is
+  // streaming, and Go live now publishes tracks that are already
+  // running instead of asking for the camera mid-flow (which iOS
+  // Safari refuses once the tap is spent on network round trips).
+  const [previewOn, setPreviewOn] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [facing, setFacing] = useState<'user' | 'environment'>('user')
+  const previewVideoEl = useRef<HTMLVideoElement>(null)
+  const previewStream = useRef<MediaStream | null>(null)
+
   const router = useRouter()
   const fxRef = useRef<GiftFxHandle>(null)
   const roomRef = useRef<Room | null>(null)
@@ -63,8 +114,19 @@ export default function GoLivePage() {
       roomRef.current?.disconnect()
       videoTrack.current?.stop()
       audioTrack.current?.stop()
+      previewStream.current?.getTracks().forEach((t) => t.stop())
     }
   }, [])
+
+  // The live stage mounts only when the phase flips to live, so the
+  // local track can only attach to its video element after that
+  // render. Without this the host watched a black stage while her
+  // viewers saw the stream fine.
+  useEffect(() => {
+    if (phase === 'live' && videoEl.current && videoTrack.current) {
+      videoTrack.current.attach(videoEl.current)
+    }
+  }, [phase])
 
   // Premium (fans only) is earned, not given: load her checklist so
   // the Premium option knows whether it is open or locked, and what
@@ -93,10 +155,98 @@ export default function GoLivePage() {
     }
   }
 
+  const startPreview = async () => {
+    setPreviewError(null)
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setPreviewError('Camera access needs a secure connection. Open Intima from its usual address and try again.')
+      return
+    }
+    try {
+      // Called directly from the tap: iOS Safari ties the camera
+      // permission to the gesture, so nothing may be awaited first.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing },
+        audio: true,
+      })
+      previewStream.current = stream
+      setPreviewOn(true)
+      if (previewVideoEl.current) {
+        previewVideoEl.current.srcObject = stream
+        void previewVideoEl.current.play().catch(() => {})
+      }
+    } catch (err) {
+      setPreviewError(friendlyMediaError(err))
+    }
+  }
+
+  const stopPreview = () => {
+    previewStream.current?.getTracks().forEach((t) => t.stop())
+    previewStream.current = null
+    if (previewVideoEl.current) previewVideoEl.current.srcObject = null
+    setPreviewOn(false)
+  }
+
+  const flipPreview = async () => {
+    const next = facing === 'user' ? 'environment' : 'user'
+    setFacing(next)
+    const stream = previewStream.current
+    if (!stream) return
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({ video: { facingMode: next } })
+      const newTrack = fresh.getVideoTracks()[0]
+      const old = stream.getVideoTracks()[0]
+      if (old) {
+        stream.removeTrack(old)
+        old.stop()
+      }
+      if (newTrack) stream.addTrack(newTrack)
+      if (previewVideoEl.current) {
+        previewVideoEl.current.srcObject = stream
+        void previewVideoEl.current.play().catch(() => {})
+      }
+    } catch (err) {
+      setPreviewError(friendlyMediaError(err))
+    }
+  }
+
+  // Tracks for publishing: reuse the running preview tracks when
+  // the preview is on (the camera ask already happened on a direct
+  // tap, so Safari cannot refuse it here), otherwise ask now.
+  const acquireTracks = async (): Promise<{ cam: LocalVideoTrack; mic: LocalAudioTrack; fromPreview: boolean }> => {
+    const stream = previewStream.current
+    const v = stream?.getVideoTracks()[0]
+    const a = stream?.getAudioTracks()[0]
+    if (stream && v && a && v.readyState === 'live' && a.readyState === 'live') {
+      return { cam: new LocalVideoTrack(v), mic: new LocalAudioTrack(a), fromPreview: true }
+    }
+    const cam = await createLocalVideoTrack({ facingMode: facing })
+    const mic = await createLocalAudioTrack()
+    return { cam, mic, fromPreview: false }
+  }
+
   const handleGoLive = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    // Validate the price before any camera work starts.
+    if (access === 'paid' && Math.max(0, parseInt(price || '0', 10)) <= 0) {
+      setError('Set a join price, or choose Public or Premium')
+      return
+    }
     setPhase('publishing')
+    // Ask for the camera FIRST, before any await: iOS Safari only
+    // honours the request while it is still tied to this tap. The
+    // old flow did the session and token round trips first, and
+    // Safari then refused with a raw NotAllowedError even when the
+    // site already had camera access allowed.
+    const mediaBox: { cam: LocalVideoTrack | null; mic: LocalAudioTrack | null; fromPreview: boolean } = { cam: null, mic: null, fromPreview: false }
+    let handedOff = false
+    const mediaPromise = acquireTracks().then((m) => {
+      mediaBox.cam = m.cam
+      mediaBox.mic = m.mic
+      mediaBox.fromPreview = m.fromPreview
+      return m
+    })
+    mediaPromise.catch(() => { /* observed for real at the await below */ })
     const supabase = createClient()
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -178,9 +328,13 @@ export default function GoLivePage() {
       }
       const { token, url } = await tokRes.json()
 
-      // Camera + mic.
-      const cam = await createLocalVideoTrack({ facingMode: 'user' })
-      const mic = await createLocalAudioTrack()
+      // Camera + mic: the tracks requested at the top of this
+      // handler (the running preview tracks when the preview is
+      // on). From here LiveKit owns them.
+      const media = await mediaPromise
+      handedOff = true
+      const cam = media.cam
+      const mic = media.mic
       videoTrack.current = cam
       audioTrack.current = mic
       if (videoEl.current) {
@@ -224,11 +378,27 @@ export default function GoLivePage() {
 
       setPhase('live')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to start stream')
+      setError(humanStartError(err))
       setPhase('setup')
       roomRef.current?.disconnect()
-      videoTrack.current?.stop()
-      audioTrack.current?.stop()
+      roomRef.current = null
+      if (handedOff) {
+        // LiveKit had the tracks: stop them and drop the preview,
+        // whose tracks are the same ones. She taps Turn on camera
+        // to preview again before the next attempt.
+        videoTrack.current?.stop()
+        audioTrack.current?.stop()
+        videoTrack.current = null
+        audioTrack.current = null
+        previewStream.current = null
+        setPreviewOn(false)
+      } else if (mediaBox.cam && !mediaBox.fromPreview) {
+        // The start failed before publishing: stop the fresh
+        // tracks so the camera does not stay on with nothing to
+        // show. A running preview is left exactly as it was.
+        mediaBox.cam.stop()
+        mediaBox.mic?.stop()
+      }
     }
   }
 
@@ -379,6 +549,48 @@ export default function GoLivePage() {
           <p className="mt-1 text-sm text-neutral-500">
             Stream to your audience TikTok-style. You decide who gets in: everyone, ticket buyers, or your fans. Viewers can send you gifts.
           </p>
+
+          {/* Pre-live preview: check the picture before anyone sees
+              it. Nothing streams from here; publishing starts only
+              at Go live now, reusing these same tracks. */}
+          <div className="relative mt-6 h-72 w-full overflow-hidden rounded-2xl bg-neutral-900">
+            <video ref={previewVideoEl} autoPlay playsInline muted className="h-full w-full object-cover" />
+            {!previewOn && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <button type="button" onClick={startPreview}
+                  className="flex min-h-[44px] items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-charcoal transition-transform active:scale-[0.98]">
+                  <Video className="h-4 w-4" /> Turn on camera
+                </button>
+                <p className="max-w-xs text-xs leading-relaxed text-white/70">
+                  Check your picture and sound first. This is only a preview: nothing streams until you tap Go live now.
+                </p>
+              </div>
+            )}
+            {previewOn && (
+              <>
+                <span className="absolute left-3 top-3 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+                  Preview only
+                </span>
+                <div className="absolute bottom-3 right-3 flex gap-2">
+                  <button type="button" onClick={flipPreview}
+                    className="flex min-h-[44px] items-center rounded-full bg-black/50 px-4 py-2 text-xs font-bold text-white backdrop-blur transition-transform active:scale-[0.98]">
+                    Flip
+                  </button>
+                  <button type="button" onClick={stopPreview}
+                    className="flex min-h-[44px] items-center rounded-full bg-black/50 px-4 py-2 text-xs font-bold text-white backdrop-blur transition-transform active:scale-[0.98]">
+                    Turn off
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {previewError && (
+            <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+              <p className="text-sm text-red-700">{previewError}</p>
+            </div>
+          )}
+
           <form onSubmit={handleGoLive} className="mt-6 space-y-5">
             <div>
               <label className="mb-1 block text-sm font-medium text-charcoal">Stream title</label>
@@ -458,7 +670,7 @@ export default function GoLivePage() {
             )}
             <button type="submit" disabled={phase === 'publishing'}
               className="flex min-h-[48px] w-full items-center justify-center rounded-full bg-primary py-3 text-sm font-bold text-white disabled:opacity-50">
-              {phase === 'publishing' ? 'Starting camera...' : 'Go live now'}
+              {phase === 'publishing' ? 'Going live...' : 'Go live now'}
             </button>
             <div className="rounded-2xl border border-neutral-200 p-4">
               <label className="flex items-center gap-1 text-sm font-medium text-charcoal">
@@ -477,7 +689,9 @@ export default function GoLivePage() {
               {schedMsg && <p className="mt-2 text-center text-xs text-neutral-500">{schedMsg}</p>}
             </div>
             <p className="text-center text-xs text-neutral-400">
-              Your browser will ask for camera and microphone permission.
+              {previewOn
+                ? 'Your camera is already on from the preview, so going live starts right away.'
+                : 'Your browser will ask for camera and microphone permission when you go live. Turn on the preview above to grant it now and check your picture first.'}
             </p>
           </form>
         </div>
