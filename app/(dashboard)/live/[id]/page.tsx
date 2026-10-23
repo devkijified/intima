@@ -282,7 +282,8 @@ export default function StreamRoomPage() {
   const syncAudience = useCallback(
     async (room: Room) => {
       const host = hostIdRef.current
-      const ids = [...new Set([host, ...room.remoteParticipants.keys()].filter(Boolean) as string[])]
+      const me = room.localParticipant?.identity
+      const ids = [...new Set([host, me, ...room.remoteParticipants.keys()].filter(Boolean) as string[])]
       const list = await Promise.all(ids.map(async (uid) => ({ id: uid, ...(await profileFor(uid)) })))
       setAudience(list)
     },
@@ -1750,9 +1751,19 @@ export default function StreamRoomPage() {
         </span>
       </div>
 
+      {/* Audience pill: people icon + watching count + top gifter,
+          under the host chip. The full lists open in the sheet. */}
+      <div className="absolute left-3 top-14 z-20 lg:hidden">
+        <LeaderboardPill
+          sessionId={id}
+          viewerCount={viewerCount}
+          onOpen={() => { setAudienceTab('gifters'); setAudienceOpen(true) }}
+        />
+      </div>
+
       {/* PK score bar + pinned message, stacked under the top bar */}
       {(pkBattle || pinnedText) && (
-        <div className="absolute inset-x-3 top-14 z-10 flex flex-col items-start gap-1.5">
+        <div className="absolute inset-x-3 top-[5.75rem] z-10 flex flex-col items-start gap-1.5">
           {pkBattle && pkBattle.status === 'active' && (
             <div className="flex w-full items-center justify-between gap-2 rounded-2xl bg-black/60 px-3 py-2 backdrop-blur-sm">
               <span className="text-xs font-bold text-white">
@@ -1793,13 +1804,6 @@ export default function StreamRoomPage() {
 
       {/* Top-right: PiP + share + close */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
-        <span className="lg:hidden">
-          <LeaderboardPill
-            sessionId={id}
-            viewerCount={viewerCount}
-            onOpen={() => { setAudienceTab('gifters'); setAudienceOpen(true) }}
-          />
-        </span>
         <Tooltip label="Stream controls" side="bottom">
           <button
             onClick={() => setPanelOpen(true)}
