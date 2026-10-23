@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .maybeSingle();
-    if (profile?.role !== 'model') {
+    if (!['model', 'admin', 'super_admin'].includes(profile?.role ?? '')) {
       return NextResponse.json({ error: 'Only companions can schedule streams' }, { status: 403 });
     }
 

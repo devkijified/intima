@@ -157,7 +157,9 @@ export default function LiveFeedPage() {
           .select('role')
           .eq('id', user.id)
           .maybeSingle()
-        setIsModel(prof?.role === 'model')
+        // The host section (schedule form, my streams, Go live)
+        // is for companions, plus admins testing the live flow.
+        setIsModel(['model', 'admin', 'super_admin'].includes(prof?.role ?? ''))
         const { data: subs } = await supabase
           .from('subscriptions')
           .select('provider_id, status, current_period_end')

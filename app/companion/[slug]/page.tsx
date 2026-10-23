@@ -9,6 +9,7 @@ import {
   Lock, Map as MapIcon, MapPin, MessageCircle, Phone, Plane, Play, Radio, Share, ShieldCheck, Star, Tag, Video, X, XCircle,
 } from '@/lib/icons'
 import { createClient } from '@/lib/supabase/client'
+import { isAdmin } from '@/lib/admin/isAdmin'
 import { showToast as globalShowToast } from '@/lib/toast'
 import { RateCard } from '@/components/rates/RateCard'
 import { ServiceChips } from '@/components/services/ServiceChips'
@@ -212,6 +213,7 @@ export default function ModelDetailPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setLoggedIn(!!user)
       setViewerId(user?.id ?? null)
+      if (user) void isAdmin().then(setViewerIsAdmin)
     })
   }, [supabase])
 
@@ -287,6 +289,8 @@ export default function ModelDetailPage() {
   const [connected, setConnected] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
   const [viewerId, setViewerId] = useState<string | null>(null)
+  const [viewerIsAdmin, setViewerIsAdmin] = useState(false)
+  const [testChatBusy, setTestChatBusy] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [eligibility, setEligibility] = useState<Eligibility | null>(null)
   // Global toast: renders from the root layout host, so a message
@@ -618,6 +622,31 @@ export default function ModelDetailPage() {
       showToast('Could not file the report')
     } finally {
       setReportBusy(false)
+    }
+  }
+
+  // Admin test chat: opens (or reuses) the admin's real thread
+  // with this companion through the admin-only route, then goes
+  // straight to it.
+  const openTestChat = async () => {
+    if (!provider || testChatBusy) return
+    setTestChatBusy(true)
+    try {
+      const res = await fetch('/api/admin/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: provider.id }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { connectionId?: string; error?: string }
+      if (!res.ok || !j.connectionId) {
+        showToast(j.error ?? 'Could not open the test chat')
+        return
+      }
+      router.push(`/messages/${j.connectionId}`)
+    } catch {
+      showToast('Could not open the test chat')
+    } finally {
+      setTestChatBusy(false)
     }
   }
 
@@ -1085,6 +1114,18 @@ export default function ModelDetailPage() {
             </Tooltip>
           )}
         </div>
+
+        {/* Admin only: jump into a real test thread with this
+            companion (opens through /api/admin/test-connection). */}
+        {viewerIsAdmin && viewerId !== provider.id && (
+          <button
+            onClick={openTestChat}
+            disabled={testChatBusy}
+            className="mt-3 w-full rounded-full border border-dashed border-primary/50 py-2.5 text-[13px] font-semibold text-primary transition-all active:scale-[0.99] disabled:opacity-50"
+          >
+            {testChatBusy ? 'Opening test chat…' : 'Test chat (admin)'}
+          </button>
+        )}
 
         {/* Fan club: hidden for her own page; the card itself renders
             nothing when she has not set a price */}

@@ -103,7 +103,7 @@ export default function GoLivePage() {
       if (!user) throw new Error('Not logged in')
       const { data: profile } = await supabase
         .from('profiles').select('role, display_name').eq('id', user.id).maybeSingle()
-      if (profile?.role !== 'model') throw new Error('Only companions can go live')
+      if (!['model', 'admin', 'super_admin'].includes(profile?.role ?? '')) throw new Error('Only companions can go live')
 
       let priceNgn = access === 'paid' ? Math.max(0, parseInt(price || '0', 10)) : 0
       if (access === 'paid' && priceNgn <= 0) throw new Error('Set a join price, or choose Public or Premium')
