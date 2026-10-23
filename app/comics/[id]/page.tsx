@@ -225,10 +225,14 @@ export default function ComicReaderPage() {
     return () => { live = false; clearTimeout(escape) }
   }, [ep])
 
-  // Completion: reader reaches the end marker.
+  // Completion: reader reaches the end marker. The observer arms
+  // only once the panels are actually on screen: before that the
+  // page is just the title plate and the preparing placeholder, so
+  // short that the end marker can sit inside the first viewport and
+  // an episode would count as finished the moment it opens.
   useEffect(() => {
     const el = endRef.current
-    if (!el || !ep) return
+    if (!el || !ep || !panelsReady) return
     const io = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting) {
         fetch('/api/comics/track', {
@@ -241,7 +245,7 @@ export default function ComicReaderPage() {
     }, { threshold: 0.4 })
     io.observe(el)
     return () => io.disconnect()
-  }, [ep, id])
+  }, [ep, id, panelsReady])
 
   // Reading progress for the magazine-style progress hairline,
   // plus the read-strength reporting: crossing a new tenth of the
@@ -371,6 +375,10 @@ export default function ComicReaderPage() {
         </button>
       )}
 
+      {/* The End block waits for the panels too: shown early it
+          spoils the ending and arms the completion sensor on a
+          page that is still just a placeholder. */}
+      {ep && panelsReady && (
       <div ref={endRef} className="px-6 pt-10 text-center">
         <div className="mx-auto max-w-sm rounded-[28px] bg-[#1A1016] px-6 py-8">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gold">{comicTitle ?? 'Intima Comics'}</p>
@@ -386,6 +394,7 @@ export default function ComicReaderPage() {
         )}
         <p className="mt-6 text-xs text-neutral-400">New episodes drop regularly. Follow Intima and you will never miss one.</p>
       </div>
+      )}
     </div>
   )
 }
