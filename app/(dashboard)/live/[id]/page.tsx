@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
-import { GiftLeaderboard } from '@/components/live/GiftLeaderboard'
+import { GiftLeaderboard, LeaderboardList, LeaderboardPill } from '@/components/live/GiftLeaderboard'
+import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import { useDock } from '@/components/dock/FloatingDock'
 import { FanBadge } from '@/components/social/FanBadge'
@@ -252,6 +253,61 @@ export default function StreamRoomPage() {
   // host has left the room (stream row still live), 'camoff' when she
   // is present but her camera is off, null while she is on stage.
   const [hostAway, setHostAway] = useState<'away' | 'camoff' | null>(null)
+  // Audience sheet (top gifters + watching now) and TikTok-style join
+  // chips: the room announces arrivals instead of silently counting.
+  const [audienceOpen, setAudienceOpen] = useState(false)
+  const [audienceTab, setAudienceTab] = useState<'gifters' | 'viewers'>('gifters')
+  const [audience, setAudience] = useState<{ id: string; name: string; avatar: string | null }[]>([])
+  const [joins, setJoins] = useState<{ key: string; name: string; avatar: string | null; gold: boolean }[]>([])
+  const { sheetRef: audienceSheetRef, handleProps: audienceHandleProps } = useSheetDrag(() => setAudienceOpen(false))
+  const profileCacheRef = useRef(new Map<string, { name: string; avatar: string | null }>())
+  const profileFor = useCallback(
+    async (uid: string) => {
+      const hit = profileCacheRef.current.get(uid)
+      if (hit) return hit
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, avatar_url')
+        .eq('id', uid)
+        .maybeSingle()
+      const entry = {
+        name: (data as { display_name?: string } | null)?.display_name ?? 'Someone',
+        avatar: (data as { avatar_url?: string | null } | null)?.avatar_url ?? null,
+      }
+      profileCacheRef.current.set(uid, entry)
+      return entry
+    },
+    [supabase]
+  )
+  const syncAudience = useCallback(
+    async (room: Room) => {
+      const host = hostIdRef.current
+      const ids = [...new Set([host, ...room.remoteParticipants.keys()].filter(Boolean) as string[])]
+      const list = await Promise.all(ids.map(async (uid) => ({ id: uid, ...(await profileFor(uid)) })))
+      setAudience(list)
+    },
+    [profileFor]
+  )
+  const pushJoin = useCallback(
+    async (uid: string) => {
+      const me = roomRef.current?.localParticipant?.identity
+      if (!uid || uid === me) return
+      const p = await profileFor(uid)
+      let gold = uid === hostIdRef.current
+      if (!gold) {
+        const { data: st } = await supabase
+          .from('gifter_stats')
+          .select('level')
+          .eq('user_id', uid)
+          .maybeSingle()
+        gold = (((st as { level?: number } | null)?.level ?? 1) >= 5)
+      }
+      const key = `${uid}-${Date.now()}`
+      setJoins((prev) => [...prev.slice(-2), { key, name: p.name, avatar: p.avatar, gold }])
+      window.setTimeout(() => setJoins((prev) => prev.filter((j) => j.key !== key)), 4200)
+    },
+    [profileFor, supabase]
+  )
 
   /* ------------------------------ helpers --------------------------------- */
 
@@ -766,6 +822,7 @@ export default function StreamRoomPage() {
       const updateViewers = () => {
         // Host + every remote participant currently in the room.
         setViewerCount(room.remoteParticipants.size + 1)
+        void syncAudience(room)
       }
 
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
@@ -796,6 +853,7 @@ export default function StreamRoomPage() {
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
         updateViewers()
         if (participant && participant.identity === session.provider_id) setHostAway(null)
+        if (participant) void pushJoin(participant.identity)
       })
       room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
         updateViewers()
@@ -1161,7 +1219,11 @@ export default function StreamRoomPage() {
         setViewerCount(room.remoteParticipants.size + 1)
         if (participant && participant.identity !== hostIdRef.current) detachTile(participant.identity)
       })
-      room.on(RoomEvent.ParticipantConnected, () => setViewerCount(room.remoteParticipants.size + 1))
+      room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+        setViewerCount(room.remoteParticipants.size + 1)
+        void syncAudience(room)
+        void pushJoin(participant?.identity)
+      })
       room.on(RoomEvent.DataReceived, handleDataPacket)
       await room.connect(url, token)
       room.remoteParticipants.forEach((p) => {
@@ -1623,7 +1685,6 @@ export default function StreamRoomPage() {
       {/* Centre column: the stage, with the gift bar under it */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div ref={stageRef} className="relative min-w-0 flex-1 overflow-hidden">
-      <GiftLeaderboard sessionId={id} />
       {/* Video layer */}
       <video
         ref={videoRef}
@@ -1732,6 +1793,13 @@ export default function StreamRoomPage() {
 
       {/* Top-right: PiP + share + close */}
       <div className="absolute right-3 top-3 flex items-center gap-2">
+        <span className="lg:hidden">
+          <LeaderboardPill
+            sessionId={id}
+            viewerCount={viewerCount}
+            onOpen={() => { setAudienceTab('gifters'); setAudienceOpen(true) }}
+          />
+        </span>
         <Tooltip label="Stream controls" side="bottom">
           <button
             onClick={() => setPanelOpen(true)}
@@ -1791,6 +1859,74 @@ export default function StreamRoomPage() {
           </Link>
         </Tooltip>
       </div>
+
+      {/* Audience sheet: top gifters + watching now, behind the
+          people pill at the top of the stage. */}
+      {audienceOpen && (
+        <div className="absolute inset-0 z-40 flex items-end justify-center bg-black/60" onPointerDown={() => setAudienceOpen(false)}>
+          <div
+            ref={audienceSheetRef}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="flex max-h-[72%] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-[#17171d] pb-[max(1rem,env(safe-area-inset-bottom))]"
+          >
+            <div {...audienceHandleProps} className="shrink-0 cursor-grab touch-none px-4 pt-2.5">
+              <div className="mx-auto h-1 w-10 rounded-full bg-white/20" aria-hidden />
+              <div className="mt-2.5 flex items-center justify-between">
+                <p className="text-sm font-bold text-white">In this live</p>
+                <button
+                  onClick={() => setAudienceOpen(false)}
+                  aria-label="Close audience list"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white active:scale-95"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-3 flex gap-2 pb-3">
+                <button
+                  onClick={() => setAudienceTab('gifters')}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${audienceTab === 'gifters' ? 'bg-gold text-charcoal' : 'bg-white/10 text-white/70'}`}
+                >
+                  Top gifters
+                </button>
+                <button
+                  onClick={() => setAudienceTab('viewers')}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${audienceTab === 'viewers' ? 'bg-gold text-charcoal' : 'bg-white/10 text-white/70'}`}
+                >
+                  Watching ({formatCompactCount(Math.max(viewerCount, audience.length))})
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+              {audienceTab === 'gifters' ? (
+                <LeaderboardList sessionId={id} />
+              ) : audience.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-white/50">Just the host so far. Share the stream to bring people in.</p>
+              ) : (
+                <div className="space-y-1">
+                  {audience.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2.5 rounded-2xl px-3 py-2">
+                      {p.avatar ? (
+                        <img src={p.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" draggable={false} />
+                      ) : (
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                          {p.name[0]?.toUpperCase() ?? 'S'}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-sm text-white">{p.name}</span>
+                      {p.id === hostId && (
+                        <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Host</span>
+                      )}
+                      {p.id === myId && (
+                        <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/80">You</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Host moderation sheet */}
       {modTarget && (
@@ -2226,8 +2362,36 @@ export default function StreamRoomPage() {
       {/* Legibility scrim: comments float over the video */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
 
+      {/* Join chips: arrivals are announced, TikTok-style; the
+          comment stack rides up while chips are showing. */}
+      {joins.length > 0 && (
+        <div className="pointer-events-none absolute bottom-24 left-3 z-10 flex flex-col gap-1.5 lg:hidden">
+          {joins.map((j) => (
+            <div
+              key={j.key}
+              className={`flex w-fit animate-pop-in items-center gap-1.5 rounded-full py-1 pl-1 pr-3 backdrop-blur-sm ${j.gold ? 'bg-gold/25 ring-1 ring-gold/70' : 'bg-black/50'}`}
+            >
+              {j.avatar ? (
+                <img src={j.avatar} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
+              ) : (
+                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${j.gold ? 'bg-gold text-charcoal' : 'bg-primary text-white'}`}>
+                  {j.name[0]?.toUpperCase() ?? 'S'}
+                </span>
+              )}
+              <span className="text-xs text-white">
+                <span className="font-semibold">{j.name}</span> <span className="text-white/70">joined</span>
+              </span>
+              {j.gold && <Crown className="h-3.5 w-3.5 text-gold" aria-hidden />}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Comments */}
-      <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden lg:hidden">
+      <div
+        className="pointer-events-none absolute left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden lg:hidden"
+        style={{ bottom: joins.length > 0 ? `calc(6rem + ${joins.length * 2.25}rem)` : '6rem' }}
+      >
         {visibleMessages.map((m) => (
           <div key={m.id} className={m.gift ? 'w-fit max-w-full rounded-2xl bg-gold/25 px-2.5 py-1.5 ring-1 ring-gold/60 backdrop-blur-[2px]' : 'w-fit max-w-full rounded-2xl bg-black/35 px-2.5 py-1.5 backdrop-blur-[2px]'}>
             <p className="pointer-events-auto text-[13px] leading-snug text-white">
@@ -2485,7 +2649,7 @@ export default function StreamRoomPage() {
         </div>
 
         <div className="border-b border-white/10 p-4">
-          <GiftLeaderboard sessionId={id} variant="rail" />
+          <GiftLeaderboard sessionId={id} />
         </div>
 
         <div

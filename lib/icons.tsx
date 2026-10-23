@@ -56,6 +56,7 @@ import {
   Play as SaxPlay,
   Pause as SaxPause,
   Profile as SaxProfile,
+  People as SaxPeople,
   ProfileAdd as SaxProfileAdd,
   ProfileRemove as SaxProfileRemove,
   Radio as SaxRadio,
@@ -151,6 +152,7 @@ export const ClipboardList = wrap(SaxTaskSquare)
 export const Banknote = wrap(SaxMoneys)
 export const Wallet = wrap(SaxWallet)
 export const Users = wrap(SaxProfile)
+export const People = wrap(SaxPeople)
 export const User = wrap(SaxProfile)
 export const UserCheck = wrap(SaxProfileAdd)
 export const UserX = wrap(SaxProfileRemove)

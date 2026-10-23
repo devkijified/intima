@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Room, LocalVideoTrack, LocalAudioTrack, createLocalVideoTrack, createLocalAudioTrack, VideoPresets, type TrackPublishOptions } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
@@ -120,6 +120,23 @@ export default function GoLivePage() {
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [viewerCount, setViewerCount] = useState(0)
+  // Join announcements for the host: TikTok tells the streamer who
+  // just walked in, by name.
+  const [joins, setJoins] = useState<{ key: string; name: string; avatar: string | null }[]>([])
+  const pushJoin = useCallback(async (uid: string) => {
+    if (!uid) return
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('profiles')
+      .select('display_name, avatar_url')
+      .eq('id', uid)
+      .maybeSingle()
+    const name = (data as { display_name?: string } | null)?.display_name ?? 'Someone'
+    const avatar = (data as { avatar_url?: string | null } | null)?.avatar_url ?? null
+    const key = `${uid}-${Date.now()}`
+    setJoins((prev) => [...prev.slice(-2), { key, name, avatar }])
+    window.setTimeout(() => setJoins((prev) => prev.filter((j) => j.key !== key)), 4200)
+  }, [])
   const [giftCount, setGiftCount] = useState(0)
   const [giftEarnings, setGiftEarnings] = useState(0)
   const [muted, setMuted] = useState(false)
@@ -438,7 +455,10 @@ export default function GoLivePage() {
       // in-room notice, instead of not going live at all).
       const room = new Room()
       roomRef.current = room
-      room.on('participantConnected', () => setViewerCount(room.remoteParticipants.size))
+      room.on('participantConnected', (p) => {
+        setViewerCount(room.remoteParticipants.size)
+        if (p) void pushJoin(p.identity)
+      })
       room.on('participantDisconnected', () => setViewerCount(room.remoteParticipants.size))
       await room.connect(url, token)
       await room.localParticipant.publishTrack(cam, CAMERA_PUBLISH_OPTIONS)
@@ -876,6 +896,25 @@ export default function GoLivePage() {
           text="This is your share of the gifts from this stream. Intima keeps half of every gift, so a 100 coin gift adds 50 coins here."
         />
       </div>
+      {/* Join announcements */}
+      {joins.length > 0 && (
+        <div className="pointer-events-none absolute bottom-28 left-4 z-20 flex flex-col gap-1.5">
+          {joins.map((j) => (
+            <div key={j.key} className="flex w-fit animate-pop-in items-center gap-1.5 rounded-full bg-black/55 py-1 pl-1 pr-3 backdrop-blur">
+              {j.avatar ? (
+                <img src={j.avatar} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
+              ) : (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+                  {j.name[0]?.toUpperCase() ?? 'S'}
+                </span>
+              )}
+              <span className="text-xs text-white">
+                <span className="font-semibold">{j.name}</span> <span className="text-white/70">joined</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Bottom controls: one glass control bar over a scrim */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
       <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
