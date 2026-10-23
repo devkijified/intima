@@ -583,8 +583,11 @@ export default function ThreadPage() {
     }
   }
 
-  const templates = other?.isProvider ? CHAT_TEMPLATES : CHAT_TEMPLATES
-  const quickReplies = !other?.isProvider ? PROVIDER_QUICK_REPLIES : null
+  const templates = CHAT_TEMPLATES
+  // Provider quick replies belong to whoever is THIS connection's
+  // provider, decided by the connection row, never by the other
+  // person's account role.
+  const quickReplies = viewerIsProvider ? PROVIDER_QUICK_REPLIES : null
 
   return (
     <div className="-mx-4 -my-8 flex h-full min-h-0 flex-col bg-[#efe7db] sm:-mx-6">
@@ -635,7 +638,7 @@ export default function ThreadPage() {
           disputeDeadline={connInfo.disputeDeadline}
           feeNgn={connInfo.feeNgn}
           otherName={other?.display_name ?? 'them'}
-          viewerIsClient={!!other?.isProvider}
+          viewerIsClient={!viewerIsProvider}
         />
       )}
 
@@ -1028,7 +1031,7 @@ export default function ThreadPage() {
             >
               <ImageIcon className="h-5 w-5 text-neutral-500" />
             </button>
-            {!other?.isProvider && active && (
+            {viewerIsProvider && active && (
               <button
                 onClick={() => setShowPpv((v) => !v)}
                 aria-label="Send locked media"
