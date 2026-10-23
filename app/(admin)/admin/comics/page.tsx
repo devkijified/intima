@@ -16,6 +16,10 @@ interface Comic {
   is_featured?: boolean
 }
 
+// Select value meaning "the fetched page is a new comic": the
+// import creates it from the preview first, then fills it.
+const NEW_TARGET = '__new__'
+
 type PagePreview =
   | { kind: 'series'; title: string; storyStatus: string | null; relay?: boolean; coverUrl?: string | null; chapters: Array<{ no: number; url: string; label: string }> }
   | { kind: 'episode'; title: string; storyStatus: string | null; relay?: boolean; images: Array<{ url: string; keep: boolean; reason: string | null }> }
@@ -165,18 +169,32 @@ export default function AdminComicsPage() {
       const keep: Record<string, boolean> = {}
       for (const img of d.images) keep[img.url] = img.keep
       setPageKeep(keep)
+      // A single chapter belongs to a comic that already exists;
+      // never let a leftover new-comic target from a series
+      // preview create a comic named after one chapter.
+      if (comicId === NEW_TARGET) setComicId(comics[0]?.id ?? '')
     }
     if (d.kind === 'series') {
       const keep: Record<number, boolean> = {}
       for (const ch of d.chapters) keep[ch.no] = true
       setChapterKeep(keep)
+      // Work out whose episodes these are without being told: a
+      // shelf comic with the same title is the target. No match
+      // means this page is a NEW comic, so the target becomes
+      // create-on-import instead of whichever comic happened to
+      // sit first in the list (owner catch, 2026-10-24: a fetched
+      // "Gisela" was about to pour 25 episodes into the unrelated
+      // comic that was selected by default).
+      const wanted = (d.title ?? '').trim().toLowerCase()
+      const match = comics.find((c) => c.title.trim().toLowerCase() === wanted)
+      setComicId(match ? match.id : NEW_TARGET)
     }
   }
 
-  async function importPageEpisode(url: string, title: string, keep?: string[]) {
+  async function importPageEpisode(url: string, title: string, keep: string[] | undefined, targetId: string) {
     const res = await fetch('/api/admin/comics/import', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'page-import', url, comicId, title, keep }),
+      body: JSON.stringify({ action: 'page-import', url, comicId: targetId, title, keep }),
     })
     const d = await res.json()
     if (!res.ok) throw new Error(d.error ?? 'Import failed.')
@@ -187,19 +205,39 @@ export default function AdminComicsPage() {
     if (!pagePreview || !comicId) return
     setImporting(true); setImportLog([])
     try {
+      // A new-comic target is created from the preview first
+      // (title plus the source's story status), then the import
+      // fills it like any other comic.
+      let targetId = comicId
+      const leadLog: string[] = []
+      if (comicId === NEW_TARGET) {
+        const cres2 = await fetch('/api/admin/comics', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ series: { title: pagePreview.title, storyStatus: pagePreview.storyStatus === 'completed' ? 'completed' : 'ongoing' } }),
+        })
+        const cd2 = await cres2.json().catch(() => ({}))
+        if (!cres2.ok || !cd2.comic?.id) {
+          setMsg(cd2.error ?? 'Could not create the new comic.')
+          return
+        }
+        targetId = cd2.comic.id as string
+        setComicId(targetId)
+        leadLog.push(`Created the new comic “${pagePreview.title}”.`)
+        setImportLog([...leadLog])
+      }
       if (pagePreview.kind === 'episode') {
         const keep = pagePreview.images.filter((i) => pageKeep[i.url]).map((i) => i.url)
-        const d = await importPageEpisode(linkUrl.trim(), pagePreview.title, keep)
+        const d = await importPageEpisode(linkUrl.trim(), pagePreview.title, keep, targetId)
         setMsg(`Imported as Episode ${d.episode.episode_no} (draft), ${d.panels} panels served through our CDN. Publish when ready.`)
         setPagePreview(null)
       } else {
         const picked = pagePreview.chapters.filter((c) => chapterKeep[c.no])
-        const log: string[] = []
+        const log: string[] = [...leadLog]
         let okCount = 0
         try {
           const cres = await fetch('/api/admin/comics/import', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'set-cover', comicId, seriesUrl: linkUrl.trim() }),
+            body: JSON.stringify({ action: 'set-cover', comicId: targetId, seriesUrl: linkUrl.trim() }),
           })
           const cd = await cres.json().catch(() => ({}))
           if (cres.ok && cd.alreadySet) log.push('This comic already has a cover, so the series page cover was skipped.')
@@ -213,7 +251,7 @@ export default function AdminComicsPage() {
           log.push(`Importing ${ch.no}. ${ch.label}…`)
           setImportLog([...log])
           try {
-            const d = await importPageEpisode(ch.url, ch.label)
+            const d = await importPageEpisode(ch.url, ch.label, undefined, targetId)
             log[log.length - 1] = `Done: ${ch.no}. ${ch.label} became Episode ${d.episode.episode_no} (${d.panels} panels).`
             okCount += 1
           } catch (e) {
@@ -272,7 +310,7 @@ export default function AdminComicsPage() {
       body: JSON.stringify({
         title: title.trim(),
         synopsis: synopsis.trim(),
-        comicId: comicId || undefined,
+        comicId: comicId && comicId !== NEW_TARGET ? comicId : undefined,
         panelUrls: panels.split('\n').map((u) => u.trim()).filter(Boolean),
       }),
     })
@@ -442,7 +480,7 @@ export default function AdminComicsPage() {
         <div className="mt-4 space-y-3">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-neutral-500">Comic</span>
-            <select value={comicId} onChange={(e) => setComicId(e.target.value)}
+            <select value={comicId === NEW_TARGET ? '' : comicId} onChange={(e) => setComicId(e.target.value)}
               className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
               {comics.length === 0 && <option value="">No comics yet, create one above</option>}
               {comics.map((c) => (
@@ -528,11 +566,27 @@ export default function AdminComicsPage() {
           <select value={comicId} onChange={(e) => setComicId(e.target.value)}
             className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
             {comics.length === 0 && <option value="">No comics yet, create one above</option>}
+            {pagePreview?.kind === 'series' && (
+              <option value={NEW_TARGET}>New comic: “{pagePreview.title}” (created on import)</option>
+            )}
             {comics.map((c) => (
               <option key={c.id} value={c.id}>{c.title}</option>
             ))}
           </select>
         </label>
+        {pagePreview?.kind === 'series' && comicId === NEW_TARGET && (
+          <p className="mt-2 rounded-xl bg-[#C9A84C]/15 px-3 py-2 text-xs leading-relaxed text-charcoal">
+            “{pagePreview.title}” is not on the shelf yet, so the target is a new comic. Importing creates it first, with the source’s story status, then adds these episodes as drafts.
+          </p>
+        )}
+        {pagePreview?.kind === 'series' && comicId !== NEW_TARGET && (() => {
+          const sel = comics.find((c) => c.id === comicId)
+          return sel && sel.title.trim().toLowerCase() !== pagePreview.title.trim().toLowerCase() ? (
+            <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 ring-1 ring-amber-100">
+              Careful: this page is “{pagePreview.title}”, but the episodes will land in “{sel.title}”, and that comic will take the source’s story status too. If “{pagePreview.title}” is its own comic, pick the New comic option above instead.
+            </p>
+          ) : null
+        })()}
         {pagePreview && pagePreview.kind === 'series' && (
           <div className="mt-4 space-y-2">
             <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
