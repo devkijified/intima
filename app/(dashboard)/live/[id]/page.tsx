@@ -532,7 +532,11 @@ export default function StreamRoomPage() {
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchend', onEnd)
     }
-  }, [giftOpen, panelOpen, modTarget, cohostInvite, router])
+    // phase is a dependency on purpose: the stage element only
+    // exists once the room is live (the loading phase renders a
+    // different tree), so the listeners must re-attach when the
+    // stage first mounts.
+  }, [phase, giftOpen, panelOpen, modTarget, cohostInvite, router])
 
   // Rail chat follows new comments while the reader is near the
   // bottom, and stays put when they have scrolled up to read.
