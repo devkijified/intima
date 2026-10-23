@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 
 const READER_COOKIE = 'intima_reader_id';
 const READER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // one year
@@ -72,10 +72,40 @@ export async function POST(req: NextRequest) {
     return respond({ error: 'Episode not found' }, 404);
   }
 
+  // Inflation guard for guests (migration 080): reader keys alone are
+  // rotatable, so one network address may mint only a capped number of
+  // counted first views per hour across all episodes. The source IP is
+  // stored only as a salted hash. Signed-in readers are accountable
+  // identities and are never capped.
+  let ipHash: string | null = null;
+  if (!user) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    ipHash = createHash('sha256')
+      .update(`${ip}|${process.env.CRON_SECRET ?? 'intima-ip-salt'}`)
+      .digest('hex');
+    const { data: existing } = await svc.from('comic_reads')
+      .select('id').eq('episode_id', episodeId).eq('viewer_id', readerId).maybeSingle();
+    if (!existing) {
+      const { data: capRow } = await svc.from('platform_settings')
+        .select('value').eq('key', 'comic_ip_hourly_cap').maybeSingle();
+      const cap = Number(capRow?.value ?? 300) || 300;
+      const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+      const { count } = await svc.from('comic_reads')
+        .select('id', { count: 'exact', head: true })
+        .eq('ip_hash', ipHash).gte('first_read_at', hourAgo);
+      if ((count ?? 0) >= cap) {
+        // Over the hourly minting cap: accept the open quietly and
+        // count nothing, so scripts gain nothing by rotating keys.
+        return respond({ ok: true, capped: true });
+      }
+    }
+  }
+
   const { error: insertError } = await svc.from('comic_reads').insert({
     episode_id: episodeId,
     user_id: user?.id ?? null,
     viewer_key: user ? null : guestId,
+    ip_hash: ipHash,
     completed: !!completed,
     completed_at: completed ? new Date().toISOString() : null,
   });

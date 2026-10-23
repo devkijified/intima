@@ -227,7 +227,7 @@ export function StoryViewer({
           companions, press and hold pauses. One pointer path covers
           touch and mouse drags alike. */}
       <div
-        className="relative h-full w-full"
+        className="relative h-full w-full touch-none select-none"
         onPointerDown={(e) => {
           setPaused(true);
           pointerX.current = e.clientX;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { StoryViewer, type Story } from './StoryViewer';
@@ -171,7 +172,7 @@ export function StoryTray() {
           </button>
         ))}
       </div>
-      {viewer && (
+      {viewer && createPortal(
         <StoryViewer
           stories={viewer.stories}
           initialIndex={viewer.index}
@@ -184,7 +185,8 @@ export function StoryTray() {
             setViewer(null);
             router.push(`/companion/${s.provider_id}?connect=1`);
           }}
-        />
+        />,
+        document.body
       )}
     </>
   );

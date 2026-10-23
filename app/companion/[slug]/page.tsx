@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -1205,9 +1206,11 @@ export default function ModelDetailPage() {
 
       <p className="px-4 pb-2 text-xs text-neutral-500">Area location only, never an exact address</p>
 
-      {/* Story viewer */}
-      {showStories && stories.length > 0 && (
-        <StoryViewer stories={stories} initialIndex={storyStartIndex} onClose={() => setShowStories(false)} />
+      {/* Story viewer: portalled to the body so its z-index competes
+          at the root and always tops page chrome. */}
+      {showStories && stories.length > 0 && createPortal(
+        <StoryViewer stories={stories} initialIndex={storyStartIndex} onClose={() => setShowStories(false)} />,
+        document.body
       )}
 
       {/* Lightbox */}
