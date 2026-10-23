@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ngnForCoins } from '@/lib/utils/helpers'
-import { Star } from '@/lib/icons'
+import { Crown, Star } from '@/lib/icons'
 
 interface LeaderRow {
   userId: string
   name: string
   coins: number
   level: number
+  avatar: string | null
 }
 
 /** In-stream gift leaderboard: top gifters this session, live-updated.
@@ -39,16 +40,17 @@ export function GiftLeaderboard({
       const ids = Object.keys(totals)
       if (ids.length === 0) { if (live) setRows([]); return }
       const { data: profs } = await supabase
-        .from('profiles').select('id, display_name').in('id', ids)
+        .from('profiles').select('id, display_name, avatar_url').in('id', ids)
       const { data: stats } = await supabase
         .from('gifter_stats').select('user_id, level').in('user_id', ids)
       const levelBy: Record<string, number> = {}
       for (const s of (stats ?? []) as any[]) levelBy[s.user_id] = s.level
       const names: Record<string, string> = {}
-      for (const p of (profs ?? []) as any[]) names[p.id] = p.display_name ?? 'Someone'
+      const avatars: Record<string, string | null> = {}
+      for (const p of (profs ?? []) as any[]) { names[p.id] = p.display_name ?? 'Someone'; avatars[p.id] = p.avatar_url ?? null }
       if (live) {
         setRows(ids
-          .map((id) => ({ userId: id, name: names[id] ?? 'Someone', coins: totals[id], level: levelBy[id] ?? 1 }))
+          .map((id) => ({ userId: id, name: names[id] ?? 'Someone', coins: totals[id], level: levelBy[id] ?? 1, avatar: avatars[id] ?? null }))
           .sort((a, b) => b.coins - a.coins)
           .slice(0, 10))
       }
@@ -97,19 +99,30 @@ export function GiftLeaderboard({
 
   if (rows.length === 0) return null
   return (
-    <div className="pointer-events-none absolute left-3 top-24 z-20 w-44 rounded-2xl bg-black/45 p-2.5 backdrop-blur-sm lg:hidden">
+    <div className="pointer-events-none absolute left-3 top-24 z-20 w-48 rounded-2xl bg-black/55 p-2.5 shadow-lg shadow-black/40 ring-1 ring-gold/40 backdrop-blur-sm lg:hidden">
       <p className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-gold">
-        <Star className="h-3 w-3" aria-hidden /> Top gifters
+        <Crown className="h-3.5 w-3.5" aria-hidden /> Top gifters
       </p>
-      <div className="mt-1.5 space-y-1.5">
+      <div className="mt-2 space-y-1.5">
         {rows.slice(0, 5).map((r, i) => (
-          <div key={r.userId} className="flex items-center justify-between text-[11px] text-white">
-            <span className="flex items-center gap-1.5 truncate">
-              <span className={`font-bold ${i === 0 ? 'text-gold' : 'text-white/60'}`}>{i + 1}.</span>
-              <span className="truncate">{r.name}</span>
+          <div key={r.userId} className={`flex items-center justify-between gap-1.5 text-[11px] text-white ${i === 0 ? 'rounded-xl bg-gold/15 px-1.5 py-1 ring-1 ring-gold/50' : 'px-1.5'}`}>
+            <span className="flex min-w-0 items-center gap-1.5">
+              {i === 0 ? (
+                <Crown className="h-3.5 w-3.5 shrink-0 text-gold" aria-hidden />
+              ) : (
+                <span className="w-3.5 shrink-0 text-center font-bold text-white/60">{i + 1}</span>
+              )}
+              {r.avatar ? (
+                <img src={r.avatar} alt="" className={`h-5 w-5 shrink-0 rounded-full object-cover ${i === 0 ? 'ring-1 ring-gold' : ''}`} draggable={false} />
+              ) : (
+                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white ${i === 0 ? 'bg-gold text-charcoal' : 'bg-primary'}`}>
+                  {r.name[0]?.toUpperCase() ?? 'S'}
+                </span>
+              )}
+              <span className={`truncate ${i === 0 ? 'font-bold text-gold' : ''}`}>{r.name}</span>
               <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-white">Lv{r.level}</span>
             </span>
-            <span className="shrink-0 font-mono text-white/80">{r.coins.toLocaleString()}</span>
+            <span className={`shrink-0 font-mono ${i === 0 ? 'font-bold text-gold' : 'text-white/80'}`}>{r.coins.toLocaleString()}</span>
           </div>
         ))}
       </div>

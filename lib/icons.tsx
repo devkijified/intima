@@ -31,6 +31,7 @@ import {
   Eye as SaxEye,
   EyeSlash as SaxEyeSlash,
   ExportSquare as SaxExportSquare,
+  ArrowForward as SaxArrowForward,
   Flag as SaxFlag,
   GalleryExport as SaxGalleryExport,
   Gift as SaxGift,
@@ -183,6 +184,7 @@ export const SearchX = wrap(SaxSearchNormal1)
 export const Send = wrap(SaxSend2)
 export const Share = wrap(SaxExportSquare)
 export const Share2 = wrap(SaxExportSquare)
+export const ShareForward = wrap(SaxArrowForward)
 export const Play = wrap(SaxPlay)
 export const Pause = wrap(SaxPause)
 export const Wifi = wrap(SaxWifi)

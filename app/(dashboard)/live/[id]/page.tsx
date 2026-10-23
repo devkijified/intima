@@ -12,10 +12,10 @@ import GiftObjectIcon from '@/components/live/GiftObjectIcon'
 import type { GiftCatalogItem, GiftFxEvent } from '@/components/live/giftTypes'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, VideoPresets, createLocalVideoTrack, createLocalAudioTrack, type RemoteTrackPublication, type TrackPublishOptions } from 'livekit-client'
+import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, VideoPresets, createLocalVideoTrack, createLocalAudioTrack, type RemoteTrackPublication, type TrackPublishOptions, type TrackPublication, type Participant } from 'livekit-client'
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
-import { ChevronUp, Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, Share2, X,
+import { ChevronUp, Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, ShareForward, X,
   PictureInPicture2, Smartphone } from '@/lib/icons'
 import { formatCompactCount, ngnForCoins } from '@/lib/utils/helpers'
 
@@ -62,6 +62,7 @@ interface ChatMsg {
   mine: boolean
   senderId?: string
   level?: number
+  gift?: boolean
 }
 
 interface PkBattleState {
@@ -247,6 +248,10 @@ export default function StreamRoomPage() {
   })
   const qualityChoiceRef = useRef<QualityChoice>(qualityChoice)
   const hostVideoPubRef = useRef<RemoteTrackPublication | null>(null)
+  // Host presence for the TikTok-style away state: 'away' when the
+  // host has left the room (stream row still live), 'camoff' when she
+  // is present but her camera is off, null while she is on stage.
+  const [hostAway, setHostAway] = useState<'away' | 'camoff' | null>(null)
 
   /* ------------------------------ helpers --------------------------------- */
 
@@ -766,19 +771,38 @@ export default function StreamRoomPage() {
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
         attachRemoteVideo(track, participant?.identity)
         noteHostVideoPub(track, pub, participant?.identity)
+        if (participant && participant.identity === session.provider_id && track.kind === Track.Kind.Video) {
+          setHostAway(null)
+        }
       })
       room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, _pub: unknown, participant: RemoteParticipant) => {
         if (participant && participant.identity !== session.provider_id) {
           detachTile(participant.identity)
         } else {
           hostVideoPubRef.current = null
+          setHostAway(room.remoteParticipants.has(session.provider_id) ? 'camoff' : 'away')
         }
       })
-      room.on(RoomEvent.ParticipantConnected, updateViewers)
+      room.on(RoomEvent.TrackMuted, (pub: TrackPublication, participant: Participant) => {
+        if (participant.identity === session.provider_id && pub.kind === Track.Kind.Video) {
+          setHostAway((a) => (a === 'away' ? a : 'camoff'))
+        }
+      })
+      room.on(RoomEvent.TrackUnmuted, (pub: TrackPublication, participant: Participant) => {
+        if (participant.identity === session.provider_id && pub.kind === Track.Kind.Video) {
+          setHostAway(null)
+        }
+      })
+      room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+        updateViewers()
+        if (participant && participant.identity === session.provider_id) setHostAway(null)
+      })
       room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
         updateViewers()
         if (participant && participant.identity !== session.provider_id) {
           detachTile(participant.identity)
+        } else if (participant) {
+          setHostAway('away')
         }
       })
       room.on(RoomEvent.DataReceived, handleDataPacket)
@@ -804,6 +828,16 @@ export default function StreamRoomPage() {
         })
       })
       updateViewers()
+      // Initial away state: the stream row is live but the host may
+      // not be in the room (app closed, connection dropped).
+      {
+        const hostP = room.remoteParticipants.get(session.provider_id)
+        if (!hostP) setHostAway('away')
+        else {
+          const vids = [...hostP.videoTrackPublications.values()]
+          if (vids.length === 0 || vids.every((v) => !v.track || v.isMuted)) setHostAway('camoff')
+        }
+      }
       watchingNowRef.current = true
       setPhase('live')
 
@@ -868,17 +902,18 @@ export default function StreamRoomPage() {
               senderName,
             }
             fxRef.current?.push(evt)
-            // Witness line for the big tiers: rendered locally on
-            // every client from this same realtime row, so a stage
-            // or takeover send stays witnessed in chat after its
-            // animation ends, with no extra packets on the wire.
-            if (evt.animTier === 'stage' || evt.animTier === 'takeover') {
+            // Witness line for every gift: rendered locally on every
+            // client from this same realtime row, styled as a gold
+            // gift chip in the comment feed (TikTok-style), with no
+            // extra packets on the wire.
+            {
               pushMessage({
                 id: `gift-${row.id}`,
                 name: senderName,
                 body: `sent ${gift.name} · ${gift.coin_cost.toLocaleString()} coins (${ngnForCoins(gift.coin_cost)})`,
                 mine: row.sender_id === user.id,
                 senderId: row.sender_id,
+                gift: true,
               })
             }
           }
@@ -1587,6 +1622,33 @@ export default function StreamRoomPage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/60 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
+      {/* Host away state: TikTok tells viewers the companion stepped
+          away instead of leaving a frozen or black stage. */}
+      {hostAway && !isHostMe && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 px-8 text-center backdrop-blur-[2px]">
+          {stream?.provider?.avatar_url ? (
+            <img src={stream.provider.avatar_url} alt={hostName} className="h-20 w-20 rounded-full object-cover ring-2 ring-gold/70" draggable={false} />
+          ) : (
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-white ring-2 ring-gold/70">
+              {hostName[0]?.toUpperCase() ?? 'H'}
+            </div>
+          )}
+          <p className="mt-4 text-base font-bold text-white">
+            {hostAway === 'away' ? `${hostName} stepped away` : `${hostName} turned her camera off`}
+          </p>
+          <p className="mt-1 max-w-[260px] text-sm leading-relaxed text-white/70">
+            {hostAway === 'away'
+              ? 'She will be back shortly. Hang tight, the stream is still live.'
+              : 'The stream is still live. Her camera should be back any moment.'}
+          </p>
+          <div className="mt-4 flex items-center gap-1.5" aria-hidden>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold [animation-delay:200ms]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold [animation-delay:400ms]" />
+          </div>
+        </div>
+      )}
+
       {/* Top-left: host chip + LIVE + viewers */}
       <div className="absolute left-3 top-3 flex items-center gap-2 lg:hidden">
         <div className="flex items-center gap-2 rounded-full bg-black/50 py-1 pl-1 pr-3 backdrop-blur-sm">
@@ -1701,7 +1763,7 @@ export default function StreamRoomPage() {
             aria-label="Share stream"
             className="flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm active:scale-95"
           >
-            <Share2 className="h-4 w-4" />
+            <ShareForward className="h-5 w-5" />
           </button>
         </Tooltip>
         <Tooltip label="Close stream" side="bottom" align="end">
@@ -2152,7 +2214,7 @@ export default function StreamRoomPage() {
       {/* Comments */}
       <div className="pointer-events-none absolute bottom-24 left-3 right-20 flex max-h-56 flex-col justify-end gap-1.5 overflow-hidden lg:hidden">
         {visibleMessages.map((m) => (
-          <div key={m.id} className="w-fit max-w-full rounded-2xl bg-black/35 px-2.5 py-1.5 backdrop-blur-[2px]">
+          <div key={m.id} className={m.gift ? 'w-fit max-w-full rounded-2xl bg-gold/25 px-2.5 py-1.5 ring-1 ring-gold/60 backdrop-blur-[2px]' : 'w-fit max-w-full rounded-2xl bg-black/35 px-2.5 py-1.5 backdrop-blur-[2px]'}>
             <p className="pointer-events-auto text-[13px] leading-snug text-white">
               {typeof m.level === 'number' && (
                 <span className="mr-1 rounded-full bg-gold px-1.5 py-px align-middle text-[9px] font-bold text-charcoal">
