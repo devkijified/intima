@@ -32,13 +32,17 @@ interface StoryViewerProps {
 const SLIDE_MS = 5000;
 
 /**
- * WhatsApp Status-style fullscreen story viewer.
+ * Fullscreen story viewer in the flow people already know from
+ * Instagram and WhatsApp Status.
  *
  * The story list arrives grouped by companion. The progress bars
  * show only the current companion's segments. Tap right = next
- * story, tap left = previous story; at a companion's last story
- * the next tap moves to the next companion, and a horizontal
- * swipe jumps straight between companions. Press and hold pauses.
+ * story of THIS companion, and only at her last story does the
+ * tap cross into the next companion (tap left mirrors it back).
+ * A horizontal swipe jumps straight between companions, landing
+ * where you left that companion if you visited her this session.
+ * Swipe down closes. Press and hold pauses, and letting go after
+ * a hold never advances: the hold was for reading, not a tap.
  * The header opens her profile, and a CTA row sits under the
  * media so a story can turn into a connection.
  */
@@ -56,9 +60,17 @@ export function StoryViewer({
   const [myId, setMyId] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const pointerX = useRef<number | null>(null);
+  const pointerY = useRef<number | null>(null);
+  // When the current press began: a release after a long hold is
+  // not a tap, and the zones must not advance on it.
+  const downAt = useRef(0);
   // Stamp of the last swipe: the tap zones ignore the click a
   // browser synthesises right after a swipe ends on them.
   const lastSwipeAt = useRef(0);
+  // Where each companion was left this session, by group index:
+  // swiping back to a companion resumes her at that story instead
+  // of restarting her or dumping you at a boundary.
+  const leftAtByGroup = useRef(new Map<number, number>());
   const story = stories[index];
 
   // Group boundaries: runs of consecutive stories per companion.
@@ -96,7 +108,8 @@ export function StoryViewer({
   const nextCompanion = useCallback(() => {
     const g = groups[groupIndex + 1];
     if (g) {
-      setIndex(g.start);
+      const leftAt = leftAtByGroup.current.get(groupIndex + 1) ?? 0;
+      setIndex(g.start + Math.min(leftAt, g.count - 1));
       setProgress(0);
     } else {
       onClose();
@@ -104,19 +117,21 @@ export function StoryViewer({
   }, [groups, groupIndex, onClose]);
 
   const prevCompanion = useCallback(() => {
-    // Mid-group: a swipe back restarts the current companion first
-    // (WhatsApp behaviour); at her first story it jumps back one.
-    if (group && indexInGroup > 0) {
-      setIndex(group.start);
-      setProgress(0);
-      return;
-    }
+    // A swipe back always jumps to the previous companion, even
+    // mid-group: restarting the current companion first (the old
+    // behaviour) reads as the swipe being ignored.
     const g = groups[groupIndex - 1];
     if (g) {
-      setIndex(g.start);
+      const leftAt = leftAtByGroup.current.get(groupIndex - 1) ?? 0;
+      setIndex(g.start + Math.min(leftAt, g.count - 1));
       setProgress(0);
     }
-  }, [groups, groupIndex, group, indexInGroup]);
+  }, [groups, groupIndex]);
+
+  // Remember where each companion is left, for swipe returns.
+  useEffect(() => {
+    if (group) leftAtByGroup.current.set(groupIndex, indexInGroup);
+  }, [group, groupIndex, indexInGroup]);
 
   // Who am I (for hiding the CTA on my own stories) + view marking.
   useEffect(() => {
@@ -221,26 +236,34 @@ export function StoryViewer({
         </Tooltip>
       </div>
 
-      {/* Media: fills the frame like WhatsApp Status. Tap zones go
-          story to story (crossing into the next companion at her
-          last story), horizontal swipes jump straight between
-          companions, press and hold pauses. One pointer path covers
-          touch and mouse drags alike. */}
+      {/* Media: fills the frame. Tap zones go story to story
+          (crossing into the next companion only at her last
+          story), horizontal swipes jump straight between
+          companions, a downward swipe closes, press and hold
+          pauses without advancing on release. One pointer path
+          covers touch and mouse drags alike. */}
       <div
         className="relative h-full w-full touch-none select-none"
         onPointerDown={(e) => {
           setPaused(true);
           pointerX.current = e.clientX;
+          pointerY.current = e.clientY;
+          downAt.current = Date.now();
         }}
         onPointerUp={(e) => {
           setPaused(false);
-          if (pointerX.current === null) return;
+          if (pointerX.current === null || pointerY.current === null) return;
           const dx = e.clientX - pointerX.current;
+          const dy = e.clientY - pointerY.current;
           pointerX.current = null;
-          if (dx <= -60) {
+          pointerY.current = null;
+          if (dy >= 80 && Math.abs(dy) > Math.abs(dx)) {
+            lastSwipeAt.current = Date.now();
+            onClose();
+          } else if (dx <= -45) {
             lastSwipeAt.current = Date.now();
             nextCompanion();
-          } else if (dx >= 60) {
+          } else if (dx >= 45) {
             lastSwipeAt.current = Date.now();
             prevCompanion();
           }
@@ -248,10 +271,12 @@ export function StoryViewer({
         onPointerLeave={() => {
           setPaused(false);
           pointerX.current = null;
+          pointerY.current = null;
         }}
         onPointerCancel={() => {
           setPaused(false);
           pointerX.current = null;
+          pointerY.current = null;
         }}
       >
         {story.media_type === 'photo' ? (
@@ -270,13 +295,21 @@ export function StoryViewer({
         <PhotoWatermark username={story.provider_username} variant="edge" />
         <button
           aria-label="Previous"
-          onClick={() => { if (Date.now() - lastSwipeAt.current >= 400) prev(); }}
-          className="absolute inset-y-0 left-0 z-10 w-1/3"
+          onClick={() => {
+            if (Date.now() - lastSwipeAt.current < 400) return;
+            if (Date.now() - downAt.current > 350) return;
+            prev();
+          }}
+          className="absolute inset-y-0 left-0 z-10 w-[30%]"
         />
         <button
           aria-label="Next"
-          onClick={() => { if (Date.now() - lastSwipeAt.current >= 400) next(); }}
-          className="absolute inset-y-0 right-0 z-10 w-1/3"
+          onClick={() => {
+            if (Date.now() - lastSwipeAt.current < 400) return;
+            if (Date.now() - downAt.current > 350) return;
+            next();
+          }}
+          className="absolute inset-y-0 right-0 z-10 w-[70%]"
         />
       </div>
 
