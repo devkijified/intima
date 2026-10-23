@@ -747,7 +747,11 @@ export default function ModelDetailPage() {
   const showRepeatRate = provider.repeatClientRate !== null && provider.distinctClientCount >= 3
   const showTrust = showResponseRate || showReplyTime || showCancellationRate || showRepeatRate
 
-  const photos = [provider.avatar, ...provider.gallery].filter(Boolean) as string[]
+  // Her avatar often is also her first gallery photo (that is how
+  // profiles get seeded and how companions upload); showing it
+  // twice in the grid and the lightbox reads as a duplicate, so
+  // the gallery copy is dropped wherever it repeats the avatar.
+  const photos = [provider.avatar, ...provider.gallery.filter((g) => g !== provider.avatar)].filter(Boolean) as string[]
   const slides: Array<{ kind: 'photo' | 'video'; src: string }> = [
     ...photos.map((src) => ({ kind: 'photo' as const, src })),
     ...provider.videos.map((src) => ({ kind: 'video' as const, src })),
