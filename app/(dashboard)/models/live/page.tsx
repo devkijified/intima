@@ -463,6 +463,13 @@ export default function GoLivePage() {
       })
       room.on('participantDisconnected', () => setViewerCount(countRealIdentities(room.remoteParticipants.keys())))
       await room.connect(url, token)
+      // A (re)connecting host clears any away countdown a
+      // previous drop started: the stamp lives on the session.
+      void fetch('/api/live/away', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, action: 'clear' }),
+      }).catch(() => {})
       await room.localParticipant.publishTrack(cam, CAMERA_PUBLISH_OPTIONS)
       if (mic) await room.localParticipant.publishTrack(mic)
 

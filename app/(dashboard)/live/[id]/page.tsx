@@ -5,6 +5,7 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 import { GiftLeaderboard, LeaderboardList, LeaderboardPill } from '@/components/live/GiftLeaderboard'
 import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
 import { isPreviewIdentity, countRealIdentities } from '@/lib/live/preview'
+import { AWAY_GRACE_SECONDS, pronounsForGender, formatCountdown } from '@/lib/live/hostAway'
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import { useDock } from '@/components/dock/FloatingDock'
 import { FanBadge } from '@/components/social/FanBadge'
@@ -52,7 +53,7 @@ interface Stream {
   pinned_text: string | null
   slow_mode_seconds: number
   blocked_words: string[]
-  provider: { display_name: string; avatar_url: string | null } | null
+  provider: { display_name: string; avatar_url: string | null; gender: string | null } | null
 }
 
 type GiftItem = GiftCatalogItem
@@ -266,6 +267,63 @@ export default function StreamRoomPage() {
   // host has left the room (stream row still live), 'camoff' when she
   // is present but her camera is off, null while she is on stage.
   const [hostAway, setHostAway] = useState<'away' | 'camoff' | null>(null)
+
+  // Host-away countdown (stepped-away only): the server stamps
+  // away_since on the session, every viewer counts the grace
+  // down from that one stamp, and when it runs out the /end
+  // action closes the live for everyone. The camera-off state
+  // has no countdown: the host is still in the room.
+  const [awayEndsAt, setAwayEndsAt] = useState<number | null>(null)
+  const [, setAwayTick] = useState(0)
+  const awayEndCalledRef = useRef(false)
+  const awayActiveRef = useRef(false)
+
+  useEffect(() => {
+    if (hostAway === null && awayActiveRef.current) {
+      awayActiveRef.current = false
+      setAwayEndsAt(null)
+      void fetch('/api/live/away', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: id, action: 'clear' }),
+      }).catch(() => {})
+    }
+    if (hostAway !== 'away') return
+    awayActiveRef.current = true
+    awayEndCalledRef.current = false
+    let stopped = false
+    const call = async (action: string) => {
+      try {
+        const r = await fetch('/api/live/away', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: id, action }),
+        })
+        return r.ok ? await r.json() : null
+      } catch { return null }
+    }
+    const applyStamp = (j: { awaySince?: string | null } | null) => {
+      if (!stopped && j?.awaySince) {
+        setAwayEndsAt(new Date(j.awaySince).getTime() + AWAY_GRACE_SECONDS * 1000)
+      }
+    }
+    void call('start').then(applyStamp)
+    const poll = setInterval(() => { void call('state').then(applyStamp) }, 15000)
+    const tick = setInterval(() => { if (!stopped) setAwayTick((t) => t + 1) }, 1000)
+    return () => { stopped = true; clearInterval(poll); clearInterval(tick) }
+  }, [hostAway, id])
+
+  useEffect(() => {
+    if (hostAway !== 'away' || !awayEndsAt || awayEndCalledRef.current) return
+    if (Date.now() < awayEndsAt) return
+    awayEndCalledRef.current = true
+    void fetch('/api/live/away', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: id, action: 'end' }),
+    }).catch(() => { /* the stamp stays; the next resync retries */ })
+  })
+
   // Audience sheet (top gifters + watching now) and TikTok-style join
   // chips: the room announces arrivals instead of silently counting.
   const [audienceOpen, setAudienceOpen] = useState(false)
@@ -754,7 +812,7 @@ export default function StreamRoomPage() {
 
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name, avatar_url, gift_menu')
+        .select('display_name, avatar_url, gift_menu, gender')
         .eq('id', session.provider_id)
         .maybeSingle()
       if (cancelled) return
@@ -1644,6 +1702,11 @@ export default function StreamRoomPage() {
   /* ---------------------------------- live ---------------------------------- */
 
   const hostName = stream?.provider?.display_name ?? 'Host'
+  // The away copy speaks about the host with THEIR pronouns,
+  // from the gender on their profile. Unset means the copy
+  // uses their name and no pronoun: never a guessed 'She'.
+  const pro = pronounsForGender(stream?.provider?.gender)
+  const awaySubj = pro ? pro.subject : hostName
   const isHostMe = !!myId && !!hostId && myId === hostId
   const canModerate = isHostMe || isModerator
   const visibleMessages = messages.filter((m) => !deletedIds.has(m.id))
@@ -1721,18 +1784,29 @@ export default function StreamRoomPage() {
             </div>
           )}
           <p className="mt-4 text-base font-bold text-white">
-            {hostAway === 'away' ? `${hostName} stepped away` : `${hostName} turned her camera off`}
+            {hostAway === 'away' ? `${hostName} stepped away` : `${hostName} turned ${pro ? pro.possessiveMid : 'their'} camera off`}
           </p>
           <p className="mt-1 max-w-[260px] text-sm leading-relaxed text-white/70">
             {hostAway === 'away'
-              ? 'She will be back shortly. Hang tight, the stream is still live.'
-              : 'The stream is still live. Her camera should be back any moment.'}
+              ? `${awaySubj} will be back shortly. Hang tight, the stream is still live.`
+              : pro
+                ? `The stream is still live. ${pro.possessive} camera should be back any moment.`
+                : 'The stream is still live. The camera should be back any moment.'}
           </p>
-          <div className="mt-4 flex items-center gap-1.5" aria-hidden>
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold [animation-delay:200ms]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold [animation-delay:400ms]" />
-          </div>
+          {hostAway === 'away' ? (
+            awayEndsAt !== null && (
+              <>
+                <p className="mt-4 text-3xl font-semibold tabular-nums text-white">{formatCountdown((awayEndsAt - Date.now()) / 1000)}</p>
+                <p className="mt-1.5 max-w-[260px] text-xs text-white/60">If {hostName} is not back by then, this live ends.</p>
+              </>
+            )
+          ) : (
+            <div className="mt-4 flex items-center gap-1.5" aria-hidden>
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold [animation-delay:200ms]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold [animation-delay:400ms]" />
+            </div>
+          )}
         </div>
       )}
 

@@ -75,6 +75,7 @@ interface ProviderForm {
   languages: string[]
   ratesNegotiable: boolean
   whatsappNumber: string
+  gender: string
   bio: string
   galleryUrls: string[]
   showOnMap: boolean
@@ -96,6 +97,7 @@ const EMPTY_FORM: ProviderForm = {
   languages: [],
   ratesNegotiable: true,
     whatsappNumber: '',
+  gender: '',
   bio: '',
   galleryUrls: [],
   showOnMap: true,
@@ -148,7 +150,7 @@ export default function ProfilePage() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(
-          'role, display_name, avatar_url, username, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, spec_complexion, spec_body_type, spec_height, spec_tags, languages, rates_negotiable, gallery_urls, whatsapp_number, bio, intake_questions, sub_price_coins'
+          'role, display_name, avatar_url, username, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, vibes, spec_complexion, spec_body_type, spec_height, spec_tags, languages, rates_negotiable, gallery_urls, whatsapp_number, gender, bio, intake_questions, sub_price_coins'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -182,6 +184,7 @@ export default function ProfilePage() {
           languages: (profile as { languages?: string[] } | null)?.languages ?? [],
           ratesNegotiable: profile?.rates_negotiable ?? true,
     whatsappNumber: profile?.whatsapp_number ?? '',
+    gender: profile?.gender ?? '',
     bio: profile?.bio ?? '',
           galleryUrls: profile?.gallery_urls ?? [],
           showOnMap: presence?.show_on_map ?? true,
@@ -366,6 +369,7 @@ export default function ProfilePage() {
           languages: form.languages,
           rates_negotiable: form.ratesNegotiable,
           whatsapp_number: form.whatsappNumber.trim() || null,
+          gender: form.gender || null,
           bio: form.bio.trim() || null,
           gallery_urls: gallery,
           sub_price_coins: parseSubPrice(form.subPriceCoins),
@@ -542,6 +546,19 @@ export default function ProfilePage() {
                     {bioWarning}
                   </p>
                 )}
+              </div>
+              <div>
+                <label className={labelCls}>Gender</label>
+                <select
+                  className={inputCls}
+                  value={form.gender}
+                  onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                >
+                  <option value="">Not set</option>
+                  <option value="female">Woman</option>
+                  <option value="male">Man</option>
+                </select>
+                <p className="mt-1 text-xs text-neutral-400">How the app refers to you, for example in live streams when you step away. Leave it unset and it uses your name instead.</p>
               </div>
               <div>
                 <label className={labelCls}>Profile photo</label>
