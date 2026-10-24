@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BookOpen, Plus, Send, Trash2, Eye, CheckCircle2, ArrowLeft } from '@/lib/icons'
+import { BookOpen, Plus, Send, Trash2, Eye, CheckCircle2, ArrowLeft, ChevronDown } from '@/lib/icons'
 import { formatCompactCount } from '@/lib/utils/helpers'
 import { HelpTip } from '@/components/ui/Tooltip'
 
@@ -66,6 +66,12 @@ export default function AdminComicsPage() {
   const [chapterKeep, setChapterKeep] = useState<Record<number, boolean>>({})
   const [importLog, setImportLog] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
+  // The episode list is grouped per comic as accordions, all
+  // closed by default, so the page stays short no matter how
+  // many episodes the shelf holds.
+  const [openComics, setOpenComics] = useState<Record<string, boolean>>({})
+  const toggleComic = (id: string) =>
+    setOpenComics((prev) => ({ ...prev, [id]: !prev[id] }))
 
   async function load() {
     const res = await fetch('/api/admin/comics')
@@ -405,6 +411,36 @@ export default function AdminComicsPage() {
 
   const draftCount = episodes.filter((e) => e.status === 'draft').length
 
+  // Episodes grouped under their comic, shelf order first, for
+  // the accordion list. Episodes whose comic is missing from
+  // the shelf still get their own group at the end.
+  const comicGroups = (() => {
+    const byComic = new Map<string, typeof episodes>()
+    for (const e of episodes) {
+      const key = e.comic_id ?? 'none'
+      byComic.set(key, [...(byComic.get(key) ?? []), e])
+    }
+    const groups = comics
+      .filter((c) => byComic.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        title: c.title,
+        cover: c.cover_url,
+        items: [...(byComic.get(c.id) ?? [])].sort((a, b) => a.episode_no - b.episode_no),
+      }))
+    for (const [key, items] of byComic) {
+      if (!comics.some((c) => c.id === key)) {
+        groups.push({
+          id: key,
+          title: comicTitle(key === 'none' ? null : key),
+          cover: null,
+          items: [...items].sort((a, b) => a.episode_no - b.episode_no),
+        })
+      }
+    }
+    return groups
+  })()
+
   return (
     <div className="mx-auto max-w-4xl px-0 pb-16 pt-2 sm:px-4 sm:pt-6">
       <Link href="/admin" className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-neutral-500 hover:text-primary">
@@ -699,48 +735,83 @@ export default function AdminComicsPage() {
           <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
         ) : episodes.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">No episodes yet. Create the first one above.</p>
-        ) : episodes.map((e) => (
-          <div key={e.id} className="card-luxe flex flex-wrap items-center gap-3 p-4">
-            <div className="min-w-0 flex-1 basis-48">
-              <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-charcoal">
-                <span className="max-w-full truncate rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-primary">
-                  {comicTitle(e.comic_id)} · Ep {e.episode_no}
+        ) : comicGroups.map((g) => {
+          const open = !!openComics[g.id]
+          const publishedCount = g.items.filter((e) => e.status === 'published').length
+          const draftInGroup = g.items.length - publishedCount
+          return (
+            <div key={g.id} className="card-luxe overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleComic(g.id)}
+                aria-expanded={open}
+                className="flex min-h-[60px] w-full items-center gap-3 p-4 text-left"
+              >
+                {g.cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={g.cover} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                ) : (
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-muted text-primary">
+                    <BookOpen aria-hidden className="h-5 w-5" />
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold text-charcoal">{g.title}</span>
+                  <span className="mt-0.5 block text-xs text-neutral-500">
+                    {g.items.length} episode{g.items.length === 1 ? '' : 's'} · {publishedCount} published · {draftInGroup} draft{draftInGroup === 1 ? '' : 's'}
+                  </span>
                 </span>
-                <span className="min-w-0 truncate">{e.title}</span>
-                {e.status === 'published'
-                  ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600"><CheckCircle2 aria-hidden className="h-3 w-3" /> Published</span>
-                  : <span className="text-[11px] font-medium text-neutral-400">Draft</span>}
-              </p>
-              <p className="mt-1 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
-                <span className="inline-flex items-center gap-1"><Eye aria-hidden className="h-3 w-3" /> {formatCompactCount(e.view_count)} reads</span>
-                <span>{formatCompactCount(stats[e.id]?.readers ?? 0)} unique</span>
-                <span>{formatCompactCount(stats[e.id]?.completed ?? 0)} finished</span>
-              </p>
-            </div>
-            {e.status === 'draft' ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <button onClick={() => patch(e.id, 'publish')} className="btn-luxe min-h-[44px] px-4 py-2 text-xs">
-                  <Send aria-hidden className="h-3 w-3" /> Publish
-                </button>
-                <button
-                  onClick={() => remove(e.id)}
-                  aria-label={confirmDelete === e.id ? 'Tap again to confirm delete' : 'Delete draft'}
-                  className={`flex min-h-[44px] items-center justify-center rounded-full px-3 text-xs font-semibold ${
-                    confirmDelete === e.id
-                      ? 'bg-red-500 text-white'
-                      : 'text-neutral-400 ring-1 ring-neutral-200 hover:bg-red-50 hover:text-red-500'
-                  }`}
-                >
-                  {confirmDelete === e.id ? 'Tap again to delete' : <Trash2 aria-hidden className="h-4 w-4" />}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => patch(e.id, 'unpublish')} className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-4 py-2 text-xs font-semibold text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50">
-                Unpublish
+                <ChevronDown aria-hidden className={`h-5 w-5 shrink-0 text-neutral-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
               </button>
-            )}
-          </div>
-        ))}
+              {open && (
+                <div className="space-y-3 border-t border-neutral-100 p-3">
+                  {g.items.map((e) => (
+            <div key={e.id} className="card-luxe flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0 flex-1 basis-48">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-charcoal">
+                  <span className="max-w-full truncate rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-primary">
+                    Ep {e.episode_no}
+                  </span>
+                  <span className="min-w-0 truncate">{e.title}</span>
+                  {e.status === 'published'
+                    ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600"><CheckCircle2 aria-hidden className="h-3 w-3" /> Published</span>
+                    : <span className="text-[11px] font-medium text-neutral-400">Draft</span>}
+                </p>
+                <p className="mt-1 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
+                  <span className="inline-flex items-center gap-1"><Eye aria-hidden className="h-3 w-3" /> {formatCompactCount(e.view_count)} reads</span>
+                  <span>{formatCompactCount(stats[e.id]?.readers ?? 0)} unique</span>
+                  <span>{formatCompactCount(stats[e.id]?.completed ?? 0)} finished</span>
+                </p>
+              </div>
+              {e.status === 'draft' ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <button onClick={() => patch(e.id, 'publish')} className="btn-luxe min-h-[44px] px-4 py-2 text-xs">
+                    <Send aria-hidden className="h-3 w-3" /> Publish
+                  </button>
+                  <button
+                    onClick={() => remove(e.id)}
+                    aria-label={confirmDelete === e.id ? 'Tap again to confirm delete' : 'Delete draft'}
+                    className={`flex min-h-[44px] items-center justify-center rounded-full px-3 text-xs font-semibold ${
+                      confirmDelete === e.id
+                        ? 'bg-red-500 text-white'
+                        : 'text-neutral-400 ring-1 ring-neutral-200 hover:bg-red-50 hover:text-red-500'
+                    }`}
+                  >
+                    {confirmDelete === e.id ? 'Tap again to delete' : <Trash2 aria-hidden className="h-4 w-4" />}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => patch(e.id, 'unpublish')} className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full px-4 py-2 text-xs font-semibold text-neutral-500 ring-1 ring-neutral-200 hover:bg-neutral-50">
+                  Unpublish
+                </button>
+              )}
+            </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
