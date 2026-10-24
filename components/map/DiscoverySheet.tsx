@@ -81,7 +81,12 @@ export function DiscoverySheet({
     if (!el) return;
     dragRef.current = { startY: e.clientY, startH: el.getBoundingClientRect().height, moved: false };
     setDragging(true);
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* Pointer already gone (cancelled gesture); the drag
+         still tracks through the header handlers. */
+    }
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current;
