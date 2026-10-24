@@ -1,11 +1,24 @@
+/* Aeonik Pro Bold, SELF-HOSTED (2026-10-24, owner call): the font
+   files live in public/fonts on our own origin. The app used to load
+   them from db.onlinewebfonts.com; if that CDN ever dies the display
+   face must not die with it. font-display swap, same as the source. */
+@font-face {
+  font-family: "Aeonik Pro Bold";
+  src: url("/fonts/aeonik-pro-bold.woff2") format("woff2"),
+       url("/fonts/aeonik-pro-bold.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Display face: Aeonik Pro Bold (stylesheet linked in the root
-       layout). The variable keeps its historical name: Tailwind's
+    /* Display face: Aeonik Pro Bold (self-hosted @font-face above).
+       The variable keeps its historical name: Tailwind's
        display/serif stacks and the heading rules read --font-inter. */
     --font-inter: "Aeonik Pro Bold", "Inter", system-ui, sans-serif;
     --primary: #AC244D;

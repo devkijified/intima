@@ -18,9 +18,9 @@ import { QueryLoadingWidget } from '@/components/shared/QueryLoadingWidget'
 import ErrorReporter from '@/components/observability/ErrorReporter'
 
 // One pairing for the whole product: Aeonik Pro Bold for display
-// (wordmark, headings, prices, sheet titles; loaded from the
-// onlinewebfonts stylesheet linked in <head>, exposed as --font-inter
-// in globals.css) and Figtree for everything else via next/font.
+// (wordmark, headings, prices, sheet titles; self-hosted from
+// public/fonts, exposed as --font-inter in globals.css) and Figtree
+// for everything else via next/font.
 const figtree = Figtree({
   subsets: ['latin'],
   variable: '--font-figtree',
@@ -79,11 +79,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${figtree.variable}`}>
       <head>
-        <link rel="preconnect" href="https://db.onlinewebfonts.com" crossOrigin="anonymous" />
-        <link
-          href="https://db.onlinewebfonts.com/c/362636484f8ad521fec5a297fdc0ab12?family=Aeonik+Pro+Bold"
-          rel="stylesheet"
-        />
+        {/* Aeonik Pro Bold is self-hosted (public/fonts, @font-face in
+            globals.css): preload the woff2 so display text paints in
+            the right face without waiting on the CSS chain. */}
+        <link rel="preload" href="/fonts/aeonik-pro-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* Critical paint: burgundy before any CSS/JS loads, kills the white flash. */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background:#FDF9F6;margin:0;padding:0;min-height:100dvh}#app-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#C22A57 0%,#8F1D40 100%)}` }} />
       </head>
