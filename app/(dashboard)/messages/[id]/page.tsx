@@ -42,11 +42,36 @@ interface Counterpart {
   display_name: string | null
   avatar_url: string | null
   whatsapp_number: string | null
+  last_seen_at: string | null
   isProvider: boolean
 }
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * The line under the name in the chat header, WhatsApp style:
+ * "Active now" when their app heartbeat landed in the last two
+ * minutes, otherwise when they were last active, in Lagos time.
+ */
+function formatLastActive(iso: string): string {
+  const then = new Date(iso)
+  if (Date.now() - then.getTime() < 2 * 60_000) return 'Active now'
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Africa/Lagos', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(then)
+  const dayKey = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(d)
+  const thatDay = dayKey(then)
+  if (thatDay === dayKey(new Date())) return `Last active today at ${time}`
+  if (thatDay === dayKey(new Date(Date.now() - 86_400_000))) return `Last active yesterday at ${time}`
+  const date = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Lagos', day: 'numeric', month: 'short',
+  }).format(then)
+  return `Last active ${date} at ${time}`
 }
 
 /** WhatsApp-style day separators between message groups. */
@@ -108,6 +133,31 @@ export default function ThreadPage() {
   const [intakeAnswers, setIntakeAnswers] = useState<{ q: string; a: string }[]>([])
   const [viewerIsProvider, setViewerIsProvider] = useState(false)
   const [otherIsFan, setOtherIsFan] = useState(false)
+
+  // Keep the other person's last-active stamp fresh while the
+  // thread is open, so "Active now" lands without a reload.
+  useEffect(() => {
+    if (!other?.id) return
+    const otherId = other.id
+    let stopped = false
+    const supabase = createClient()
+    const t = setInterval(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('last_seen_at')
+        .eq('id', otherId)
+        .single()
+      if (!stopped && data) {
+        setOther((prev) =>
+          prev && prev.id === otherId
+            ? { ...prev, last_seen_at: (data as { last_seen_at?: string | null }).last_seen_at ?? null }
+            : prev,
+        )
+      }
+    }, 45_000)
+    return () => { stopped = true; clearInterval(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [other?.id])
   const [showIntake, setShowIntake] = useState(false)
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -322,7 +372,7 @@ export default function ThreadPage() {
       }
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name, avatar_url, whatsapp_number, role')
+        .select('display_name, avatar_url, whatsapp_number, role, last_seen_at')
         .eq('id', otherId)
         .single()
       if (live && prof) {
@@ -330,8 +380,14 @@ export default function ThreadPage() {
           id: otherId,
           display_name: prof.display_name,
           avatar_url: prof.avatar_url,
-          // WhatsApp only revealed on an ACTIVE (paid) connection.
-          whatsapp_number: conn.status === 'active' ? (prof.whatsapp_number ?? null) : null,
+          // WhatsApp only revealed on an ACTIVE (paid) connection,
+          // and never on a video call (SVC) connection: the call
+          // is the product there, so the chat stays in the app.
+          whatsapp_number:
+            conn.status === 'active' && (conn as { service_type?: string | null }).service_type !== 'video-call'
+              ? (prof.whatsapp_number ?? null)
+              : null,
+          last_seen_at: (prof as { last_seen_at?: string | null }).last_seen_at ?? null,
           isProvider: prof.role === 'model',
         })
       }
@@ -635,6 +691,10 @@ export default function ThreadPage() {
   // person's account role.
   const quickReplies = viewerIsProvider ? PROVIDER_QUICK_REPLIES : null
 
+  // Under the name: when they were last active, WhatsApp style.
+  // Falls back to the connection state until their first stamp.
+  const lastActiveLabel = other?.last_seen_at ? formatLastActive(other.last_seen_at) : null
+
   return (
     // Full screen on mobile, WhatsApp style: the thread covers
     // the whole viewport edge to edge, so no shell background
@@ -663,8 +723,10 @@ export default function ThreadPage() {
             {other?.display_name ?? 'Member'}
             {otherIsFan && <FanBadge className="ml-1.5" />}
           </p>
-          <p className={`text-xs ${!loading && active ? 'text-emerald-600' : 'text-neutral-400'}`}>
-            {loading ? 'Loading…' : active ? 'Connection active' : 'Connection not active'}
+          <p className={`text-xs ${!loading && (lastActiveLabel === 'Active now' || (!lastActiveLabel && active)) ? 'text-emerald-600' : 'text-neutral-400'}`}>
+            {loading
+              ? 'Loading…'
+              : lastActiveLabel ?? (active ? 'Connection active' : 'Connection not active')}
             {otherRating && (
               <span className="text-neutral-500"> · ★ {otherRating.avg} ({otherRating.count} review{otherRating.count === 1 ? '' : 's'})</span>
             )}

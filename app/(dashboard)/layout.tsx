@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { MobileNav } from '@/components/nav/MobileNav'
 import { MessagesFab } from '@/components/nav/MessagesFab'
+import { LastSeenHeartbeat } from '@/components/presence/LastSeenHeartbeat'
 
 export default function DashboardLayout({
   children,
@@ -244,6 +245,7 @@ export default function DashboardLayout({
           unread count now that Comics holds the bar slot. */}
       <MobileNav />
       <MessagesFab />
+      <LastSeenHeartbeat />
     </div>
   )
 }

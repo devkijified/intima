@@ -596,7 +596,7 @@ export default function ProfilePage() {
                 placeholder="e.g. 2348012345678"
               />
               <p className="mt-1.5 text-xs text-neutral-500">
-                Only clients with an active (paid) connection can see this. Never shown on your public profile or the map.
+                Only clients with an active (paid) connection can see this, and never on a video call connection. Never shown on your public profile or the map.
               </p>
             </div>
           </div>
