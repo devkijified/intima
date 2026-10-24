@@ -51,6 +51,10 @@ export function LivePreviewVideo({
         })
       })
     }
+    // Subscriptions can settle after connect returns, especially
+    // on slow networks: keep offering the host's track a home
+    // until one lands.
+    const retry = setInterval(attachHost, 2000)
 
     async function start() {
       try {
@@ -63,7 +67,11 @@ export function LivePreviewVideo({
         const { token, url } = (await res.json()) as { token: string; url: string }
         if (cancelled) return
         room = new Room({ adaptiveStream: true, dynacast: true })
+        room.on(RoomEvent.Disconnected, (reason) => {
+          console.log('[preview] disconnected', String(reason))
+        })
         room.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+          console.log('[preview] track subscribed', track.kind, participant.identity)
           if (track.kind === Track.Kind.Audio) {
             // A preview is silent by design, and unsubscribing
             // keeps it light on data too.
@@ -76,9 +84,11 @@ export function LivePreviewVideo({
           }
         })
         await room.connect(url, token)
+        console.log('[preview] connected, remotes:', room.remoteParticipants.size)
         if (cancelled) return
         attachHost() // the host was already publishing when we arrived
-      } catch {
+      } catch (e) {
+        console.log('[preview] connect failed', String(e))
         /* the cover stays; joining is unaffected */
       }
     }
@@ -86,6 +96,7 @@ export function LivePreviewVideo({
     void start()
     return () => {
       cancelled = true
+      clearInterval(retry)
       setLive(false)
       void room?.disconnect()
     }
