@@ -1540,7 +1540,8 @@ export default function IntimaMap() {
 
         {/* Quick row: city, the two standing discovery toggles,
             and the guest auth actions at the end. */}
-        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-2 flex items-start gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,black_90%,transparent)]">
           <div className="relative shrink-0">
             <select
               value={filters.city}
@@ -1602,7 +1603,11 @@ export default function IntimaMap() {
           >
             Negotiable
           </button>
-          <div className="ml-auto flex shrink-0 items-center gap-2 pl-1">
+          </div>
+          {/* Auth stays OUTSIDE the scrolling chips: pinned to
+              the right edge, always visible, never something a
+              user has to discover by scrolling sideways. */}
+          <div className="flex shrink-0 items-center gap-2 pb-0.5">
             {session ? (
               <Link
                 href="/dashboard"
