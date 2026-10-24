@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Bell, Calendar, Clock, Crown, Eye, Lock, Radio } from '@/lib/icons'
 import { showToast } from '@/lib/toast'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
+import { LivePreviewVideo } from '@/components/live/LivePreviewVideo'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface LiveStream {
@@ -542,6 +543,13 @@ export default function LiveFeedPage() {
                 <div className="flex h-full w-full items-center justify-center">
                   <Radio className="h-16 w-16 text-neutral-600" />
                 </div>
+              )}
+              {/* Pre-join preview: the slide on screen plays the
+                  room's real video (muted, unannounced) so you
+                  can see what is on before joining. Gated rooms
+                  keep their cover: no free peek. */}
+              {activeIndex === i && s.access_mode !== 'fans' && s.price_ngn === 0 && myId !== s.provider_id && (
+                <LivePreviewVideo sessionId={s.id} hostId={s.provider_id} />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
 

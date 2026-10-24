@@ -53,10 +53,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
 
-    const { sessionId, role } = await req.json();
+    const { sessionId, role, preview } = await req.json();
     if (!sessionId || !['publisher', 'viewer'].includes(role)) {
       return NextResponse.json({ error: 'sessionId and role required' }, { status: 400 });
     }
+    // A pre-join preview is still a viewer, and every gate below
+    // applies to it exactly the same: no free peek into a fans
+    // only or paid room. It just mints a quieter token.
+    const isPreview = preview === true && role === 'viewer';
 
     const { data: session } = await supabase
       .from('live_sessions')
@@ -152,17 +156,22 @@ export async function POST(req: NextRequest) {
       process.env.LIVEKIT_API_KEY!,
       process.env.LIVEKIT_API_SECRET!,
       {
-        identity: user.id,
+        // Preview connections carry a marked identity so every
+        // other client can leave them out of join announcements,
+        // the audience list and the viewer count: they are
+        // watching the shop window, not in the room yet.
+        identity: isPreview ? `${user.id}#preview` : user.id,
         name: user.id.slice(0, 8),
-        ttl: role === 'publisher' ? '4h' : '2h',
+        ttl: role === 'publisher' ? '4h' : isPreview ? '30m' : '2h',
       }
     );
+    if (isPreview) at.metadata = JSON.stringify({ preview: true });
     at.addGrant({
       roomJoin: true,
       room: roomName,
       canPublish: role === 'publisher',
       canSubscribe: true,
-      canPublishData: true,
+      canPublishData: !isPreview,
     });
 
     return NextResponse.json({

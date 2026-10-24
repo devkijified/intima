@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { RequestConnectionModal } from '@/components/connections/RequestConnectionModal'
 import { GiftLeaderboard, LeaderboardList, LeaderboardPill } from '@/components/live/GiftLeaderboard'
 import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
+import { isPreviewIdentity, countRealIdentities } from '@/lib/live/preview'
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import { useDock } from '@/components/dock/FloatingDock'
 import { FanBadge } from '@/components/social/FanBadge'
@@ -117,6 +118,7 @@ export default function StreamRoomPage() {
       const stash = JSON.parse(raw) as { sessionId?: string; giftId?: string | null }
       if (stash.sessionId === id) {
         setGiftReturnId(stash.giftId ?? null)
+        setGiftPanelView('gifts')
         setGiftOpen(true)
         sessionStorage.removeItem('intima_gift_return')
       }
@@ -156,6 +158,18 @@ export default function StreamRoomPage() {
   const [myName, setMyName] = useState('Guest')
 
   const [giftOpen, setGiftOpen] = useState(false)
+  // How the gift panel should open: on the gifts, or straight on
+  // the coin packages when a tap could not afford the gift (the
+  // TikTok answer to an empty balance is the recharge sheet, not
+  // a dead tap). barGiftId remembers which gift asked for it, so
+  // the panel lands back on that gift after a top-up.
+  const [giftPanelView, setGiftPanelView] = useState<'gifts' | 'packages'>('gifts')
+  const [barGiftId, setBarGiftId] = useState<string | null>(null)
+  const openGiftPanel = useCallback((view: 'gifts' | 'packages', giftId: string | null = null) => {
+    setGiftPanelView(view)
+    setBarGiftId(giftId)
+    setGiftOpen(true)
+  }, [])
   const [catalog, setCatalog] = useState<GiftItem[]>([])
   const [balance, setBalance] = useState<number | null>(null)
   const [sendingGift, setSendingGift] = useState<string | null>(null)
@@ -282,7 +296,7 @@ export default function StreamRoomPage() {
     async (room: Room) => {
       const host = hostIdRef.current
       const me = room.localParticipant?.identity
-      const ids = [...new Set([host, me, ...room.remoteParticipants.keys()].filter(Boolean) as string[])]
+      const ids = [...new Set([host, me, ...room.remoteParticipants.keys()].filter((x): x is string => !!x && !isPreviewIdentity(x)))]
       const list = await Promise.all(ids.map(async (uid) => ({ id: uid, ...(await profileFor(uid)) })))
       setAudience(list)
     },
@@ -292,6 +306,7 @@ export default function StreamRoomPage() {
     async (uid: string) => {
       const me = roomRef.current?.localParticipant?.identity
       if (!uid || uid === me) return
+      if (isPreviewIdentity(uid)) return // still at the shop window, not in the room
       const p = await profileFor(uid)
       let gold = uid === hostIdRef.current
       if (!gold) {
@@ -808,7 +823,7 @@ export default function StreamRoomPage() {
 
       const updateViewers = () => {
         // Host + every remote participant currently in the room.
-        setViewerCount(room.remoteParticipants.size + 1)
+        setViewerCount(countRealIdentities(room.remoteParticipants.keys()) + 1)
         void syncAudience(room)
       }
 
@@ -1203,11 +1218,11 @@ export default function StreamRoomPage() {
         noteHostVideoPub(track, pub, participant?.identity)
       })
       room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
-        setViewerCount(room.remoteParticipants.size + 1)
+        setViewerCount(countRealIdentities(room.remoteParticipants.keys()) + 1)
         if (participant && participant.identity !== hostIdRef.current) detachTile(participant.identity)
       })
       room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
-        setViewerCount(room.remoteParticipants.size + 1)
+        setViewerCount(countRealIdentities(room.remoteParticipants.keys()) + 1)
         void syncAudience(room)
         void pushJoin(participant?.identity)
       })
@@ -1221,7 +1236,7 @@ export default function StreamRoomPage() {
           }
         })
       })
-      setViewerCount(room.remoteParticipants.size + 1)
+      setViewerCount(countRealIdentities(room.remoteParticipants.keys()) + 1)
 
       const cam = await createLocalVideoTrack({ facingMode: 'user' })
       const mic = await createLocalAudioTrack()
@@ -1337,9 +1352,18 @@ export default function StreamRoomPage() {
 
   const sendGift = useCallback(
     async (gift: GiftItem) => {
-      await sendGiftTracked(gift)
+      // The persistent gift bar sends directly. A tap the
+      // balance cannot cover must not die quietly (owner hit
+      // exactly this with 0 coins): open the recharge sheet,
+      // the way TikTok answers an unaffordable gift.
+      if (balance !== null && gift.coin_cost > balance) {
+        openGiftPanel('packages', gift.id)
+        return
+      }
+      const result = await sendGiftTracked(gift)
+      if (result === 'topup') openGiftPanel('packages', gift.id)
     },
-    [sendGiftTracked]
+    [sendGiftTracked, balance, openGiftPanel]
   )
 
   // System chat line published on the sender's client only (combo
@@ -2349,7 +2373,7 @@ export default function StreamRoomPage() {
       {/* Join chips: arrivals are announced, TikTok-style; the
           comment stack rides up while chips are showing. */}
       {joins.length > 0 && (
-        <div className="pointer-events-none absolute bottom-24 left-3 z-10 flex flex-col gap-1.5 lg:hidden">
+        <div className="pointer-events-none absolute bottom-24 left-3 z-10 flex flex-col gap-1.5 lg:bottom-4">
           {joins.map((j) => (
             <div
               key={j.key}
@@ -2464,7 +2488,7 @@ export default function StreamRoomPage() {
         </div>
         <Tooltip label="Send a gift">
           <button
-            onClick={() => setGiftOpen(true)}
+            onClick={() => openGiftPanel('gifts')}
             aria-label="Send a gift"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
           >
@@ -2490,12 +2514,13 @@ export default function StreamRoomPage() {
           hostName={hostName}
           giftMenu={hostGiftMenu}
           sendingId={sendingGift}
-          initialGiftId={giftReturnId}
+          initialGiftId={barGiftId ?? giftReturnId}
+          initialView={giftPanelView}
           onSend={sendGiftTracked}
           onComboSummary={handleComboSummary}
           onBuyCoinsStart={stashGiftReturn}
           onBalanceRefresh={refreshBalance}
-          onClose={() => setGiftOpen(false)}
+          onClose={() => { setGiftOpen(false); setBarGiftId(null) }}
         />
       )}
 
@@ -2576,7 +2601,7 @@ export default function StreamRoomPage() {
             {balance === null ? '...' : balance.toLocaleString()} coins
           </span>
           <button
-            onClick={() => setGiftOpen(true)}
+            onClick={() => openGiftPanel('gifts')}
             className="shrink-0 min-h-[44px] rounded-full bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-white/15"
           >
             All gifts
@@ -2698,7 +2723,7 @@ export default function StreamRoomPage() {
           </div>
           <Tooltip label="Send a gift">
             <button
-              onClick={() => setGiftOpen(true)}
+              onClick={() => openGiftPanel('gifts')}
               aria-label="Send a gift"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/40 active:scale-95"
             >

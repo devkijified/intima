@@ -66,6 +66,7 @@ export function GiftPanel({
   giftMenu,
   sendingId,
   initialGiftId,
+  initialView,
   onSend,
   onComboSummary,
   onBuyCoinsStart,
@@ -78,13 +79,14 @@ export function GiftPanel({
   giftMenu: Record<string, string>
   sendingId: string | null
   initialGiftId?: string | null
+  initialView?: 'gifts' | 'packages'
   onSend: (gift: GiftCatalogItem) => Promise<GiftSendResult>
   onComboSummary: (gift: GiftCatalogItem, count: number) => void
   onBuyCoinsStart: (giftId: string | null) => void
   onBalanceRefresh?: () => Promise<number | null>
   onClose: () => void
 }) {
-  const [view, setView] = useState<'gifts' | 'packages'>('gifts')
+  const [view, setView] = useState<'gifts' | 'packages'>(initialView ?? 'gifts')
   const [tab, setTab] = useState<PanelTab>('all')
   const [favs, setFavs] = useState<string[]>(() => readList(FAVS_KEY))
   const [recent, setRecent] = useState<string[]>(() => readList(RECENT_KEY))

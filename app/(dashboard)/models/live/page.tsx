@@ -8,6 +8,7 @@ import { GiftFxLayer, type GiftFxHandle } from '@/components/live/GiftFx'
 import { GiftMenuEditor } from '@/components/live/GiftMenuEditor'
 import type { GiftFxEvent } from '@/components/live/giftTypes'
 import { ngnForCoins } from '@/lib/utils/helpers'
+import { isPreviewIdentity, countRealIdentities } from '@/lib/live/preview'
 import { Video, AlertCircle, Lock, Unlock, Mic, MicOff, Camera, RefreshCw, XCircle, Gift, Eye, Crown, CheckCircle } from '@/lib/icons'
 import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 
@@ -125,6 +126,7 @@ export default function GoLivePage() {
   const [joins, setJoins] = useState<{ key: string; name: string; avatar: string | null }[]>([])
   const pushJoin = useCallback(async (uid: string) => {
     if (!uid) return
+    if (isPreviewIdentity(uid)) return // a preview is not an arrival
     const supabase = createClient()
     const { data } = await supabase
       .from('profiles')
@@ -456,10 +458,10 @@ export default function GoLivePage() {
       const room = new Room()
       roomRef.current = room
       room.on('participantConnected', (p) => {
-        setViewerCount(room.remoteParticipants.size)
+        setViewerCount(countRealIdentities(room.remoteParticipants.keys()))
         if (p) void pushJoin(p.identity)
       })
-      room.on('participantDisconnected', () => setViewerCount(room.remoteParticipants.size))
+      room.on('participantDisconnected', () => setViewerCount(countRealIdentities(room.remoteParticipants.keys())))
       await room.connect(url, token)
       await room.localParticipant.publishTrack(cam, CAMERA_PUBLISH_OPTIONS)
       if (mic) await room.localParticipant.publishTrack(mic)
