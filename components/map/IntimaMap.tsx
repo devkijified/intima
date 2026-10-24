@@ -406,7 +406,7 @@ export default function IntimaMap() {
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   /** True when the raster fallback style is active (gets the dark CSS filter). */
-  const [usingRaster, setUsingRaster] = useState(true);
+  const [usingRaster, setUsingRaster] = useState(BASE_STAGES[0].filtered);
   /** True when the map has been loading too long without reaching ready:
       show an honest error card instead of a silent black screen. */
   const [mapStalled, setMapStalled] = useState(false);
@@ -447,7 +447,7 @@ export default function IntimaMap() {
     setMapFailed(false);
     setMapFailReason(null);
     setMapReady(false);
-    setUsingRaster(false);
+    setUsingRaster(BASE_STAGES[0].filtered);
     setMapAttempt((n) => n + 1);
   };
 
