@@ -191,10 +191,10 @@ export default function AdminComicsPage() {
     }
   }
 
-  async function importPageEpisode(url: string, title: string, keep: string[] | undefined, targetId: string) {
+  async function importPageEpisode(url: string, title: string, keep: string[] | undefined, targetId: string, opts?: { sync?: boolean }) {
     const res = await fetch('/api/admin/comics/import', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'page-import', url, comicId: targetId, title, keep }),
+      body: JSON.stringify({ action: 'page-import', url, comicId: targetId, title, keep, ...(opts?.sync ? { sync: true } : {}) }),
     })
     const d = await res.json()
     if (!res.ok) throw new Error(d.error ?? 'Import failed.')
@@ -234,6 +234,7 @@ export default function AdminComicsPage() {
         const picked = pagePreview.chapters.filter((c) => chapterKeep[c.no])
         const log: string[] = [...leadLog]
         let okCount = 0
+        let updCount = 0
         try {
           const cres = await fetch('/api/admin/comics/import', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -243,6 +244,9 @@ export default function AdminComicsPage() {
           if (cres.ok && cd.alreadySet) log.push('This comic already has a cover, so the series page cover was skipped.')
           else if (cres.ok) log.push('Cover pulled from the series page and saved to this comic.')
           else log.push('No cover could be pulled from the series page. The import continues without one.')
+          if (cres.ok && cd.statusChanged) {
+            log.push(`Story status set to ${cd.storyStatus === 'completed' ? 'Completed' : 'Ongoing'} from the source page.`)
+          }
         } catch {
           log.push('No cover could be pulled from the series page. The import continues without one.')
         }
@@ -251,15 +255,28 @@ export default function AdminComicsPage() {
           log.push(`Importing ${ch.no}. ${ch.label}…`)
           setImportLog([...log])
           try {
-            const d = await importPageEpisode(ch.url, ch.label, undefined, targetId)
-            log[log.length - 1] = `Done: ${ch.no}. ${ch.label} became Episode ${d.episode.episode_no} (${d.panels} panels).`
+            // Sync mode: a chapter this comic already has is
+            // refreshed in place (that is what updating a comic
+            // from its link means); a new chapter lands as a
+            // fresh draft episode.
+            const d = await importPageEpisode(ch.url, ch.label, undefined, targetId, { sync: true })
+            if (d.updated) {
+              log[log.length - 1] = `Updated: ${ch.no}. ${ch.label} refreshed Episode ${d.episode.episode_no} in place (${d.panels} panels).`
+              updCount += 1
+            } else {
+              log[log.length - 1] = `Done: ${ch.no}. ${ch.label} became Episode ${d.episode.episode_no} (${d.panels} panels).`
+            }
             okCount += 1
           } catch (e) {
             log[log.length - 1] = `Skipped ${ch.no}. ${ch.label}: ${e instanceof Error ? e.message : 'failed'}`
           }
           setImportLog([...log])
         }
-        setMsg(`Series import finished: ${okCount} of ${picked.length} episodes landed as drafts.`)
+        setMsg(
+          updCount > 0
+            ? `Series update finished: ${updCount} episode${updCount === 1 ? '' : 's'} refreshed in place, ${okCount - updCount} new draft${okCount - updCount === 1 ? '' : 's'} added, out of ${picked.length} picked.`
+            : `Series import finished: ${okCount} of ${picked.length} episodes landed as drafts.`,
+        )
         if (okCount > 0) setPagePreview(null)
       }
       load()
@@ -417,6 +434,123 @@ export default function AdminComicsPage() {
         ))}
       </div>
 
+      {/* Page-link import */}
+      <div className="card-luxe mt-6 p-5">
+        <h2 className="flex items-center gap-2 t-section-title text-charcoal">Import from a page link
+          <HelpTip text="Paste a chapter link to bring in that one episode, or a series link to bring in every episode in order. Panels are served through our own image CDN, so readers load everything from Intima, fast. Everything lands as drafts." />
+        </h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Only import comics you own or are licensed to republish. Logos, banners and other site decoration are filtered out on their own; you can untick anything else in the preview.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://example.com/comic/series-name or one chapter link"
+            className="min-h-[44px] min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm" />
+          <button onClick={fetchPagePreview} disabled={busy || importing || !linkUrl.trim()} className="btn-luxe min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">Fetch</button>
+        </div>
+        <label className="mt-3 block">
+          {pagePreview && comics.length === 0 && (
+            <div className="mb-3 rounded-2xl bg-[#C9A84C]/15 p-3.5">
+              <p className="text-xs leading-relaxed text-charcoal">There is no comic yet to receive these episodes, which is why the import button below stays off.</p>
+              <button type="button" onClick={createFromPreview} disabled={busy} className="btn-luxe mt-2.5 min-h-[44px] max-w-full whitespace-normal break-words px-4 py-2 text-left text-sm disabled:opacity-50">
+                Create “{pagePreview.title}” as a new comic
+              </button>
+            </div>
+          )}
+          <span className="mb-1 block text-xs font-semibold text-neutral-500">Episodes go into this comic</span>
+          <select value={comicId} onChange={(e) => setComicId(e.target.value)}
+            className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
+            {comics.length === 0 && <option value="">No comics yet, create one above</option>}
+            {pagePreview?.kind === 'series' && (
+              <option value={NEW_TARGET}>New comic: “{pagePreview.title}” (created on import)</option>
+            )}
+            {comics.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </label>
+        {pagePreview?.kind === 'series' && comicId === NEW_TARGET && (
+          <p className="mt-2 rounded-xl bg-[#C9A84C]/15 px-3 py-2 text-xs leading-relaxed text-charcoal">
+            “{pagePreview.title}” is not on the shelf yet, so the target is a new comic. Importing creates it first, with the source’s story status, then adds these episodes as drafts.
+          </p>
+        )}
+        {pagePreview?.kind === 'series' && comicId !== NEW_TARGET && (() => {
+          const sel = comics.find((c) => c.id === comicId)
+          return sel && sel.title.trim().toLowerCase() !== pagePreview.title.trim().toLowerCase() ? (
+            <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 ring-1 ring-amber-100">
+              Careful: this page is “{pagePreview.title}”, but the episodes will land in “{sel.title}”, and that comic will take the source’s story status too. If “{pagePreview.title}” is its own comic, pick the New comic option above instead.
+            </p>
+          ) : null
+        })()}
+        {pagePreview && pagePreview.kind === 'series' && (
+          <div className="mt-4 space-y-2">
+            <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            {pagePreview.coverUrl && (
+              <div className="flex items-center gap-3">
+                <img src={pagePreview.coverUrl} alt="" className="h-20 w-14 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
+                <p className="text-xs text-neutral-500">Cover found on the series page. It saves to the comic automatically when the import starts, through our CDN.</p>
+              </div>
+            )}
+            {pagePreview.relay && (
+              <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
+            )}
+            <p className="text-xs text-neutral-500">
+              {pagePreview.chapters.length} episodes found, in reading order.
+              {pagePreview.storyStatus ? ` The source lists this comic as ${pagePreview.storyStatus === 'completed' ? 'Completed' : 'Ongoing'}; importing will set that here too.` : ''}
+            </p>
+            {comicId !== NEW_TARGET && comicId !== '' && (
+              <p className="text-xs leading-relaxed text-neutral-500">
+                This comic is already on the shelf, so importing updates it: chapters it already has are refreshed in place, and new chapters land as drafts.
+              </p>
+            )}
+            <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+              {pagePreview.chapters.map((ch) => (
+                <label key={ch.no} className="flex min-h-[44px] items-center gap-3 rounded-xl border border-neutral-100 px-3 py-2">
+                  <input type="checkbox" checked={!!chapterKeep[ch.no]} onChange={(e) => setChapterKeep({ ...chapterKeep, [ch.no]: e.target.checked })} className="h-5 w-5 shrink-0 accent-[#AC244D]" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-charcoal">{ch.no}. {ch.label}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+              {importing ? 'Importing…' : `Import ${pagePreview.chapters.filter((c) => chapterKeep[c.no]).length} episodes as drafts`}
+            </button>
+            {!comicId && <p className="text-xs text-neutral-500">Choose the comic these episodes go into above to switch this button on.</p>}
+          </div>
+        )}
+        {pagePreview && pagePreview.kind === 'episode' && (
+          <div className="mt-4 space-y-3">
+            <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
+            {pagePreview.relay && (
+              <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
+            )}
+            <p className="text-xs text-neutral-500">
+              {pagePreview.images.filter((i) => i.keep).length} panels found. Unticked pictures were judged to be site decoration; tick any of them if that call was wrong.
+            </p>
+            <div className="grid max-h-96 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
+              {pagePreview.images.map((img) => (
+                <label key={img.url} className={`relative block overflow-hidden rounded-xl ring-1 ${pageKeep[img.url] ? 'ring-primary' : 'opacity-60 ring-neutral-200'}`}>
+                  <img src={img.url} alt="" loading="lazy" className="h-24 w-full object-cover" />
+                  <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/55 px-2 py-1.5">
+                    <input type="checkbox" checked={!!pageKeep[img.url]} onChange={(e) => setPageKeep({ ...pageKeep, [img.url]: e.target.checked })} className="h-4 w-4 shrink-0 accent-[#AC244D]" />
+                    <span className="truncate text-[10px] font-medium text-white">{img.keep ? 'Panel' : img.reason ?? 'Stray'}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
+              {importing ? 'Importing…' : 'Import this episode as a draft'}
+            </button>
+            {!comicId && <p className="text-xs text-neutral-500">Choose the comic this episode goes into above to switch this button on.</p>}
+          </div>
+        )}
+        {importLog.length > 0 && (
+          <div className="mt-3 space-y-1 rounded-xl bg-cream px-3 py-2">
+            {importLog.map((line, i) => (
+              <p key={i} className="break-words text-xs text-neutral-600">{line}</p>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* New comic (series) */}
       <div className="card-luxe mt-6 p-5">
         <h2 className="t-section-title text-charcoal">New comic</h2>
@@ -535,118 +669,6 @@ export default function AdminComicsPage() {
                 <span className="shrink-0 text-[11px] text-neutral-400">{i.images.length} panels</span>
                 <button onClick={() => importItem(i.guid)} disabled={busy || i.images.length === 0} className="btn-luxe min-h-[44px] shrink-0 px-3 py-1.5 text-xs disabled:opacity-50">Import</button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Page-link import */}
-      <div className="card-luxe mt-6 p-5">
-        <h2 className="flex items-center gap-2 t-section-title text-charcoal">Import from a page link
-          <HelpTip text="Paste a chapter link to bring in that one episode, or a series link to bring in every episode in order. Panels are served through our own image CDN, so readers load everything from Intima, fast. Everything lands as drafts." />
-        </h2>
-        <p className="mt-1 text-xs text-neutral-500">
-          Only import comics you own or are licensed to republish. Logos, banners and other site decoration are filtered out on their own; you can untick anything else in the preview.
-        </p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://example.com/comic/series-name or one chapter link"
-            className="min-h-[44px] min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm" />
-          <button onClick={fetchPagePreview} disabled={busy || importing || !linkUrl.trim()} className="btn-luxe min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50">Fetch</button>
-        </div>
-        <label className="mt-3 block">
-          {pagePreview && comics.length === 0 && (
-            <div className="mb-3 rounded-2xl bg-[#C9A84C]/15 p-3.5">
-              <p className="text-xs leading-relaxed text-charcoal">There is no comic yet to receive these episodes, which is why the import button below stays off.</p>
-              <button type="button" onClick={createFromPreview} disabled={busy} className="btn-luxe mt-2.5 min-h-[44px] max-w-full whitespace-normal break-words px-4 py-2 text-left text-sm disabled:opacity-50">
-                Create “{pagePreview.title}” as a new comic
-              </button>
-            </div>
-          )}
-          <span className="mb-1 block text-xs font-semibold text-neutral-500">Episodes go into this comic</span>
-          <select value={comicId} onChange={(e) => setComicId(e.target.value)}
-            className="min-h-[44px] w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-base outline-none focus:border-primary md:text-sm">
-            {comics.length === 0 && <option value="">No comics yet, create one above</option>}
-            {pagePreview?.kind === 'series' && (
-              <option value={NEW_TARGET}>New comic: “{pagePreview.title}” (created on import)</option>
-            )}
-            {comics.map((c) => (
-              <option key={c.id} value={c.id}>{c.title}</option>
-            ))}
-          </select>
-        </label>
-        {pagePreview?.kind === 'series' && comicId === NEW_TARGET && (
-          <p className="mt-2 rounded-xl bg-[#C9A84C]/15 px-3 py-2 text-xs leading-relaxed text-charcoal">
-            “{pagePreview.title}” is not on the shelf yet, so the target is a new comic. Importing creates it first, with the source’s story status, then adds these episodes as drafts.
-          </p>
-        )}
-        {pagePreview?.kind === 'series' && comicId !== NEW_TARGET && (() => {
-          const sel = comics.find((c) => c.id === comicId)
-          return sel && sel.title.trim().toLowerCase() !== pagePreview.title.trim().toLowerCase() ? (
-            <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800 ring-1 ring-amber-100">
-              Careful: this page is “{pagePreview.title}”, but the episodes will land in “{sel.title}”, and that comic will take the source’s story status too. If “{pagePreview.title}” is its own comic, pick the New comic option above instead.
-            </p>
-          ) : null
-        })()}
-        {pagePreview && pagePreview.kind === 'series' && (
-          <div className="mt-4 space-y-2">
-            <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
-            {pagePreview.coverUrl && (
-              <div className="flex items-center gap-3">
-                <img src={pagePreview.coverUrl} alt="" className="h-20 w-14 shrink-0 rounded-lg object-cover ring-1 ring-black/10" />
-                <p className="text-xs text-neutral-500">Cover found on the series page. It saves to the comic automatically when the import starts, through our CDN.</p>
-              </div>
-            )}
-            {pagePreview.relay && (
-              <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
-            )}
-            <p className="text-xs text-neutral-500">
-              {pagePreview.chapters.length} episodes found, in reading order.
-              {pagePreview.storyStatus ? ` The source lists this comic as ${pagePreview.storyStatus === 'completed' ? 'Completed' : 'Ongoing'}; importing will set that here too.` : ''}
-            </p>
-            <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-              {pagePreview.chapters.map((ch) => (
-                <label key={ch.no} className="flex min-h-[44px] items-center gap-3 rounded-xl border border-neutral-100 px-3 py-2">
-                  <input type="checkbox" checked={!!chapterKeep[ch.no]} onChange={(e) => setChapterKeep({ ...chapterKeep, [ch.no]: e.target.checked })} className="h-5 w-5 shrink-0 accent-[#AC244D]" />
-                  <span className="min-w-0 flex-1 truncate text-sm text-charcoal">{ch.no}. {ch.label}</span>
-                </label>
-              ))}
-            </div>
-            <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
-              {importing ? 'Importing…' : `Import ${pagePreview.chapters.filter((c) => chapterKeep[c.no]).length} episodes as drafts`}
-            </button>
-            {!comicId && <p className="text-xs text-neutral-500">Choose the comic these episodes go into above to switch this button on.</p>}
-          </div>
-        )}
-        {pagePreview && pagePreview.kind === 'episode' && (
-          <div className="mt-4 space-y-3">
-            <p className="break-words text-sm font-semibold text-charcoal">{pagePreview.title}</p>
-            {pagePreview.relay && (
-              <p className="text-xs font-medium text-[#8a6d2a]">That site would not answer our server directly, so the page was read through a relay. The panels themselves still come from the source through our CDN.</p>
-            )}
-            <p className="text-xs text-neutral-500">
-              {pagePreview.images.filter((i) => i.keep).length} panels found. Unticked pictures were judged to be site decoration; tick any of them if that call was wrong.
-            </p>
-            <div className="grid max-h-96 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
-              {pagePreview.images.map((img) => (
-                <label key={img.url} className={`relative block overflow-hidden rounded-xl ring-1 ${pageKeep[img.url] ? 'ring-primary' : 'opacity-60 ring-neutral-200'}`}>
-                  <img src={img.url} alt="" loading="lazy" className="h-24 w-full object-cover" />
-                  <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/55 px-2 py-1.5">
-                    <input type="checkbox" checked={!!pageKeep[img.url]} onChange={(e) => setPageKeep({ ...pageKeep, [img.url]: e.target.checked })} className="h-4 w-4 shrink-0 accent-[#AC244D]" />
-                    <span className="truncate text-[10px] font-medium text-white">{img.keep ? 'Panel' : img.reason ?? 'Stray'}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <button onClick={importFromPreview} disabled={importing || !comicId} className="btn-luxe min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50">
-              {importing ? 'Importing…' : 'Import this episode as a draft'}
-            </button>
-            {!comicId && <p className="text-xs text-neutral-500">Choose the comic this episode goes into above to switch this button on.</p>}
-          </div>
-        )}
-        {importLog.length > 0 && (
-          <div className="mt-3 space-y-1 rounded-xl bg-cream px-3 py-2">
-            {importLog.map((line, i) => (
-              <p key={i} className="break-words text-xs text-neutral-600">{line}</p>
             ))}
           </div>
         )}

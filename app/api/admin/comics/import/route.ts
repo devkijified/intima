@@ -85,12 +85,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'A comic and a series page address are both needed' }, { status: 400 });
       }
       const svc = serviceDb();
-      const { data: comic } = await svc.from('comics').select('id, cover_url').eq('id', comicId).maybeSingle();
+      const { data: comic } = await svc.from('comics').select('id, cover_url, story_status').eq('id', comicId).maybeSingle();
       if (!comic) return NextResponse.json({ error: 'Comic not found' }, { status: 404 });
-      if (comic.cover_url) {
-        return NextResponse.json({ ok: true, alreadySet: true, coverUrl: comic.cover_url });
-      }
+      // This call opens every series import (new comic or an
+      // update of an existing one), so it also syncs the comic's
+      // story status from the source page, cover or no cover.
       const { html } = await fetchPageHtmlWithFallback(seriesUrl);
+      const storyStatus = detectStoryStatus(html);
+      let statusChanged = false;
+      if (storyStatus && comic.story_status !== storyStatus) {
+        await svc.from('comics').update({ story_status: storyStatus }).eq('id', comicId);
+        statusChanged = true;
+      }
+      if (comic.cover_url) {
+        return NextResponse.json({ ok: true, alreadySet: true, coverUrl: comic.cover_url, storyStatus, statusChanged });
+      }
       const cover = extractSeriesCover(html, seriesUrl);
       if (!cover) {
         return NextResponse.json({ error: 'No cover picture could be found on that series page' }, { status: 422 });
@@ -101,7 +110,7 @@ export async function POST(req: NextRequest) {
       const stored = toCdnUrl(cover);
       const { error } = await svc.from('comics').update({ cover_url: stored }).eq('id', comicId);
       if (error) return NextResponse.json({ error: 'The cover could not be saved' }, { status: 500 });
-      return NextResponse.json({ ok: true, coverUrl: stored });
+      return NextResponse.json({ ok: true, coverUrl: stored, storyStatus, statusChanged });
     }
 
     if (action === 'page-preview') {
@@ -133,16 +142,38 @@ export async function POST(req: NextRequest) {
     if (action === 'page-import') {
       const url = String(body.url ?? '').trim();
       const comicId = String(body.comicId ?? '').trim();
+      const updateEpisodeId = String(body.updateEpisodeId ?? '').trim();
       if (!url.startsWith('http')) return NextResponse.json({ error: 'Valid page URL required' }, { status: 400 });
       if (!comicId) return NextResponse.json({ error: 'Pick the comic this episode belongs to first' }, { status: 400 });
       const db = serviceDb();
       const { data: comic } = await db.from('comics').select('id, title, story_status').eq('id', comicId).maybeSingle();
       if (!comic) return NextResponse.json({ error: 'That comic no longer exists' }, { status: 404 });
 
+      // Update mode: the fetched pages REPLACE one existing
+      // episode's panels. The episode keeps its number, title,
+      // status and read counts; only its pages change.
+      let updateTarget: { id: string; episode_no: number } | null = null;
+      if (updateEpisodeId) {
+        const { data: ep } = await db.from('comic_episodes')
+          .select('id, episode_no, comic_id').eq('id', updateEpisodeId).maybeSingle();
+        if (!ep) return NextResponse.json({ error: 'That episode no longer exists' }, { status: 404 });
+        if (ep.comic_id !== comicId) {
+          return NextResponse.json({ error: 'That episode belongs to a different comic' }, { status: 400 });
+        }
+        updateTarget = { id: ep.id, episode_no: ep.episode_no };
+      }
+
       const guid = 'page_' + createHash('sha256').update(url).digest('hex').slice(0, 24);
       const { data: dup } = await db.from('comic_episodes')
-        .select('id, episode_no').eq('import_guid', guid).maybeSingle();
-      if (dup) {
+        .select('id, episode_no, comic_id').eq('import_guid', guid).maybeSingle();
+      // Series sync (updating a comic from its link): a chapter
+      // that was imported before is refreshed in place instead of
+      // refused or duplicated. Its episode keeps its number,
+      // title, status and read counts; only the pages change.
+      if (!updateTarget && body.sync === true && dup && dup.comic_id === comicId) {
+        updateTarget = { id: dup.id, episode_no: dup.episode_no };
+      }
+      if (dup && dup.id !== updateTarget?.id) {
         return NextResponse.json({ error: `That page was already imported as Episode ${dup.episode_no}. Delete that draft first if you want to redo it.` }, { status: 409 });
       }
 
@@ -181,12 +212,37 @@ export async function POST(req: NextRequest) {
       }
       const stored = panels.map(toCdnUrl);
 
+      let host = url;
+      try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep raw */ }
+
+      if (updateTarget) {
+        // Replace the target episode's pages in place. Its title
+        // is kept (the UI passes the episode's own title back),
+        // and a one-episode update never moves the series' story
+        // status.
+        const { data, error } = await db.from('comic_episodes').update({
+          cover_url: stored[0],
+          panel_urls: stored,
+          import_guid: guid,
+          import_source: 'page',
+          source_name: host,
+          source_link: url,
+        }).eq('id', updateTarget.id).select('id, episode_no').single();
+        if (error) throw error;
+        return NextResponse.json({
+          success: true,
+          updated: true,
+          episode: data,
+          panels: stored.length,
+          cdn: stored.length,
+          droppedPanels,
+        });
+      }
+
       const { data: max } = await db.from('comic_episodes')
         .select('episode_no').eq('comic_id', comicId)
         .order('episode_no', { ascending: false }).limit(1).maybeSingle();
       const episode_no = (max?.episode_no ?? 0) + 1;
-      let host = url;
-      try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep raw */ }
       const { data, error } = await db.from('comic_episodes').insert({
         episode_no,
         title,
