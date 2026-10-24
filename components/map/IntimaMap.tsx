@@ -1456,23 +1456,34 @@ export default function IntimaMap() {
                 <X aria-hidden className="h-4 w-4" />
               </button>
             )}
-            <button
-              onClick={() => setFilterOpen(true)}
-              aria-label="Open filters"
-              className={`flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-all active:scale-95 ${
-                sheetFilterCount > 0
-                  ? 'bg-[#C9A84C] text-charcoal shadow-lg'
-                  : 'bg-[#AC244D] text-white hover:bg-[#8F1D40]'
-              }`}
-            >
-              <SlidersHorizontal aria-hidden className="h-4 w-4" />
-              <span className="hidden min-[380px]:inline">Filters</span>
-              {sheetFilterCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-charcoal px-1 text-[11px] font-bold text-white">
-                  {sheetFilterCount}
-                </span>
-              )}
-            </button>
+            {/* Account actions live in the search card, the
+                app-bar row: one row, one job. Filter controls
+                live in the chips row below with the other
+                filters. Guests always see both actions; the
+                search input is the flexible element, not them. */}
+            {session ? (
+              <Link
+                href="/dashboard"
+                className="inline-flex min-h-[36px] shrink-0 items-center rounded-full bg-[#AC244D] px-3.5 text-[13px] font-semibold text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="inline-flex min-h-[36px] shrink-0 items-center rounded-full bg-white/10 px-3 text-[13px] font-semibold text-white transition-all hover:bg-white/20 active:scale-95"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="inline-flex min-h-[36px] shrink-0 items-center rounded-full bg-[#AC244D] px-3.5 text-[13px] font-semibold text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Search results: real data only. Cities from the
@@ -1544,8 +1555,24 @@ export default function IntimaMap() {
 
         {/* Quick row: city, the two standing discovery toggles,
             and the guest auth actions at the end. */}
-        <div className="mt-2 flex items-start gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,black_90%,transparent)]">
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,black_92%,transparent)]">
+          <button
+            onClick={() => setFilterOpen(true)}
+            aria-label="Open filters"
+            className={`flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+              sheetFilterCount > 0
+                ? 'border-[#C9A84C] bg-[#C9A84C] text-charcoal shadow-lg'
+                : 'border-white/15 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
+            }`}
+          >
+            <SlidersHorizontal aria-hidden className="h-3.5 w-3.5" />
+            Filters
+            {sheetFilterCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-charcoal px-1 text-[11px] font-bold text-white">
+                {sheetFilterCount}
+              </span>
+            )}
+          </button>
           <div className="relative shrink-0">
             <select
               value={filters.city}
@@ -1607,35 +1634,6 @@ export default function IntimaMap() {
           >
             Negotiable
           </button>
-          </div>
-          {/* Auth stays OUTSIDE the scrolling chips: pinned to
-              the right edge, always visible, never something a
-              user has to discover by scrolling sideways. */}
-          <div className="flex shrink-0 items-center gap-2 pb-0.5">
-            {session ? (
-              <Link
-                href="/dashboard"
-                className="inline-flex min-h-[40px] items-center rounded-full bg-[#AC244D] px-4 py-2 text-[13px] font-semibold text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="hidden min-h-[40px] items-center rounded-full bg-black/55 px-4 py-2 text-[13px] font-semibold text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95 min-[380px]:inline-flex"
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="inline-flex min-h-[40px] items-center rounded-full bg-[#AC244D] px-4 py-2 text-[13px] font-semibold text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
