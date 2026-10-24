@@ -74,11 +74,7 @@ export function LivePreviewVideo({
         room.on(RoomEvent.TrackPublished, (pub, participant) => {
           if (pub.kind === Track.Kind.Video && participant.identity === hostId) pub.setSubscribed(true)
         })
-        room.on(RoomEvent.Disconnected, (reason) => {
-          console.log('[preview] disconnected', String(reason))
-        })
         room.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
-          console.log('[preview] track subscribed', track.kind, participant.identity)
           if (track.kind === Track.Kind.Audio) {
             // A preview is silent by design, and unsubscribing
             // keeps it light on data too.
@@ -91,11 +87,9 @@ export function LivePreviewVideo({
           }
         })
         await room.connect(url, token)
-        console.log('[preview] connected, remotes:', room.remoteParticipants.size)
         if (cancelled) return
         attachHost() // the host was already publishing when we arrived
-      } catch (e) {
-        console.log('[preview] connect failed', String(e))
+      } catch {
         /* the cover stays; joining is unaffected */
       }
     }
