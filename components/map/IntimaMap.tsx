@@ -534,7 +534,11 @@ export default function IntimaMap() {
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const r = await searchPlaces(query);
+        const c = mapRef.current?.getCenter();
+        const r = await searchPlaces(
+          query,
+          c ? [c.lng, c.lat] : [3.3792, 6.5244],
+        );
         if (!cancelled) {
           setRemotePlaces(r);
           setSearchFailed(false);

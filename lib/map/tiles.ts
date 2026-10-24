@@ -96,11 +96,21 @@ export interface PlaceResult {
  * callers can merge it with local results unconditionally;
  * throws on a failed request so the UI can say so honestly.
  */
-export async function searchPlaces(query: string): Promise<PlaceResult[]> {
+export async function searchPlaces(
+  query: string,
+  proximity?: [number, number],
+): Promise<PlaceResult[]> {
   const q = query.trim();
   if (!MAPTILER_KEY || q.length < 3) return [];
+  // Proximity bias is not decoration: without it a search for Yaba
+  // returns Yaba, Burkina Faso and two Bulgarian villages, ranked
+  // by global prominence. The map's current centre keeps results
+  // local to what the user is actually looking at.
+  const prox = proximity
+    ? `&proximity=${proximity[0]},${proximity[1]}`
+    : '';
   const res = await fetch(
-    `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${MAPTILER_KEY}&limit=5&language=en`,
+    `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${MAPTILER_KEY}&limit=5&language=en${prox}`,
     { headers: { Accept: 'application/json' } },
   );
   if (!res.ok) throw new Error(`place search ${res.status}`);
