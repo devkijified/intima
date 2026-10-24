@@ -44,6 +44,10 @@ export function LivePreviewVideo({
       room.remoteParticipants.forEach((p) => {
         if (p.identity !== hostId) return
         p.videoTrackPublications.forEach((pub) => {
+          // Adaptive stream leaves an unattached track
+          // unsubscribed: wanting it has to be said out loud,
+          // or the host's video never starts flowing.
+          pub.setSubscribed(true)
           if (pub.track && videoRef.current) {
             pub.track.attach(videoRef.current)
             setLive(true)
@@ -67,6 +71,9 @@ export function LivePreviewVideo({
         const { token, url } = (await res.json()) as { token: string; url: string }
         if (cancelled) return
         room = new Room({ adaptiveStream: true, dynacast: true })
+        room.on(RoomEvent.TrackPublished, (pub, participant) => {
+          if (pub.kind === Track.Kind.Video && participant.identity === hostId) pub.setSubscribed(true)
+        })
         room.on(RoomEvent.Disconnected, (reason) => {
           console.log('[preview] disconnected', String(reason))
         })
