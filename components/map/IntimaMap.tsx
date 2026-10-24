@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StoryTray } from '@/components/stories/StoryTray';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -13,8 +12,9 @@ import {
   ChevronDown,
   LayoutDashboard,
   LayoutGrid,
-  List,
   Loader2,
+  Locate,
+  Search,
   Map as MapIcon,
   MapPin,
   BookOpen,
@@ -27,9 +27,18 @@ import { createClient } from '@/lib/supabase/client';
 import { formatCompactCount } from '@/lib/utils/helpers';
 import { useCities } from '@/lib/citiesLive';
 import { GAZETTEER_COORDS } from '@/lib/cities';
-import { fetchMapProviders, type MapProvider } from '@/lib/map/providers';
+import {
+  fetchMapProviders,
+  fetchMapProvidersInBounds,
+  fetchMapProviderTotal,
+  mockProvidersInBounds,
+  type MapBounds,
+  type MapProvider,
+} from '@/lib/map/providers';
+import { buildBaseStages, searchPlaces, type PlaceResult } from '@/lib/map/tiles';
+import { DiscoverySheet, type SheetSnap } from './DiscoverySheet';
+import Supercluster from 'supercluster';
 import { emptySpecFilter, matchesSpec, type SpecFilter } from '@/lib/spec';
-import { ComicRibbon } from '@/components/comics/ComicRibbon';
 import { ProviderSheet } from './ProviderSheet';
 import { FilterSheet } from './FilterSheet';
 import { ProviderListCard, ProviderListSkeleton } from './ProviderListCard';
@@ -38,61 +47,22 @@ import { RequestConnectionModal } from '@/components/connections/RequestConnecti
 import { Tooltip } from '@/components/ui/Tooltip';
 
 /**
- * Base map strategy (rebuilt 2026-10-22 after the map shipped black
- * on the owner's phone, twice over). The primary base is Wikimedia's
- * raster tiles under the app's dark CSS filter: plain image tiles on
- * highly reachable infrastructure, no external style JSON, no vector
- * tiles, no webfont glyphs to stall on, and under the filter they
- * read as the dark slate night base the Snap Map reference calls
- * for. If no tile paints within the stage budget, or tiles keep
- * erroring, the base steps down to OpenStreetMap's own raster tiles
- * (same filter), and only then to the honest list. A base is only
- * trusted once a tile has genuinely loaded (see the sourcedata proof
- * in the init effect): the MapLibre 'load' event alone is NOT proof,
- * it fires for a style whose tiles never arrive.
- *
- * Two dead ends already walked, do not re-add them: the CARTO vector
- * style (its tile and glyph chain stalls on the networks that matter
- * here) and CARTO's keyless dark_all raster (the tiles arrive
- * watermarked "API KEY REQUIRED"). The other half of the black-map
- * bug was never the tiles at all: maplibre-gl.css sets the map
- * container to position: relative, which beat the Tailwind absolute
- * classes in the cascade and collapsed the container to zero height.
- * The container now carries inline position styles (see the JSX),
- * and a ResizeObserver keeps the canvas matched to its box.
+ * Base map strategy: the chain lives in lib/map/tiles.ts
+ * (MapTiler vector when a key is configured, then Wikimedia
+ * raster, then OpenStreetMap raster, both rasters under the
+ * dark CSS filter). A stage counts as working only when one of
+ * its tiles has genuinely painted (see the sourcedata proof in
+ * the init effect): the MapLibre 'load' event alone is NOT
+ * proof, it fires for a style whose tiles never arrive. The
+ * other half of the historical black-map bug was never tiles:
+ * maplibre-gl.css sets the container to position: relative,
+ * which beat the Tailwind absolute classes and collapsed it to
+ * zero height. The container carries inline position styles
+ * (see the JSX) and a ResizeObserver keeps the canvas matched
+ * to its box for the map's whole life.
  */
-const WIKIMEDIA_RASTER_STYLE = {
-  version: 8 as const,
-  sources: {
-    wikimedia: {
-      type: 'raster' as const,
-      tiles: ['https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [{ id: 'wikimedia', type: 'raster' as const, source: 'wikimedia' }],
-};
+const BASE_STAGES = buildBaseStages();
 
-const OSM_RASTER_STYLE = {
-  version: 8 as const,
-  sources: {
-    osm: {
-      type: 'raster' as const,
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
-};
-
-/** The base chain: Wikimedia raster first, OpenStreetMap raster
- *  behind it, both under the dark CSS filter. */
-const BASE_STAGES = [
-  { style: WIKIMEDIA_RASTER_STYLE, sourceId: 'wikimedia', filtered: true },
-  { style: OSM_RASTER_STYLE, sourceId: 'osm', filtered: true },
-] as const;
 const LAGOS_CENTER: [number, number] = [3.3792, 6.5244];
 
 /** City centers for map fly-to when the city filter changes. [lng, lat]. */
@@ -171,6 +141,56 @@ async function loadMapLibre(): Promise<{ lib: MapLibreLib | null; keys: string }
 
 
 const HEAT_SOURCE_ID = 'intima-heat';
+
+/** Grow a bounds box by a fraction on every side, so small pans
+    stay inside ground that is already loaded. */
+function padBounds(b: MapBounds, frac: number): MapBounds {
+  const dLat = (b.maxLat - b.minLat) * frac;
+  const dLng = (b.maxLng - b.minLng) * frac;
+  return {
+    minLat: b.minLat - dLat,
+    maxLat: b.maxLat + dLat,
+    minLng: b.minLng - dLng,
+    maxLng: b.maxLng + dLng,
+  };
+}
+
+function boundsContain(outer: MapBounds, inner: MapBounds): boolean {
+  return (
+    inner.minLat >= outer.minLat &&
+    inner.maxLat <= outer.maxLat &&
+    inner.minLng >= outer.minLng &&
+    inner.maxLng <= outer.maxLng
+  );
+}
+
+function boundsOf(map: MLMap): MapBounds {
+  const b = map.getBounds();
+  return { minLat: b.getSouth(), maxLat: b.getNorth(), minLng: b.getWest(), maxLng: b.getEast() };
+}
+
+/**
+ * A cluster bubble: Intima burgundy with the group's count.
+ * Clusters are MapLibre-agnostic DOM markers like the pins;
+ * supercluster decides the grouping per zoom, this is only
+ * the face. Tap zooms to the group's expansion zoom.
+ */
+function clusterElement(count: number, onTap: () => void): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'intima-cluster';
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', `${count} companions grouped here`);
+  el.innerHTML =
+    `<div style="position:relative;cursor:pointer;width:54px;height:54px">` +
+    `<span style="position:absolute;inset:0;border-radius:9999px;background:radial-gradient(circle, rgba(201,168,76,0.45) 0%, transparent 70%)"></span>` +
+    `<span style="position:absolute;inset:7px;border-radius:9999px;background:rgba(172,36,77,0.94);border:2px solid rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;box-shadow:0 6px 16px rgba(0,0,0,.5)">${count > 999 ? formatCompactCount(count) : count}</span>` +
+    `</div>`;
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onTap();
+  });
+  return el;
+}
 const HEAT_LAYER_ID = 'intima-heat';
 
 /**
@@ -374,7 +394,7 @@ export default function IntimaMap() {
   const { startCall } = useCall();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
-  const markersRef = useRef<MLMarker[]>([]);
+  const markersByKeyRef = useRef<Map<string, MLMarker>>(new Map());
   /** Resolved maplibre exports, shared by init and pin rendering. */
   const libRef = useRef<MapLibreLib | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -392,7 +412,14 @@ export default function IntimaMap() {
   const [mapStalled, setMapStalled] = useState(false);
   /** Why the map fell back, shown under Technical details in the fallback. */
   const [mapFailReason, setMapFailReason] = useState<string | null>(null);
-  const [view, setView] = useState<'map' | 'list'>('map');
+  const [forceList, setForceList] = useState(false);
+  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [remotePlaces, setRemotePlaces] = useState<PlaceResult[]>([]);
+  const [searchFailed, setSearchFailed] = useState(false);
+  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('peek');
+  const [bounds, setBounds] = useState<MapBounds | null>(null);
   const [selected, setSelected] = useState<MapProvider | null>(null);
   /** Pin id carrying the selected name plate on the map. */
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
@@ -446,19 +473,100 @@ export default function IntimaMap() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Providers: public DB view first, mock fallback.
+  // Providers load per viewport and accumulate: panning fetches
+  // the new ground (padded, debounced by the settle listener),
+  // never the whole directory, so the map stays fast at 100 or
+  // at 100,000 companions. The data mode latches once: when the
+  // directory itself is known empty, the preview pins stand in;
+  // a populated directory never mixes them in.
+  const providersByIdRef = useRef<Map<string, MapProvider>>(new Map());
+  const dataModeRef = useRef<'unknown' | 'db' | 'mock'>('unknown');
+  const lastFetchedBoundsRef = useRef<MapBounds | null>(null);
+  const loadRunRef = useRef(0);
+
+  const mergeProviders = (list: MapProvider[]) => {
+    if (list.length === 0) return;
+    const byId = providersByIdRef.current;
+    for (const p of list) {
+      if (!byId.has(p.id) && byId.size >= 3000) continue;
+      byId.set(p.id, p);
+    }
+    setProviders([...byId.values()]);
+  };
+
+  const loadForBounds = async (raw: MapBounds) => {
+    const padded = padBounds(raw, 0.3);
+    if (lastFetchedBoundsRef.current && boundsContain(lastFetchedBoundsRef.current, padded)) return;
+    lastFetchedBoundsRef.current = padded;
+    const run = ++loadRunRef.current;
+    try {
+      if (dataModeRef.current === 'unknown') {
+        const total = await fetchMapProviderTotal();
+        dataModeRef.current = total === 0 ? 'mock' : 'db';
+      }
+      if (dataModeRef.current === 'mock') {
+        mergeProviders(mockProvidersInBounds(padded));
+        setProvidersReady(true);
+        return;
+      }
+      const list = await fetchMapProvidersInBounds(padded);
+      if (run !== loadRunRef.current) return;
+      mergeProviders(list);
+      setProvidersReady(true);
+    } catch {
+      if (run !== loadRunRef.current) return;
+      // Offline or the view errored: preview pins keep the map
+      // useful for this viewport instead of an empty screen.
+      mergeProviders(mockProvidersInBounds(padded));
+      setProvidersReady(true);
+    }
+  };
+  const loadForBoundsRef = useRef(loadForBounds);
+  loadForBoundsRef.current = loadForBounds;
+
+  // Place search: debounced, provider-backed (lib/map/tiles).
+  // Local results (cities, companions) never depend on it.
   useEffect(() => {
+    if (!searchOpen || query.trim().length < 3) {
+      setRemotePlaces([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await searchPlaces(query);
+        if (!cancelled) {
+          setRemotePlaces(r);
+          setSearchFailed(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setRemotePlaces([]);
+          setSearchFailed(true);
+        }
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, searchOpen]);
+
+  // A dead map has no viewport to load by: fill the fallback
+  // list the original way, one whole-directory read.
+  useEffect(() => {
+    if (!mapFailed) return;
     let cancelled = false;
     fetchMapProviders().then((list) => {
       if (!cancelled) {
-        setProviders(list);
+        mergeProviders(list);
         setProvidersReady(true);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mapFailed]);
 
   const filtered = useMemo(
     () =>
@@ -780,8 +888,9 @@ export default function IntimaMap() {
             sourceId?: string;
             tile?: { state?: string };
           };
+          const stageSource = BASE_STAGES[baseStage].sourceId;
           if (
-            ev.sourceId === BASE_STAGES[baseStage].sourceId &&
+            (stageSource === null || ev.sourceId === stageSource) &&
             ev.tile &&
             ev.tile.state === 'loaded'
           ) {
@@ -813,8 +922,8 @@ export default function IntimaMap() {
       if (bundleTimer) clearTimeout(bundleTimer);
       if (baseTimer) clearTimeout(baseTimer);
       if (stallTimer) clearTimeout(stallTimer);
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
+      markersByKeyRef.current.forEach((m) => m.remove());
+      markersByKeyRef.current.clear();
       pinElsRef.current.clear();
       map?.remove();
       mapRef.current = null;
@@ -847,30 +956,99 @@ export default function IntimaMap() {
     }
   }, [filters.city, mapReady, mapFailed]);
 
-  // Rebuild pins whenever the filtered set changes.
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || mapFailed) return;
-    let cancelled = false;
-    async function renderPins() {
-      const lib = libRef.current;
-      if (cancelled || !mapRef.current || !lib) return;
-      markersRef.current.forEach((m) => m.remove());
-      pinElsRef.current.clear();
-      markersRef.current = filtered.map((p) => {
-        const el = markerElement(p, previewProvider);
-        pinElsRef.current.set(p.id, el);
-        return new lib.Marker({ element: el, anchor: 'bottom' } as any)
-          .setLngLat([p.lng, p.lat])
-          .addTo(mapRef.current as MLMap);
-      });
-      refreshPlates();
-    }
+  // Clustering: supercluster groups the filtered set per zoom;
+  // the camera only changes which clusters and pins render.
+  // Only rendered items exist as DOM markers, and a marker is
+  // created once per key, so panning never rebuilds the world.
+  const clusterIndexRef = useRef<Supercluster | null>(null);
 
-    renderPins();
-    return () => {
-      cancelled = true;
-    };
-  }, [filtered, mapReady, mapFailed]);
+  const renderViewport = (force = false) => {
+    const map = mapRef.current;
+    const lib = libRef.current;
+    const idx = clusterIndexRef.current;
+    if (!map || !lib || !idx) return;
+    if (force) {
+      markersByKeyRef.current.forEach((m) => m.remove());
+      markersByKeyRef.current.clear();
+      pinElsRef.current.clear();
+    }
+    let feats: Array<{
+      properties?: { cluster?: boolean; cluster_id?: number; point_count?: number; providerId?: string };
+      geometry: { coordinates: [number, number] };
+    }> = [];
+    try {
+      const b = map.getBounds();
+      const z = Math.max(0, Math.min(20, Math.floor(map.getZoom())));
+      feats = idx.getClusters([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], z) as unknown as typeof feats;
+    } catch {
+      return; // map mid-teardown; the next settle re-renders
+    }
+    const want = new Set<string>();
+    for (const f of feats) {
+      const props = f.properties ?? {};
+      const coords = f.geometry.coordinates;
+      if (props.cluster) {
+        const key = `cluster-${props.cluster_id}`;
+        want.add(key);
+        if (!markersByKeyRef.current.has(key)) {
+          const cid = props.cluster_id as number;
+          const el = clusterElement(props.point_count ?? 0, () => {
+            const index = clusterIndexRef.current;
+            const m = mapRef.current;
+            if (!index || !m) return;
+            try {
+              const ez = index.getClusterExpansionZoom(cid);
+              m.easeTo({ center: coords, zoom: Math.min(ez, 17), duration: 700 });
+            } catch {
+              /* cluster gone with a data swap; ignore */
+            }
+          });
+          const marker = new lib.Marker({ element: el, anchor: 'center' } as any)
+            .setLngLat(coords)
+            .addTo(map as MLMap);
+          markersByKeyRef.current.set(key, marker);
+        }
+      } else {
+        const provider = filteredRef.current.find((x) => x.id === props.providerId);
+        if (!provider) continue;
+        want.add(provider.id);
+        if (!markersByKeyRef.current.has(provider.id)) {
+          const el = markerElement(provider, previewProvider);
+          pinElsRef.current.set(provider.id, el);
+          const marker = new lib.Marker({ element: el, anchor: 'bottom' } as any)
+            .setLngLat([provider.lng, provider.lat])
+            .addTo(map as MLMap);
+          markersByKeyRef.current.set(provider.id, marker);
+        }
+      }
+    }
+    for (const [key, marker] of [...markersByKeyRef.current]) {
+      if (!want.has(key)) {
+        marker.remove();
+        markersByKeyRef.current.delete(key);
+        if (!key.startsWith('cluster-')) pinElsRef.current.delete(key);
+      }
+    }
+    refreshPlates();
+  };
+  const renderViewportRef = useRef(renderViewport);
+  renderViewportRef.current = renderViewport;
+
+  // Rebuild the cluster index whenever the filtered set changes
+  // and repaint from scratch: filter changes are user-paced, so
+  // a clean rebuild beats diffing two cluster trees.
+  useEffect(() => {
+    const idx = new Supercluster({ radius: 64, maxZoom: 16, minPoints: 2 });
+    idx.load(
+      filtered.map((p) => ({
+        type: 'Feature' as const,
+        properties: { providerId: p.id },
+        geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] as [number, number] },
+      })),
+    );
+    clusterIndexRef.current = idx;
+    renderViewportRef.current(true);
+  }, [filtered]);
 
   // Heat layer: the same filtered points the pins use, re-synced
   // whenever they change and whenever a fresh style loads (style
@@ -893,14 +1071,42 @@ export default function IntimaMap() {
     if (!mapReady || mapFailed) return;
     const map = mapRef.current;
     if (!map) return;
+    let renderTimer: ReturnType<typeof setTimeout> | undefined;
+    let fetchTimer: ReturnType<typeof setTimeout> | undefined;
     const onSettle = () => {
       refreshPlates();
       updateAreaName();
+      try {
+        setBounds(boundsOf(map));
+      } catch {
+        /* mid-teardown; keep the last bounds */
+      }
+      if (renderTimer) clearTimeout(renderTimer);
+      renderTimer = setTimeout(() => renderViewportRef.current(false), 120);
+      if (fetchTimer) clearTimeout(fetchTimer);
+      fetchTimer = setTimeout(() => {
+        try {
+          loadForBoundsRef.current(boundsOf(map));
+        } catch {
+          /* mid-teardown; the next settle retries */
+        }
+      }, 500);
+    };
+    // A tap on open map ground settles the overlays back: the
+    // discovery sheet returns to its peek and search closes.
+    const onMapTap = () => {
+      setSheetSnap('peek');
+      setSearchOpen(false);
     };
     map.on('moveend', onSettle);
+    map.on('click', onMapTap);
+    onSettle();
     updateAreaName();
     return () => {
       map.off('moveend', onSettle);
+      map.off('click', onMapTap);
+      if (renderTimer) clearTimeout(renderTimer);
+      if (fetchTimer) clearTimeout(fetchTimer);
     };
   }, [mapReady, mapFailed, mapAttempt]);
 
@@ -1023,8 +1229,136 @@ export default function IntimaMap() {
   // notice). They disable only for logged-in users on preview pins.
   const callsDisabled = !!session && !!selected && !selected.userId;
 
-  // A dead map forces the list; the toggle hides to avoid a dead control.
-  const showList = view === 'list' || mapFailed;
+  // A dead map forces the list; the stalled card can ask for it too.
+  const showList = mapFailed || forceList;
+
+  /** Companions inside the settled map view, filters applied. */
+  const inView = useMemo(() => {
+    if (!bounds) return filtered;
+    return filtered.filter(
+      (p) => p.lat >= bounds.minLat && p.lat <= bounds.maxLat && p.lng >= bounds.minLng && p.lng <= bounds.maxLng,
+    );
+  }, [filtered, bounds]);
+
+  /** Sheet order: boosted first, then available, then best rated. */
+  const sheetProviders = useMemo(
+    () =>
+      [...inView].sort(
+        (a, b) =>
+          Number(b.boosted ?? false) - Number(a.boosted ?? false) ||
+          Number(b.available) - Number(a.available) ||
+          (b.rating ?? 0) - (a.rating ?? 0),
+      ),
+    [inView],
+  );
+
+  const filtersActive =
+    filters.verifiedOnly || filters.availableNow || filters.negotiableOnly || sheetFilterCount > 0;
+
+  /** Distance from the user, only when they shared a position. */
+  const distanceKmFor = (p: MapProvider): number | null => {
+    if (!userPos) return null;
+    const dLat = ((p.lat - userPos.lat) * Math.PI) / 180;
+    const dLng = ((p.lng - userPos.lng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((userPos.lat * Math.PI) / 180) * Math.cos((p.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  const handleRecenter = () => {
+    if (!('geolocation' in navigator)) {
+      showToast({ message: 'This browser cannot share your location.' });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserPos(here);
+        try {
+          mapRef.current?.flyTo({ center: [here.lng, here.lat], zoom: 13, duration: 1200 });
+        } catch {
+          /* map not ready for camera moves */
+        }
+      },
+      () => {
+        showToast({
+          message:
+            'Location is off for this browser, so the map cannot centre on you. The city picker above still takes you anywhere.',
+        });
+      },
+      { timeout: 10000, maximumAge: 300000 },
+    );
+  };
+
+  /** Sheet row tap: settle the sheet, centre her pin, preview her. */
+  const handleSheetSelect = (p: MapProvider) => {
+    setSheetSnap('peek');
+    setSelectedPinId(p.id);
+    try {
+      const map = mapRef.current;
+      if (map) map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 13), duration: 800 });
+    } catch {
+      /* map not ready for camera moves */
+    }
+    setSelected(p);
+  };
+
+  // Search: everything matches against real loaded data. Cities
+  // come from the app's own gazetteer and live city list; places
+  // from the configured geocoder; companions from the directory
+  // rows the map has actually loaded.
+  const companionMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return providers
+      .filter(
+        (p) =>
+          p.displayName.toLowerCase().includes(q) ||
+          p.area.toLowerCase().includes(q) ||
+          p.city.toLowerCase().includes(q),
+      )
+      .slice(0, 8);
+  }, [providers, query]);
+
+  const cityMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const names = new Set<string>([...liveCities, ...Object.keys(GAZETTEER_COORDS), ...Object.keys(CITY_CENTERS)]);
+    return [...names].filter((n) => n.toLowerCase().includes(q)).slice(0, 5);
+  }, [liveCities, query]);
+
+  const pickCity = (city: string) => {
+    setFilters((f) => ({ ...f, city }));
+    try {
+      localStorage.setItem(CITY_STORAGE_KEY, city);
+    } catch {
+      /* persistence is best-effort */
+    }
+    setSearchOpen(false);
+    setQuery('');
+  };
+
+  const pickPlace = (pl: PlaceResult) => {
+    setSearchOpen(false);
+    setQuery('');
+    try {
+      mapRef.current?.flyTo({ center: [pl.lng, pl.lat], zoom: 12, duration: 1200 });
+    } catch {
+      /* map not ready for camera moves */
+    }
+  };
+
+  const pickCompanion = (p: MapProvider) => {
+    setSearchOpen(false);
+    setQuery('');
+    try {
+      mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: 14, duration: 1000 });
+    } catch {
+      /* map not ready for camera moves */
+    }
+    previewProvider(p);
+  };
 
   return (
     <div
@@ -1043,7 +1377,7 @@ export default function IntimaMap() {
         style={{ position: 'absolute', inset: 0 }}
         className={usingRaster ? 'map-raster-dark' : undefined}
       />
-      {!mapReady && !mapFailed && !mapStalled && view === 'map' && (
+      {!mapReady && !mapFailed && !mapStalled && !showList && (
         <div className="absolute inset-0 z-10 overflow-hidden bg-[#04070c]">
           {/* Shimmer sweep: guests see intentional loading, not a bug. */}
           <div className="map-shimmer absolute inset-0" />
@@ -1058,7 +1392,7 @@ export default function IntimaMap() {
           </div>
         </div>
       )}
-      {mapStalled && !mapReady && !mapFailed && view === 'map' && (
+      {mapStalled && !mapReady && !mapFailed && !showList && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#04070c] px-6 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#AC244D]/15">
             <MapPin aria-hidden className="h-7 w-7 text-[#AC244D]" />
@@ -1078,7 +1412,7 @@ export default function IntimaMap() {
               Try again
             </button>
             <button
-              onClick={() => setView('list')}
+              onClick={() => setForceList(true)}
               className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white"
             >
               View as list
@@ -1087,104 +1421,159 @@ export default function IntimaMap() {
         </div>
       )}
 
-      {/* Slim floating header: wordmark, city select, auth actions. No marketing copy. */}
-      <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-[max(1rem,env(safe-area-inset-top))] sm:px-5 sm:pt-[max(1.25rem,env(safe-area-inset-top))]">
-        <div className="flex items-center justify-between gap-2">
-          <div className="glass-dark flex min-w-0 items-center gap-1.5 rounded-full py-1.5 pl-3.5 pr-1.5 sm:gap-2 sm:pl-4">
-            <span className="font-display text-lg font-semibold tracking-tight text-white sm:text-xl">Intima<span className="text-gold">.</span></span>
-            <div className="relative">
-              <select
-                value={filters.city}
-                onChange={(e) => {
-                  const city = e.target.value;
-                  setFilters((f) => ({ ...f, city }));
-                  try {
-                    localStorage.setItem(CITY_STORAGE_KEY, city);
-                  } catch {
-                    /* persistence is best-effort */
-                  }
+      {/* Floating discovery header: one search card and one
+          chips row, so the map stays the screen. Secondary
+          actions live in the filter sheet and the discovery
+          sheet below. */}
+      <div className="absolute left-0 right-0 top-0 z-30 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-[max(1rem,env(safe-area-inset-top))]">
+        <div className="relative">
+          <div className="glass-dark flex items-center gap-1.5 rounded-full py-1.5 pl-4 pr-1.5 shadow-xl">
+            <Search aria-hidden className="h-5 w-5 shrink-0 text-white/60" />
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Search companions or places"
+              aria-label="Search companions or places"
+              className="min-h-[40px] min-w-0 flex-1 bg-transparent text-[15px] text-white placeholder:text-white/45 focus:outline-none"
+            />
+            {query && (
+              <button
+                onClick={() => {
+                  setQuery('');
+                  setSearchOpen(false);
                 }}
-                aria-label="Choose city"
-                className="min-h-[44px] max-w-[110px] appearance-none truncate rounded-full bg-white/[0.08] py-1.5 pl-3 pr-8 text-base font-medium text-white/90 outline-none transition-colors hover:bg-white/[0.14] sm:max-w-none md:text-sm"
+                aria-label="Clear search"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10"
               >
-                <option value="" className="text-charcoal">
-                  All cities
-                </option>
-                {liveCities.map((c) => (
-                  <option key={c} value={c} className="text-charcoal">
-                    {c}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {session ? (
-              <Link
-                href="/dashboard"
-                className="inline-flex min-h-[44px] items-center rounded-full bg-[#AC244D] px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="hidden min-h-[44px] items-center rounded-full bg-black/55 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95 min-[380px]:inline-flex"
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="inline-flex min-h-[44px] items-center rounded-full bg-[#AC244D] px-3.5 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95 sm:px-4"
-                >
-                  Sign up
-                </Link>
-              </>
+                <X aria-hidden className="h-4 w-4" />
+              </button>
             )}
-          </div>
-        </div>
-
-        {/* Single filter bar: view toggle, quick toggles, filters sheet. */}
-        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {!mapFailed && (
-            <div
-              className="glass-dark flex shrink-0 items-center rounded-full p-1"
-              role="tablist"
-              aria-label="Discovery view"
+            <button
+              onClick={() => setFilterOpen(true)}
+              aria-label="Open filters"
+              className={`flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-all active:scale-95 ${
+                sheetFilterCount > 0
+                  ? 'bg-[#C9A84C] text-charcoal shadow-lg'
+                  : 'bg-[#AC244D] text-white hover:bg-[#8F1D40]'
+              }`}
             >
-              {(
-                [
-                  { value: 'map', label: 'Map', Icon: MapIcon },
-                  { value: 'list', label: 'List', Icon: List },
-                ] as const
-              ).map(({ value, label, Icon }) => (
-                <button
-                  key={value}
-                  role="tab"
-                  aria-selected={view === value}
-                  onClick={() => setView(value)}
-                  className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all active:scale-95 ${
-                    view === value
-                      ? 'bg-white text-charcoal shadow'
-                      : 'text-white/75 hover:text-white'
-                  }`}
-                >
-                  <Icon aria-hidden className="h-4 w-4" />
-                  {label}
-                </button>
-              ))}
+              <SlidersHorizontal aria-hidden className="h-4 w-4" />
+              <span className="hidden min-[380px]:inline">Filters</span>
+              {sheetFilterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-charcoal px-1 text-[11px] font-bold text-white">
+                  {sheetFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Search results: real data only. Cities from the
+              app gazetteer, places from the configured geocoder,
+              companions from the loaded directory rows. */}
+          {searchOpen && query.trim().length >= 2 && (
+            <div className="absolute inset-x-0 top-full z-40 mt-2 overflow-hidden rounded-3xl bg-[#14141c]/95 shadow-2xl ring-1 ring-white/10 backdrop-blur-md">
+              {cityMatches.length === 0 && remotePlaces.length === 0 && companionMatches.length === 0 ? (
+                <p className="px-4 py-3.5 text-sm text-white/60">
+                  No matches for &ldquo;{query.trim()}&rdquo;.
+                  {searchFailed && ' Place search is unavailable right now.'}
+                </p>
+              ) : (
+                <ul className="max-h-[46dvh] overflow-y-auto py-1.5">
+                  {cityMatches.map((name) => (
+                    <li key={`city-${name}`}>
+                      <button
+                        onClick={() => pickCity(name)}
+                        className="flex min-h-[48px] w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5 active:bg-white/10"
+                      >
+                        <MapPin aria-hidden className="h-5 w-5 shrink-0 text-[#C9A84C]" />
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-white">{name}</span>
+                        <span className="shrink-0 text-xs text-white/45">City</span>
+                      </button>
+                    </li>
+                  ))}
+                  {remotePlaces.map((pl) => (
+                    <li key={`place-${pl.label}-${pl.lng}-${pl.lat}`}>
+                      <button
+                        onClick={() => pickPlace(pl)}
+                        className="flex min-h-[48px] w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5 active:bg-white/10"
+                      >
+                        <MapPin aria-hidden className="h-5 w-5 shrink-0 text-white/60" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[15px] font-medium text-white">{pl.label}</span>
+                          {pl.detail && pl.detail !== pl.label && (
+                            <span className="block truncate text-xs text-white/45">{pl.detail}</span>
+                          )}
+                        </span>
+                        <span className="shrink-0 text-xs text-white/45">Place</span>
+                      </button>
+                    </li>
+                  ))}
+                  {companionMatches.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        onClick={() => pickCompanion(p)}
+                        className="flex min-h-[48px] w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-white/5 active:bg-white/10"
+                      >
+                        <img src={p.avatar} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/20" />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-[15px] font-medium text-white">{p.displayName}</span>
+                            {p.verified && <BadgeCheck aria-hidden className="h-4 w-4 shrink-0 text-[#C9A84C]" />}
+                          </span>
+                          <span className="block truncate text-xs text-white/45">
+                            {p.area} · {p.city}
+                          </span>
+                        </span>
+                        {p.available && <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" aria-label="Available now" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
-          {/* Bybit P2P-style quick filters: compact action chips, clear on/off. */}
+        </div>
+
+        {/* Quick row: city, the two standing discovery toggles,
+            and the guest auth actions at the end. */}
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="relative shrink-0">
+            <select
+              value={filters.city}
+              onChange={(e) => {
+                const city = e.target.value;
+                setFilters((f) => ({ ...f, city }));
+                try {
+                  localStorage.setItem(CITY_STORAGE_KEY, city);
+                } catch {
+                  /* persistence is best-effort */
+                }
+              }}
+              aria-label="Choose city"
+              className="min-h-[40px] max-w-[118px] appearance-none truncate rounded-full bg-black/55 py-2 pl-3.5 pr-8 text-[13px] font-semibold text-white/90 ring-1 ring-white/10 backdrop-blur-md outline-none transition-colors hover:bg-black/75"
+            >
+              <option value="" className="text-charcoal">
+                All cities
+              </option>
+              {liveCities.map((c) => (
+                <option key={c} value={c} className="text-charcoal">
+                  {c}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
+          </div>
           <button
             onClick={() => toggle('verifiedOnly')}
             aria-pressed={filters.verifiedOnly}
-            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.verifiedOnly
                 ? 'border-[#AC244D] bg-[#AC244D] text-white shadow-lg'
-                : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
+                : 'border-white/15 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
             }`}
           >
             <BadgeCheck aria-hidden className="h-3.5 w-3.5" />
@@ -1193,10 +1582,10 @@ export default function IntimaMap() {
           <button
             onClick={() => toggle('availableNow')}
             aria-pressed={filters.availableNow}
-            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.availableNow
                 ? 'border-green-600 bg-green-600 text-white shadow-lg'
-                : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
+                : 'border-white/15 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
             }`}
           >
             <span className={`h-2 w-2 rounded-full ${filters.availableNow ? 'bg-white' : 'bg-green-400'}`} />
@@ -1205,52 +1594,61 @@ export default function IntimaMap() {
           <button
             onClick={() => toggle('negotiableOnly')}
             aria-pressed={filters.negotiableOnly}
-            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
+            className={`flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold backdrop-blur-md transition-all active:scale-95 ${
               filters.negotiableOnly
                 ? 'border-[#C9A84C] bg-[#C9A84C] text-charcoal shadow-lg'
-                : 'border-white/20 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
+                : 'border-white/15 bg-black/55 text-white/85 hover:border-white/40 hover:text-white'
             }`}
           >
             Negotiable
           </button>
-          <button
-            onClick={() => setFilterOpen(true)}
-            className={`flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium backdrop-blur-md transition-all active:scale-95 ${
-              sheetFilterCount > 0
-                ? 'bg-[#C9A84C] text-charcoal shadow-lg'
-                : 'bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/75'
-            }`}
-          >
-            <SlidersHorizontal aria-hidden className="h-4 w-4" />
-            Filters
-            {sheetFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-charcoal px-1 text-[11px] font-bold text-white">
-                {sheetFilterCount}
-              </span>
+          <div className="ml-auto flex shrink-0 items-center gap-2 pl-1">
+            {session ? (
+              <Link
+                href="/dashboard"
+                className="inline-flex min-h-[40px] items-center rounded-full bg-[#AC244D] px-4 py-2 text-[13px] font-semibold text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden min-h-[40px] items-center rounded-full bg-black/55 px-4 py-2 text-[13px] font-semibold text-white ring-1 ring-white/10 backdrop-blur-md transition-all hover:bg-black/75 active:scale-95 min-[380px]:inline-flex"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="inline-flex min-h-[40px] items-center rounded-full bg-[#AC244D] px-4 py-2 text-[13px] font-semibold text-white shadow-lg transition-all hover:bg-[#8F1D40] active:scale-95"
+                >
+                  Sign up
+                </Link>
+              </>
             )}
-          </button>
+          </div>
         </div>
       </div>
-      {/* Story tray + comic ribbon: ONE stacked column under the
-          header (wordmark row + filter row), so they can never
-          overlap each other or the filter chips again. Map view
-          only; the list view has its own clean top. */}
-      {view === 'map' && (
-        <div className="absolute left-0 right-0 top-[calc(118px+env(safe-area-inset-top))] z-30 flex flex-col">
-          <StoryTray />
-          <ComicRibbon />
-          {/* Area name, Snap style: a quiet dark-glass chip centred
-              under the tray stack once the map settles. It lives in
-              this column so it can never overlap the tray, the
-              ribbon or the filter row above it. */}
-          {areaName && (
-            <div className="pointer-events-none mt-2 flex justify-center px-4">
-              <span className="glass-dark rounded-full px-3.5 py-1.5 font-display text-[13px] font-semibold tracking-wide text-white/90">
-                {areaName}
-              </span>
-            </div>
-          )}
+
+      {/* Area name, Snap style: a quiet chip centred under the
+          header once the map settles on an area. */}
+      {areaName && !showList && (
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(118px+env(safe-area-inset-top))] z-20 flex justify-center px-4">
+          <span className="glass-dark rounded-full px-3.5 py-1.5 font-display text-[13px] font-semibold tracking-wide text-white/90">
+            {areaName}
+          </span>
         </div>
+      )}
+
+      {/* Recenter on the user, when they allow location. */}
+      {!showList && (
+        <button
+          onClick={handleRecenter}
+          aria-label="Centre the map on my location"
+          className="glass-dark absolute right-3 top-[calc(118px+env(safe-area-inset-top))] z-30 flex h-11 w-11 items-center justify-center rounded-full text-white shadow-lg transition-all hover:bg-black/70 active:scale-95 sm:right-5"
+        >
+          <Locate aria-hidden className="h-5 w-5" />
+        </button>
       )}
 
       {/* Build tag: tiny, bottom-right. Tells us exactly what version is running. */}
@@ -1258,56 +1656,28 @@ export default function IntimaMap() {
         {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev'}
       </div>
 
-      {/* Nearby tray, Snap style: a visible companion count and a
-          scrollable row of who is around, above the bottom bar.
-          Tapping a face opens the same profile path as her pin. */}
-      {view === 'map' && providersReady && filtered.length > 0 && (
-        <div
-          className="absolute inset-x-0 z-30"
-          style={{ bottom: session ? 'calc(76px + env(safe-area-inset-bottom))' : 'max(0.75rem, env(safe-area-inset-bottom))' }}
-        >
-          <div className="flex items-center gap-2 px-4 pb-1.5">
-            <span className="glass-dark rounded-full px-3 py-1.5 text-xs font-semibold text-white">
-              {formatCompactCount(filtered.length)} {filtered.length === 1 ? 'companion' : 'companions'} nearby
-            </span>
-            <span className="glass-dark flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] text-white/85">
-              <BadgeCheck aria-hidden className="h-3 w-3" /> Verified
-              <span className="ml-1 h-2 w-2 rounded-full bg-green-500" /> Available now
-            </span>
-          </div>
-          <div className="scroll-row gap-3 px-4 pb-1 pt-1">
-            {filtered.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => previewProvider(p)}
-                className="flex w-14 shrink-0 flex-col items-center gap-1"
-                aria-label={`${p.displayName}, ${p.area}`}
-              >
-                <span className="relative block">
-                  <img
-                    src={p.avatar}
-                    alt=""
-                    loading="lazy"
-                    className={`h-12 w-12 rounded-full object-cover shadow-lg ${p.trustTier === 'elite' ? 'ring-[2.5px] ring-gold' : 'ring-2 ring-white/85'}`}
-                  />
-                  {p.available && (
-                    <span className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#04070c] bg-green-500" />
-                  )}
-                </span>
-                <span className="w-full truncate text-center text-[10px] font-medium text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.85)]">
-                  {p.displayName.split(' ')[0]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Discovery sheet: the nearby tray's replacement. The
+          map stays the screen; the sheet peeks with the in-area
+          count and drags open into the paginated list. */}
+      {!showList && (
+        <DiscoverySheet
+          providers={sheetProviders}
+          ready={providersReady}
+          snap={sheetSnap}
+          onSnapChange={setSheetSnap}
+          onSelect={handleSheetSelect}
+          distanceKmFor={distanceKmFor}
+          filtersActive={filtersActive}
+          onClearFilters={clearFilters}
+          aboveNav={!!session}
+          selectedId={selectedPinId}
+        />
       )}
 
       {/* Signed-in bottom bar on the map (guests keep the clean
           full-screen map): same five stops as everywhere else,
           Map popped in the middle. */}
-      {session && view === 'map' && (
+      {session && !showList && (
         <nav className="absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#101016]/92 backdrop-blur-md">
           <div className="grid grid-cols-5 px-1 py-1.5">
             {[
@@ -1339,7 +1709,7 @@ export default function IntimaMap() {
 
       {/* First-class list view. Also the graceful fallback when tiles fail. */}
       {showList && (
-        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[176px] [touch-action:pan-y] [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch]">
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-cream px-4 pb-10 pt-[148px] [touch-action:pan-y] [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch]">
           {mapFailed && (
             <div className="mb-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-100">
               <AlertTriangle aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
@@ -1371,8 +1741,18 @@ export default function IntimaMap() {
                 Companions
               </h2>
               {providersReady && (
-                <span className="rounded-full bg-[#AC244D]/10 px-3 py-1.5 text-xs font-semibold text-[#AC244D]">
-                  {formatCompactCount(filtered.length)} nearby
+                <span className="flex items-center gap-2">
+                  <span className="rounded-full bg-[#AC244D]/10 px-3 py-1.5 text-xs font-semibold text-[#AC244D]">
+                    {formatCompactCount(filtered.length)} nearby
+                  </span>
+                  {!mapFailed && (
+                    <button
+                      onClick={() => setForceList(false)}
+                      className="rounded-full bg-charcoal px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Back to map
+                    </button>
+                  )}
                 </span>
               )}
             </div>
@@ -1466,7 +1846,7 @@ export default function IntimaMap() {
       {toast && (
         <div
           className="absolute inset-x-0 z-40 flex justify-center px-4"
-          style={{ bottom: 'calc(12rem + env(safe-area-inset-bottom))' }}
+          style={{ bottom: session ? 'calc(11.5rem + env(safe-area-inset-bottom))' : 'calc(7.5rem + env(safe-area-inset-bottom))' }}
         >
           <div className="flex items-center gap-3 rounded-full bg-charcoal/95 py-2.5 pl-5 pr-2.5 text-sm text-white shadow-2xl backdrop-blur-md">
             <span>{toast.message}</span>

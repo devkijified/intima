@@ -172,65 +172,141 @@ function rowToMapProvider(row: MapProviderRow): MapProvider {
   };
 }
 
+/** A geographic window on the map, as WGS84 degrees. */
+export interface MapBounds {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+}
+
+const MAP_SELECT =
+  'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls, travel_mode, travel_cities, vibes';
+
+/** Raw rows from the public view, optionally boxed to a viewport. */
+async function fetchRows(bounds: MapBounds | null): Promise<MapProviderRow[]> {
+  const supabase = createClient();
+  const PAGE = 300;
+  const MAX_ROWS = 1500;
+  const rows: MapProviderRow[] = [];
+  for (let from = 0; from < MAX_ROWS; from += PAGE) {
+    let q = supabase.from('map_providers').select(MAP_SELECT);
+    if (bounds) {
+      q = q
+        .gte('area_lat', bounds.minLat)
+        .lte('area_lat', bounds.maxLat)
+        .gte('area_lng', bounds.minLng)
+        .lte('area_lng', bounds.maxLng);
+    }
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) throw error;
+    const batch = (data ?? []) as MapProviderRow[];
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return rows;
+}
+
 /**
- * Load map pins. Tries the public database view first; falls back to the
- * local mock providers on any error or when the table is still empty.
+ * Merge the companion extras the view does not carry (boosts,
+ * tours, declared specs) onto mapped rows. Shared by every load
+ * path so a pin looks the same however it was fetched.
+ */
+async function hydrate(rows: MapProviderRow[]): Promise<MapProvider[]> {
+  const supabase = createClient();
+  const mapped = rows.map(rowToMapProvider);
+  // Boosts: active boosts pin providers to the front.
+  const { data: boosts } = await supabase
+    .from('boosts')
+    .select('provider_id')
+    .gt('ends_at', new Date().toISOString());
+  const boostedIds = new Set<string>(((boosts ?? []) as { provider_id: string }[]).map((b) => b.provider_id));
+  for (const p of mapped) p.boosted = boostedIds.has(p.id.replace(/^db-/, ''));
+  // Tours: attach each provider's earliest current/upcoming tour so
+  // cards can say "In Abuja, Oct 18 to 22" and city filters can match.
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: tours } = await supabase
+    .from('tour_dates')
+    .select('provider_id, city, start_date, end_date')
+    .gte('end_date', today)
+    .order('start_date', { ascending: true });
+  for (const t of (tours ?? []) as { provider_id: string; city: string; start_date: string; end_date: string }[]) {
+    const p = mapped.find((x) => x.id === `db-${t.provider_id}`);
+    if (p && !p.nextTour) p.nextTour = { city: t.city, start: t.start_date, end: t.end_date };
+  }
+  // Specs: declared on profiles (migration 082), merged the same
+  // way as boosts and tours. Best effort: when the select errors
+  // every spec simply stays unset, so an active spec filter
+  // matches nobody rather than crashing the map.
+  if (rows.length > 0) {
+    const { data: specRows } = await supabase
+      .from('profiles')
+      .select('id, spec_complexion, spec_body_type, spec_height, spec_tags')
+      .in('id', rows.map((r) => r.provider_id));
+    for (const s of (specRows ?? []) as { id: string; spec_complexion: string | null; spec_body_type: string | null; spec_height: string | null; spec_tags: string[] | null }[]) {
+      const p = mapped.find((x) => x.id === `db-${s.id}`);
+      if (p) {
+        p.spec = cleanSpec({
+          complexion: s.spec_complexion,
+          bodyType: s.spec_body_type,
+          height: s.spec_height,
+          tags: s.spec_tags ?? [],
+        });
+      }
+    }
+  }
+  mapped.sort((a, b) => Number(b.boosted ?? false) - Number(a.boosted ?? false));
+  return mapped;
+}
+
+/**
+ * Load map pins for one viewport. Only the companions inside the
+ * box come down, in pages, so the map stays fast at 100 or at
+ * 100,000 companions: panning loads the new ground, never the
+ * whole directory again. Throws on a view error; the caller
+ * decides the fallback.
+ */
+export async function fetchMapProvidersInBounds(bounds: MapBounds): Promise<MapProvider[]> {
+  return hydrate(await fetchRows(bounds));
+}
+
+/** How many companions the public view holds in total (headers
+    only, no rows). Null when the count could not be read. The
+    map uses it once to choose between real data and the preview
+    pins: an empty directory shows the previews, a populated one
+    never mixes them in. */
+export async function fetchMapProviderTotal(): Promise<number | null> {
+  try {
+    const supabase = createClient();
+    const { count, error } = await supabase
+      .from('map_providers')
+      .select('provider_id', { count: 'exact', head: true });
+    if (error) return null;
+    return count ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Preview pins inside a viewport, for when the directory itself
+    is still empty (see fetchMapProviderTotal). */
+export function mockProvidersInBounds(bounds: MapBounds): MapProvider[] {
+  return MOCK_PROVIDERS.map(mockToMapProvider).filter(
+    (p) =>
+      p.lat >= bounds.minLat && p.lat <= bounds.maxLat && p.lng >= bounds.minLng && p.lng <= bounds.maxLng,
+  );
+}
+
+/**
+ * Load every map pin (first 300). Kept for compatibility; the
+ * map itself loads per viewport via fetchMapProvidersInBounds.
+ * Falls back to the local mock providers on any error or when
+ * the table is still empty.
  */
 export async function fetchMapProviders(): Promise<MapProvider[]> {
   try {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('map_providers')
-      .select(
-        'provider_id, username, display_name, avatar_url, is_verified, trust_tier, city, area_lat, area_lng, is_available, rate_short_time_ngn, rate_overnight_ngn, rate_weekend_ngn, services, last_active_at, rates_negotiable, gallery_urls, view_count, review_count, avg_rating, booking_count, video_urls, travel_mode, travel_cities, vibes',
-      )
-      .limit(300);
-    if (error) throw error;
-    const rows = (data ?? []) as MapProviderRow[];
-    if (rows.length > 0) {
-      const mapped = rows.map(rowToMapProvider);
-      // Boosts: active boosts pin providers to the front.
-      const { data: boosts } = await supabase
-        .from('boosts')
-        .select('provider_id')
-        .gt('ends_at', new Date().toISOString());
-      const boostedIds = new Set<string>(((boosts ?? []) as { provider_id: string }[]).map((b) => b.provider_id));
-      for (const p of mapped) p.boosted = boostedIds.has(p.id.replace(/^db-/, ''));
-      // Tours: attach each provider's earliest current/upcoming tour so
-      // cards can say "In Abuja, Oct 18 to 22" and city filters can match.
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: tours } = await supabase
-        .from('tour_dates')
-        .select('provider_id, city, start_date, end_date')
-        .gte('end_date', today)
-        .order('start_date', { ascending: true });
-      for (const t of (tours ?? []) as { provider_id: string; city: string; start_date: string; end_date: string }[]) {
-        const p = mapped.find((x) => x.id === `db-${t.provider_id}`);
-        if (p && !p.nextTour) p.nextTour = { city: t.city, start: t.start_date, end: t.end_date };
-      }
-      // Specs: declared on profiles (migration 082), merged the
-      // same way as boosts and tours. Best effort: before the
-      // migration lands the select errors and every spec simply
-      // stays unset, so an active spec filter matches nobody
-      // rather than crashing the map.
-      const { data: specRows } = await supabase
-        .from('profiles')
-        .select('id, spec_complexion, spec_body_type, spec_height, spec_tags')
-        .in('id', rows.map((r) => r.provider_id));
-      for (const s of (specRows ?? []) as { id: string; spec_complexion: string | null; spec_body_type: string | null; spec_height: string | null; spec_tags: string[] | null }[]) {
-        const p = mapped.find((x) => x.id === `db-${s.id}`);
-        if (p) {
-          p.spec = cleanSpec({
-            complexion: s.spec_complexion,
-            bodyType: s.spec_body_type,
-            height: s.spec_height,
-            tags: s.spec_tags ?? [],
-          });
-        }
-      }
-      mapped.sort((a, b) => Number(b.boosted ?? false) - Number(a.boosted ?? false));
-      return mapped;
-    }
+    const rows = await fetchRows(null);
+    if (rows.length > 0) return hydrate(rows);
   } catch {
     // Fall through to mocks: map stays useful before migration / offline.
   }

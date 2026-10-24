@@ -67,6 +67,8 @@ import {
   Refresh as SaxRefresh,
   Save2 as SaxSave2,
   SearchNormal1 as SaxSearchNormal1,
+  Location as SaxLocation,
+  Gps as SaxGps,
   Send2 as SaxSend2,
   Setting2 as SaxSetting2,
   Shield as SaxShield,
@@ -131,8 +133,9 @@ export const Mic = wrap(SaxMicrophone)
 export const MicOff = wrap(SaxMicrophoneSlash)
 export const MessageCircle = wrap(SaxMessage)
 export const Ticket = wrap(SaxTicket)
-export const MapPin = wrap(SaxSearchNormal1)
-export const LocationIcon = wrap(SaxSearchNormal1)
+export const MapPin = wrap(SaxLocation)
+export const LocationIcon = wrap(SaxLocation)
+export const Locate = wrap(SaxGps)
 export const Coins = wrap(SaxCoin)
 export const Chart = wrap(SaxChart)
 export const Clock = wrap(SaxClock)
