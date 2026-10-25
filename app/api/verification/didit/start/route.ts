@@ -59,7 +59,7 @@ export async function POST() {
 
   try {
     const session = await createDiditSession(rowId)
-    await db
+    const { error: anchorError } = await db
       .from('verifications')
       .update({
         provider: 'didit',
@@ -70,6 +70,22 @@ export async function POST() {
       })
       .eq('id', rowId)
       .eq('status', 'pending')
+    if (anchorError) {
+      // The session exists and the webhook can still find this row
+      // through vendor_data, so the user flow continues; log the
+      // failure instead of letting it pass silently.
+      try {
+        await db.from('error_logs').insert({
+          message: 'Didit session anchor update failed',
+          route: '/api/verification/didit/start',
+          source: 'server',
+          user_id: user.id,
+          stack_head: anchorError.message.slice(0, 2000),
+        })
+      } catch {
+        // Logging is best effort only.
+      }
+    }
     await db.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id)
     return NextResponse.json({ ok: true, url: session.url, sessionId: session.sessionId })
   } catch (e) {
