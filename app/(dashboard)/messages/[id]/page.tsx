@@ -70,6 +70,7 @@ interface Counterpart {
   avatar_url: string | null
   whatsapp_number: string | null
   last_seen_at: string | null
+  joined_at: string | null
   isProvider: boolean
 }
 
@@ -463,7 +464,7 @@ export default function ThreadPage() {
       }
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name, avatar_url, whatsapp_number, role, last_seen_at')
+        .select('display_name, avatar_url, whatsapp_number, role, last_seen_at, created_at')
         .eq('id', otherId)
         .single()
       if (live && prof) {
@@ -479,6 +480,7 @@ export default function ThreadPage() {
               ? (prof.whatsapp_number ?? null)
               : null,
           last_seen_at: (prof as { last_seen_at?: string | null }).last_seen_at ?? null,
+          joined_at: (prof as { created_at?: string | null }).created_at ?? null,
           isProvider: prof.role === 'model',
         })
       }
@@ -1073,6 +1075,12 @@ export default function ThreadPage() {
   // Under the name: when they were last active, WhatsApp style.
   // Falls back to the connection state until their first stamp.
   const lastActiveLabel = other?.last_seen_at ? formatLastActive(other.last_seen_at) : null
+  // No last-active stamp yet (they have not opened the app since
+  // presence shipped): show when they joined instead of dressing
+  // the bare connection state up as a presence claim.
+  const joinedLabel = !lastActiveLabel && other?.joined_at
+    ? `Joined ${new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' }).format(new Date(other.joined_at))}`
+    : null
 
   return (
     // Full screen on mobile, WhatsApp style: the thread covers
@@ -1107,7 +1115,7 @@ export default function ThreadPage() {
               ? 'Loading…'
               : peerTyping
                 ? 'typing…'
-                : lastActiveLabel ?? (active ? 'Connection active' : 'Connection not active')}
+                : lastActiveLabel ?? joinedLabel ?? (active ? 'Connection active' : 'Connection not active')}
             {otherRating && (
               <span className="text-neutral-500"> · ★ {otherRating.avg} ({otherRating.count} review{otherRating.count === 1 ? '' : 's'})</span>
             )}

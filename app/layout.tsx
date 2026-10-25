@@ -14,6 +14,8 @@ import { UpdatePrompt } from '@/components/pwa/UpdatePrompt'
 import { ConnectionMonitor } from '@/components/pwa/ConnectionMonitor'
 import { ToastHost } from '@/components/shared/ToastHost'
 import { PageViewBeacon } from '@/components/analytics/PageViewBeacon'
+import { LastSeenHeartbeat } from '@/components/presence/LastSeenHeartbeat'
+
 import { QueryLoadingWidget } from '@/components/shared/QueryLoadingWidget'
 import ErrorReporter from '@/components/observability/ErrorReporter'
 
@@ -134,6 +136,7 @@ export default function RootLayout({
           <ConnectionMonitor />
           <QueryLoadingWidget />
           <PageViewBeacon />
+          <LastSeenHeartbeat />
           <ToastHost />
         </AgeGate>
         <script
