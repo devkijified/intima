@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { friendlyAuthError } from '@/lib/auth/errors'
+import ResendConfirmation from '@/components/auth/ResendConfirmation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -116,6 +117,11 @@ export default function SignupPage() {
                 : 'Your account has been created successfully.'}
             </CardDescription>
           </CardHeader>
+          {needsConfirm && (
+            <CardContent>
+              <ResendConfirmation email={formData.email} />
+            </CardContent>
+          )}
           <CardFooter>
             <Link href={nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : '/login'} className="w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AC244D]/40">
               <Button size="lg" className="w-full">

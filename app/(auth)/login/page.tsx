@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { friendlyAuthError } from '@/lib/auth/errors'
+import { friendlyAuthError, isEmailNotConfirmedError } from '@/lib/auth/errors'
+import ResendConfirmation from '@/components/auth/ResendConfirmation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -25,6 +26,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null)
   const [nextParam] = useState<string | null>(() => getNextParam())
   const supabase = createClient()
 
@@ -32,6 +34,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setUnconfirmedEmail(null)
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -46,7 +49,13 @@ export default function LoginPage() {
         window.location.href = nextParam ?? '/dashboard'
       }
     } catch (err: any) {
-      setError(friendlyAuthError(err, 'We could not sign you in. Please try again.'))
+      if (isEmailNotConfirmedError(err)) {
+        // Not a dead end: offer a fresh confirmation link for the
+        // address they just tried to sign in with.
+        setUnconfirmedEmail(email)
+      } else {
+        setError(friendlyAuthError(err, 'We could not sign you in. Please try again.'))
+      }
     } finally {
       setLoading(false)
     }
@@ -69,7 +78,7 @@ export default function LoginPage() {
                 id="login-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setUnconfirmedEmail(null) }}
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
@@ -97,6 +106,7 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+            {unconfirmedEmail && <ResendConfirmation email={unconfirmedEmail} />}
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <Button

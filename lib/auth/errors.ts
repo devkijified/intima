@@ -3,6 +3,20 @@
  * The raw message is still reported to /api/logs (error_logs table)
  * so debugging keeps the real detail; the screen never shows it.
  */
+/**
+ * True when sign-in failed only because the email was never
+ * confirmed (the confirmation link died, or was never opened).
+ * The login screen answers this case with a resend panel instead
+ * of a dead-end error: see components/auth/ResendConfirmation.
+ */
+export function isEmailNotConfirmedError(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code
+  if (code === 'email_not_confirmed') return true
+  const raw =
+    err instanceof Error ? err.message : typeof err === 'string' ? err : ''
+  return raw.toLowerCase().includes('email not confirmed')
+}
+
 export function friendlyAuthError(err: unknown, fallback: string): string {
   const raw =
     err instanceof Error ? err.message : typeof err === 'string' ? err : ''
