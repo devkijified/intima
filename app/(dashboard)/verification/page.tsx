@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { reencodeImage } from '@/lib/uploads/reencode'
-import { BadgeCheck, Clock, ShieldCheck, XCircle, Camera, IdCard, PenLine } from '@/lib/icons'
+import { BadgeCheck, Clock, ShieldCheck, XCircle, Camera, IdCard, PenLine, Zap } from '@/lib/icons'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 type VStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
@@ -43,6 +43,9 @@ export default function VerificationPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  const [diditAvailable, setDiditAvailable] = useState(false)
+  const [diditBusy, setDiditBusy] = useState(false)
+  const [diditError, setDiditError] = useState('')
 
   useEffect(() => {
     let live = true
@@ -68,6 +71,36 @@ export default function VerificationPage() {
     })()
     return () => { live = false }
   }, [])
+
+  // Instant verification (Didit) is offered only when the provider
+  // is configured server-side; otherwise the manual upload flow
+  // below stands alone, exactly as before.
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/verification/didit/start')
+        const data = (await res.json().catch(() => null)) as { configured?: boolean } | null
+        if (live && data?.configured) setDiditAvailable(true)
+      } catch {
+        // Silent: the manual flow is the fallback.
+      }
+    })()
+    return () => { live = false }
+  }, [])
+
+  async function startDidit() {
+    setDiditBusy(true); setDiditError('')
+    try {
+      const res = await fetch('/api/verification/didit/start', { method: 'POST' })
+      const data = (await res.json().catch(() => null)) as { url?: string } | null
+      if (!res.ok || !data?.url) throw new Error('start failed')
+      window.location.href = data.url
+    } catch {
+      setDiditError('Instant verification could not start. You can still submit your photos below for manual review.')
+      setDiditBusy(false)
+    }
+  }
 
   const pick = (key: keyof typeof files) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -216,6 +249,31 @@ export default function VerificationPage() {
       {/* Submission form (shown when unverified or rejected) */}
       {(status === 'unverified' || status === 'rejected') && !done && (
         <div className="mt-6 space-y-4">
+          {diditAvailable && (
+            <div className="card-luxe p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-muted">
+                  <Zap className="h-5 w-5 text-primary" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-charcoal">Instant verification</p>
+                    <HelpTip text="Our verification partner Didit checks your ID and selfie on a secure page and sends us only the result, pass or fail. Your ID photos are not stored on your Intima profile and never shown to other members." />
+                  </div>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-neutral-500">
+                    Verify in about a minute: photograph your ID, take a selfie, done. Most results arrive within minutes.
+                  </p>
+                </div>
+              </div>
+              {diditError && <p className="mt-3 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">{diditError}</p>}
+              <button onClick={startDidit} disabled={diditBusy} className="btn-luxe mt-3 inline-flex min-h-[44px] w-full items-center justify-center py-3 text-[15px] disabled:opacity-50">
+                {diditBusy ? 'Starting…' : 'Start instant verification'}
+              </button>
+              <p className="mt-3 text-center text-xs leading-relaxed text-neutral-400">
+                Prefer to upload your photos yourself? Use the steps below instead.
+              </p>
+            </div>
+          )}
           <div className="card-luxe p-5">
             <label className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">Your ID type</label>
             <div className="mt-2 flex flex-wrap gap-2">

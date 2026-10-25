@@ -162,7 +162,7 @@ export interface ApplyDecisionInput {
   provider: string
   providerResult: unknown
   providerConfidence: number | null
-  decisionSource: 'dojah' | 'dojah_webhook'
+  decisionSource: 'dojah' | 'dojah_webhook' | 'didit' | 'didit_webhook'
 }
 
 // Writes a provider decision exactly where the admin route writes a
