@@ -8,13 +8,36 @@ import { useSyncExternalStore } from 'react'
  * from; profiles.last_seen_at remains the record of when
  * someone was last online once they have left, and the map
  * recency buckets remain the coarse fallback for strangers.
+ *
+ * The state lives on a window-global, not in module scope:
+ * Next can bundle this module into more than one chunk (the
+ * layout graph and a page graph), and two module copies mean
+ * two stores, the writer filling one while the readers watch
+ * the other. That split is exactly what bit the map: the
+ * presence frames arrived, the sync handler ran, and the
+ * pins and sheets still never lit. One backing object on
+ * window makes the split impossible.
  */
-let onlineIds: ReadonlySet<string> = new Set()
-const listeners = new Set<() => void>()
+interface PresenceStore {
+  ids: ReadonlySet<string>
+  listeners: Set<() => void>
+}
+
+const serverStore: PresenceStore = { ids: new Set(), listeners: new Set() }
+
+function getStore(): PresenceStore {
+  if (typeof window === 'undefined') return serverStore
+  const w = window as unknown as { __intimaPresenceStore?: PresenceStore }
+  if (!w.__intimaPresenceStore) {
+    w.__intimaPresenceStore = { ids: new Set(), listeners: new Set() }
+  }
+  return w.__intimaPresenceStore
+}
 
 export function setOnlineUserIds(ids: Iterable<string>) {
-  onlineIds = new Set(ids)
-  for (const fn of [...listeners]) fn()
+  const store = getStore()
+  store.ids = new Set(ids)
+  for (const fn of [...store.listeners]) fn()
 }
 
 export function clearOnlineUserIds() {
@@ -23,20 +46,21 @@ export function clearOnlineUserIds() {
 
 /** Imperative read for non-React surfaces (map pins). */
 export function isOnlineNow(userId: string | null | undefined): boolean {
-  return userId ? onlineIds.has(userId) : false
+  return userId ? getStore().ids.has(userId) : false
 }
 
 export function subscribeOnline(fn: () => void) {
-  listeners.add(fn)
+  const store = getStore()
+  store.listeners.add(fn)
   return () => {
-    listeners.delete(fn)
+    store.listeners.delete(fn)
   }
 }
 
 export function useIsOnline(userId: string | null | undefined): boolean {
   return useSyncExternalStore(
     subscribeOnline,
-    () => (userId ? onlineIds.has(userId) : false),
+    () => (userId ? getStore().ids.has(userId) : false),
     () => false,
   )
 }
