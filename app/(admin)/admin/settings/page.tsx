@@ -7,7 +7,7 @@ import { clearSettingsCache } from '@/lib/settings/platformSettings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { ShieldAlert, Save, Loader2 } from '@/lib/icons'
+import { ShieldAlert, ShieldCheck, Save, Loader2 } from '@/lib/icons'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 /** Plain-language warnings for the keys where a wrong value breaks
@@ -57,12 +57,20 @@ function displayValue(value: unknown): string {
   return String(value)
 }
 
+interface DiditModeState {
+  mode: 'sandbox' | 'live'
+  sandboxConfigured: boolean
+  liveConfigured: boolean
+}
+
 export default function AdminSettingsPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [settings, setSettings] = useState<SettingRow[]>([])
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const [didit, setDidit] = useState<DiditModeState | null>(null)
+  const [diditSaving, setDiditSaving] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -83,9 +91,42 @@ export default function AdminSettingsPage() {
         }
         setDrafts(initial)
       }
+      try {
+        const res = await fetch('/api/admin/didit-mode')
+        const modeData = (await res.json().catch(() => null)) as DiditModeState | null
+        if (modeData && (modeData.mode === 'live' || modeData.mode === 'sandbox')) {
+          setDidit(modeData)
+        }
+      } catch {
+        // The switch card simply stays hidden if the read fails.
+      }
     }
     init()
   }, [supabase])
+
+  async function switchDiditMode(mode: 'sandbox' | 'live') {
+    if (!didit || didit.mode === mode || diditSaving) return
+    setDiditSaving(true)
+    setNotice('')
+    try {
+      const res = await fetch('/api/admin/didit-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
+      if (!res.ok) throw new Error('save failed')
+      setDidit((prev) => (prev ? { ...prev, mode } : prev))
+      setNotice(
+        mode === 'live'
+          ? 'Didit is now LIVE. Instant verification runs real checks.'
+          : 'Didit is back in TEST MODE. Instant verification is simulated.'
+      )
+    } catch {
+      setNotice('The Didit switch did not save. Please try again.')
+    } finally {
+      setDiditSaving(false)
+    }
+  }
 
   async function handleSave(row: SettingRow) {
     const kind = kindOf(row.key, row.value)
@@ -181,6 +222,76 @@ export default function AdminSettingsPage() {
         <div className="mb-4 bg-primary-muted border border-primary/20 text-charcoal text-sm rounded-xl px-4 py-3">
           {notice}
         </div>
+      )}
+
+      {didit && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1 text-base">
+              <ShieldCheck className="w-5 h-5 mr-1 text-primary" />
+              Identity verification (Didit)
+              <HelpTip
+                text="The Test / Live switch for instant identity checks, like the one on Paystack. Test mode uses the Didit sandbox application: the flow works end to end but verdicts are simulated and free. Live mode uses the real Didit application: checks are real and Didit bills the account balance for each one. Flipping the switch takes effect immediately, no redeploy."
+                label="About the Didit mode switch"
+              />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <div className="text-sm text-gray-500 sm:w-40 flex-shrink-0">
+                Current:{' '}
+                <span
+                  className={`inline-flex items-center gap-1.5 font-semibold ${
+                    didit.mode === 'live' ? 'text-green-700' : 'text-amber-700'
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      didit.mode === 'live' ? 'bg-green-600' : 'bg-amber-500'
+                    }`}
+                  />
+                  {didit.mode === 'live' ? 'LIVE MODE' : 'TEST MODE'}
+                </span>
+              </div>
+              <div className="flex flex-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => switchDiditMode('sandbox')}
+                  disabled={diditSaving || didit.mode === 'sandbox'}
+                  className={`min-h-[44px] flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                    didit.mode === 'sandbox'
+                      ? 'border-amber-500 bg-amber-100 text-amber-800'
+                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  } disabled:opacity-70`}
+                >
+                  Test mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchDiditMode('live')}
+                  disabled={diditSaving || didit.mode === 'live'}
+                  className={`min-h-[44px] flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                    didit.mode === 'live'
+                      ? 'border-green-600 bg-green-100 text-green-800'
+                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  } disabled:opacity-70`}
+                >
+                  {diditSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Live mode'}
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mt-3">
+              Sandbox keys: {didit.sandboxConfigured ? 'set' : 'missing'}. Live keys:{' '}
+              {didit.liveConfigured ? 'set' : 'missing'}.
+              {didit.mode === 'live' && !didit.liveConfigured
+                ? ' Live keys are not set yet, so the instant verification card stays hidden until they are.'
+                : ''}
+              {didit.mode === 'sandbox' && !didit.sandboxConfigured
+                ? ' Sandbox keys are not set, so the instant verification card is hidden.'
+                : ''}
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       <div className="space-y-4">

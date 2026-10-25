@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createVerificationServiceDb } from '@/lib/verification/automation'
-import { createDiditSession, diditConfigured } from '@/lib/verification/didit'
+import {
+  createDiditSession,
+  diditConfigForMode,
+  diditConfigured,
+  getDiditMode,
+} from '@/lib/verification/didit'
 
 export const dynamic = 'force-dynamic'
 
 // GET: tells the verification page whether the instant Didit flow
-// is available, so the card only renders when it can work.
+// is available in the mode the app is currently in (Admin,
+// Settings holds the Test / Live switch), so the card only renders
+// when it can work.
 export async function GET() {
-  return NextResponse.json({ configured: diditConfigured() })
+  const db = createVerificationServiceDb()
+  const config = diditConfigForMode(await getDiditMode(db))
+  return NextResponse.json({ configured: diditConfigured(config) })
 }
 
 // POST: starts a hosted Didit verification session for the signed-in
@@ -24,14 +33,15 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: 'Sign in required' }, { status: 401 })
   }
-  if (!diditConfigured()) {
+
+  const db = createVerificationServiceDb()
+  const config = diditConfigForMode(await getDiditMode(db))
+  if (!diditConfigured(config)) {
     return NextResponse.json(
       { error: 'Instant verification is not available right now.' },
       { status: 503 }
     )
   }
-
-  const db = createVerificationServiceDb()
 
   const { data: pendingRows, error: loadError } = await db
     .from('verifications')
@@ -58,7 +68,7 @@ export async function POST() {
   }
 
   try {
-    const session = await createDiditSession(rowId)
+    const session = await createDiditSession(rowId, config)
     const { error: anchorError } = await db
       .from('verifications')
       .update({

@@ -5,8 +5,11 @@ import {
 } from '@/lib/verification/automation'
 import {
   applyDiditOutcome,
+  diditConfigForMode,
   fetchDiditDecision,
+  getDiditMode,
   verifyDiditSignature,
+  type DiditConfig,
 } from '@/lib/verification/didit'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +31,24 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
-  if (!verifyDiditSignature(rawBody, req.headers.get('x-signature-v2'))) {
+  const signature = req.headers.get('x-signature-v2')
+
+  // Both Didit applications (Live and Sandbox) deliver to this one
+  // URL, each with its own secret. Whichever secret verifies tells
+  // us which application the session belongs to, and that config
+  // also serves the decision fetch below. Sessions started before
+  // a mode switch still resolve this way.
+  const db = createVerificationServiceDb()
+  const activeConfig = diditConfigForMode(await getDiditMode(db))
+  const otherConfig = diditConfigForMode(activeConfig.mode === 'live' ? 'sandbox' : 'live')
+  let matchedConfig: DiditConfig | null = null
+  for (const config of [activeConfig, otherConfig]) {
+    if (config.webhookSecret && verifyDiditSignature(rawBody, signature, config.webhookSecret)) {
+      matchedConfig = config
+      break
+    }
+  }
+  if (!matchedConfig) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
@@ -44,7 +64,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ignored: true })
   }
 
-  const db = createVerificationServiceDb()
   const selectCols =
     'id, provider_id, status, id_document_url, selfie_url, sign_selfie_url, id_type, provider_reference'
 
@@ -71,7 +90,7 @@ export async function POST(req: NextRequest) {
   // decision endpoint when the event carries only the status.
   let decision = asRecord(root.decision)
   if (Object.keys(decision).length === 0 && sessionId) {
-    decision = await fetchDiditDecision(sessionId).catch(() => ({}))
+    decision = await fetchDiditDecision(sessionId, matchedConfig).catch(() => ({}))
   }
 
   const outcome = await applyDiditOutcome(db, row, status, decision)

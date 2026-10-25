@@ -27,6 +27,7 @@ interface VerificationRow {
 
 export default function AdminVerificationsPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  const [diditMode, setDiditMode] = useState<'sandbox' | 'live' | null>(null)
   const [rows, setRows] = useState<VerificationRow[]>([])
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
@@ -80,7 +81,16 @@ export default function AdminVerificationsPage() {
     async function init() {
       const ok = await isAdmin()
       setAuthorized(ok)
-      if (ok) await load()
+      if (ok) {
+        await load()
+        try {
+          const res = await fetch('/api/admin/didit-mode')
+          const data = (await res.json().catch(() => null)) as { mode?: string } | null
+          if (data?.mode === 'live' || data?.mode === 'sandbox') setDiditMode(data.mode)
+        } catch {
+          // The badge is informational; the queue works without it.
+        }
+      }
     }
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,6 +157,23 @@ export default function AdminVerificationsPage() {
       <p className="text-gray-600 mb-6">
         Every provider badge is earned here. Approve only after the ID and selfie genuinely match.
       </p>
+
+      {diditMode && (
+        <div
+          className={`mb-6 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
+            diditMode === 'live'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-amber-100 text-amber-800'
+          }`}
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${diditMode === 'live' ? 'bg-green-600' : 'bg-amber-500'}`}
+          />
+          {diditMode === 'live'
+            ? 'Didit is LIVE: instant verdicts are real checks'
+            : 'Didit is in TEST MODE: instant verdicts are simulated'}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 mb-6">
         {(['pending', 'approved', 'rejected'] as const).map((s) => (

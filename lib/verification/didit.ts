@@ -17,9 +17,16 @@
 //     abandoned session, any provider error) leaves the row pending
 //     in the admin queue with the provider result stored.
 //
-// Env gate: with DIDIT_API_KEY / DIDIT_WORKFLOW_ID unset this module
-// is a no-op and the manual upload flow is untouched. Never import
-// this file from client components.
+// Mode gate (Paystack style): Didit gives every account a Live app
+// and a Sandbox app, each with its own API key, workflow and webhook
+// secret. Both credential sets live in env (DIDIT_LIVE_* and
+// DIDIT_SANDBOX_*; the sandbox set falls back to the original
+// DIDIT_* names), and the platform_settings key 'didit_mode' says
+// which set the app uses. The mode defaults to 'sandbox' (fail
+// closed toward test) and is switched from Admin, Settings. With
+// the active mode's key / workflow unset this module is a no-op
+// and the manual upload flow is untouched. Never import this file
+// from client components.
 import { createHmac, timingSafeEqual } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
@@ -31,8 +38,53 @@ import {
 const DIDIT_DEFAULT_BASE = 'https://verification.didit.me'
 export const DIDIT_CALLBACK_URL = 'https://intima-snowy.vercel.app/verification'
 
-export function diditConfigured(): boolean {
-  return Boolean(process.env.DIDIT_API_KEY && process.env.DIDIT_WORKFLOW_ID)
+export type DiditMode = 'sandbox' | 'live'
+
+export interface DiditConfig {
+  mode: DiditMode
+  apiKey: string
+  workflowId: string
+  webhookSecret: string
+}
+
+/** The credential set for one mode, from env. The sandbox set
+ * falls back to the original DIDIT_* variables so deployments made
+ * before the mode switch keep working untouched. */
+export function diditConfigForMode(mode: DiditMode): DiditConfig {
+  if (mode === 'live') {
+    return {
+      mode,
+      apiKey: process.env.DIDIT_LIVE_API_KEY ?? '',
+      workflowId: process.env.DIDIT_LIVE_WORKFLOW_ID ?? '',
+      webhookSecret: process.env.DIDIT_LIVE_WEBHOOK_SECRET ?? '',
+    }
+  }
+  return {
+    mode,
+    apiKey: process.env.DIDIT_SANDBOX_API_KEY || process.env.DIDIT_API_KEY || '',
+    workflowId: process.env.DIDIT_SANDBOX_WORKFLOW_ID || process.env.DIDIT_WORKFLOW_ID || '',
+    webhookSecret: process.env.DIDIT_SANDBOX_WEBHOOK_SECRET || process.env.DIDIT_WEBHOOK_SECRET || '',
+  }
+}
+
+export function diditConfigured(config: DiditConfig): boolean {
+  return Boolean(config.apiKey && config.workflowId)
+}
+
+/** Which mode the app is in, from platform_settings ('didit_mode').
+ * Anything but the exact string 'live' means sandbox: test is the
+ * safe default while the live account is unfunded or unproven. */
+export async function getDiditMode(db: SupabaseClient): Promise<DiditMode> {
+  try {
+    const { data } = await db
+      .from('platform_settings')
+      .select('value')
+      .eq('key', 'didit_mode')
+      .maybeSingle()
+    return data?.value === 'live' ? 'live' : 'sandbox'
+  } catch {
+    return 'sandbox'
+  }
 }
 
 function diditBaseUrl(): string {
@@ -44,7 +96,7 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
-async function diditFetch(path: string, init: RequestInit): Promise<unknown> {
+async function diditFetch(path: string, init: RequestInit, apiKey: string): Promise<unknown> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 30_000)
   try {
@@ -52,7 +104,7 @@ async function diditFetch(path: string, init: RequestInit): Promise<unknown> {
       ...init,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.DIDIT_API_KEY!,
+        'x-api-key': apiKey,
         ...(init.headers ?? {}),
       },
       signal: controller.signal,
@@ -81,23 +133,23 @@ export interface DiditSession {
 // Creates one hosted verification session for a verifications row.
 // vendor_data carries our row id so the webhook can find the row
 // even before provider_reference is stored.
-export async function createDiditSession(rowId: string): Promise<DiditSession> {
+export async function createDiditSession(rowId: string, config: DiditConfig): Promise<DiditSession> {
   const body: Record<string, unknown> = {
-    workflow_id: process.env.DIDIT_WORKFLOW_ID!,
+    workflow_id: config.workflowId,
     vendor_data: rowId,
     callback: DIDIT_CALLBACK_URL,
   }
-  // Sandbox proofing only: when DIDIT_SANDBOX_SCENARIO is set (for
-  // example "approve"), Didit's sandbox auto-populates the session
-  // with magic inputs and a deterministic verdict. The variable is
-  // never set against the live application.
-  if (process.env.DIDIT_SANDBOX_SCENARIO) {
+  // Sandbox proofing only: in sandbox mode, when
+  // DIDIT_SANDBOX_SCENARIO is set (for example "approve"), Didit
+  // auto-populates the session with magic inputs and a
+  // deterministic verdict. It is never attached to live sessions.
+  if (config.mode === 'sandbox' && process.env.DIDIT_SANDBOX_SCENARIO) {
     body.sandbox_scenario = process.env.DIDIT_SANDBOX_SCENARIO
   }
   const payload = await diditFetch('/v3/session/', {
     method: 'POST',
     body: JSON.stringify(body),
-  })
+  }, config.apiKey)
   const rec = asRecord(payload)
   const sessionId = typeof rec.session_id === 'string' ? rec.session_id : ''
   const url = typeof rec.url === 'string' ? rec.url : ''
@@ -108,10 +160,13 @@ export async function createDiditSession(rowId: string): Promise<DiditSession> {
 // Fetches the full decision for a session: one array per workflow
 // feature (id_verifications, liveness_checks, face_matches) at the
 // root of the response.
-export async function fetchDiditDecision(sessionId: string): Promise<Record<string, unknown>> {
+export async function fetchDiditDecision(
+  sessionId: string,
+  config: DiditConfig
+): Promise<Record<string, unknown>> {
   const payload = await diditFetch(`/v3/session/${encodeURIComponent(sessionId)}/decision/`, {
     method: 'GET',
-  })
+  }, config.apiKey)
   return asRecord(payload)
 }
 
@@ -142,8 +197,11 @@ function safeEqualHex(a: string, b: string): boolean {
   return timingSafeEqual(ba, bb)
 }
 
-export function verifyDiditSignature(rawBody: string, headerValue: string | null): boolean {
-  const secret = process.env.DIDIT_WEBHOOK_SECRET
+export function verifyDiditSignature(
+  rawBody: string,
+  headerValue: string | null,
+  secret: string
+): boolean {
   if (!secret || !headerValue) return false
   const given = headerValue.trim().toLowerCase()
   const rawHmac = createHmac('sha256', secret).update(rawBody).digest('hex')
