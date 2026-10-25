@@ -43,6 +43,10 @@ export function friendlyAuthError(err: unknown, fallback: string): string {
   if (m.includes('already registered') || m.includes('already exists')) {
     return 'An account with this email already exists. Try signing in instead.'
   }
+  if (m.includes('over_email_send_rate_limit') || m.includes('only request this after')) {
+    // GoTrue's per-address email cooldown: an email just went out.
+    return 'An email was just sent. Wait a moment, check your inbox, then try again.'
+  }
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Too many attempts. Please wait a moment, then try again.'
   }
