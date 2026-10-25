@@ -82,13 +82,21 @@ export interface DiditSession {
 // vendor_data carries our row id so the webhook can find the row
 // even before provider_reference is stored.
 export async function createDiditSession(rowId: string): Promise<DiditSession> {
+  const body: Record<string, unknown> = {
+    workflow_id: process.env.DIDIT_WORKFLOW_ID!,
+    vendor_data: rowId,
+    callback: DIDIT_CALLBACK_URL,
+  }
+  // Sandbox proofing only: when DIDIT_SANDBOX_SCENARIO is set (for
+  // example "approve"), Didit's sandbox auto-populates the session
+  // with magic inputs and a deterministic verdict. The variable is
+  // never set against the live application.
+  if (process.env.DIDIT_SANDBOX_SCENARIO) {
+    body.sandbox_scenario = process.env.DIDIT_SANDBOX_SCENARIO
+  }
   const payload = await diditFetch('/v3/session/', {
     method: 'POST',
-    body: JSON.stringify({
-      workflow_id: process.env.DIDIT_WORKFLOW_ID!,
-      vendor_data: rowId,
-      callback: DIDIT_CALLBACK_URL,
-    }),
+    body: JSON.stringify(body),
   })
   const rec = asRecord(payload)
   const sessionId = typeof rec.session_id === 'string' ? rec.session_id : ''
