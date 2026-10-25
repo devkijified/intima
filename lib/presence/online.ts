@@ -44,9 +44,22 @@ export function clearOnlineUserIds() {
   setOnlineUserIds([])
 }
 
+/**
+ * Map providers carry a display id prefixed with 'db-' (the
+ * map layer separates database rows from mock previews that
+ * way); presence is keyed by the raw profile id. Strip the
+ * prefix here, in the one place every reader passes through,
+ * so a map surface can hand over its display id and still
+ * match. A real profile id never has a hyphen at index 2 (its
+ * first hyphen sits at index 8), so the strip cannot misfire.
+ */
+function normalizeId(userId: string): string {
+  return userId.startsWith('db-') ? userId.slice(3) : userId
+}
+
 /** Imperative read for non-React surfaces (map pins). */
 export function isOnlineNow(userId: string | null | undefined): boolean {
-  return userId ? getStore().ids.has(userId) : false
+  return userId ? getStore().ids.has(normalizeId(userId)) : false
 }
 
 export function subscribeOnline(fn: () => void) {
@@ -60,7 +73,7 @@ export function subscribeOnline(fn: () => void) {
 export function useIsOnline(userId: string | null | undefined): boolean {
   return useSyncExternalStore(
     subscribeOnline,
-    () => (userId ? getStore().ids.has(userId) : false),
+    () => (userId ? getStore().ids.has(normalizeId(userId)) : false),
     () => false,
   )
 }
