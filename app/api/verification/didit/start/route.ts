@@ -72,9 +72,21 @@ export async function POST() {
       .eq('status', 'pending')
     await db.from('profiles').update({ verification_status: 'pending' }).eq('id', user.id)
     return NextResponse.json({ ok: true, url: session.url, sessionId: session.sessionId })
-  } catch {
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    try {
+      await db.from('error_logs').insert({
+        message: 'Didit session start failed',
+        route: '/api/verification/didit/start',
+        source: 'server',
+        user_id: user.id,
+        stack_head: detail.slice(0, 2000),
+      })
+    } catch {
+      // Logging is best effort only.
+    }
     return NextResponse.json(
-      { error: 'The verification service could not start. Please try again.' },
+      { error: 'The verification service could not start. Please try again.', detail },
       { status: 502 }
     )
   }

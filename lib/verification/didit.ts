@@ -57,9 +57,15 @@ async function diditFetch(path: string, init: RequestInit): Promise<unknown> {
       },
       signal: controller.signal,
     })
-    const payload: unknown = await res.json().catch(() => null)
+    const text = await res.text().catch(() => '')
+    let payload: unknown = null
+    try {
+      payload = text ? (JSON.parse(text) as unknown) : null
+    } catch {
+      payload = null
+    }
     if (!res.ok) {
-      throw new Error(`Didit ${path} failed (${res.status})`)
+      throw new Error(`Didit ${path} failed (${res.status}): ${text.slice(0, 300)}`)
     }
     return payload
   } finally {
