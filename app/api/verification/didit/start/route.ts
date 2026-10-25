@@ -102,7 +102,7 @@ export async function POST() {
       // Logging is best effort only.
     }
     return NextResponse.json(
-      { error: 'The verification service could not start. Please try again.', detail },
+      { error: 'The verification service could not start. Please try again.' },
       { status: 502 }
     )
   }
