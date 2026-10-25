@@ -50,6 +50,11 @@ export function ProviderSheet({
   showViewProfile,
 }: ProviderSheetProps) {
   const { sheetRef, handleProps } = useSheetDrag(onClose);
+  // Live presence for the recency line. Hooks live above the
+  // !provider early return below, always: a hook that only
+  // runs when the sheet is open crashes React (#310) the
+  // moment a pin is tapped.
+  const online = useIsOnline(provider?.id ?? null);
   const [connectionFee, setConnectionFee] = useState<number | null>(null);
   // Why a call cannot start, shown in place when a dimmed call button
   // is tapped. A hard-disabled button explains nothing on a phone.
@@ -354,7 +359,6 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
   const recency = formatRecency(provider.lastActiveAt);
-  const online = useIsOnline(provider.id);
   const offersVoice = provider.services.includes('voice-call');
   const offersVideo = provider.services.includes('video-call');
   const voiceDisabled = callsDisabled || !offersVoice;
