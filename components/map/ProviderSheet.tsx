@@ -10,6 +10,7 @@ import { SpecChips } from '@/components/services/SpecChips';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import { useSheetDrag } from '@/lib/hooks/useSheetDrag';
 import { formatRecency } from '@/lib/utils/recency';
+import { useIsOnline } from '@/lib/presence/online';
 import { formatCompactCount, formatCompactPrice } from '@/lib/utils/helpers';
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings';
 import { getMockReviews, type MockReview } from '@/lib/map/mockReviews';
@@ -353,6 +354,7 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
   const recency = formatRecency(provider.lastActiveAt);
+  const online = useIsOnline(provider.id);
   const offersVoice = provider.services.includes('voice-call');
   const offersVideo = provider.services.includes('video-call');
   const voiceDisabled = callsDisabled || !offersVoice;
@@ -479,9 +481,14 @@ function VideoSlide({ src, active }: { src: string; active: boolean }) {
                   Available now
                 </span>
               )}
-              {recency && (
+              {online ? (
+                <span className="flex items-center gap-1 font-medium text-green-700">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+                  Online now
+                </span>
+              ) : recency ? (
                 <span className="text-neutral-500">{recency}</span>
-              )}
+              ) : null}
               <span className="text-neutral-500">
                 {provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}
               </span>

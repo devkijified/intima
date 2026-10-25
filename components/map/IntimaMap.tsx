@@ -38,6 +38,7 @@ import {
 import { buildBaseStages, searchPlaces, type PlaceResult } from '@/lib/map/tiles';
 import { DiscoverySheet, type SheetSnap } from './DiscoverySheet';
 import Supercluster from 'supercluster';
+import { isOnlineNow, subscribeOnline } from '@/lib/presence/online';
 import { emptySpecFilter, matchesSpec, type SpecFilter } from '@/lib/spec';
 import { ProviderSheet } from './ProviderSheet';
 import { FilterSheet } from './FilterSheet';
@@ -288,13 +289,27 @@ function shortRecency(iso: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * The pin's name plate content: first name plus her activity.
+ * The live layer wins: when the presence websocket says she
+ * is in the app, the plate reads "now" in green instead of a
+ * bucketed age from her presence row.
+ */
+function plateInner(provider: MapProvider): string {
+  const firstName = escAttr(provider.displayName.split(' ')[0] ?? provider.displayName);
+  if (isOnlineNow(provider.id)) {
+    return `${firstName} <span style="color:#4ade80;font-weight:700">\u00b7 now</span>`;
+  }
+  const recency = shortRecency(provider.lastActiveAt);
+  return `${firstName}${recency ? ` <span style="color:rgba(255,255,255,.65);font-weight:500">\u00b7 ${recency}</span>` : ''}`;
+}
+
 function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void): HTMLDivElement {
   const el = document.createElement('div');
   el.className = 'intima-pin';
   el.setAttribute('role', 'button');
   el.setAttribute('aria-label', `${escAttr(provider.displayName)} in ${escAttr(provider.area)}`);
   const firstName = escAttr(provider.displayName.split(' ')[0] ?? provider.displayName);
-  const recency = shortRecency(provider.lastActiveAt);
   // Deterministic per-pin bob delay, so the figures never bob in sync.
   const hash = (provider.id ?? '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   const delay = ((hash % 14) / 10).toFixed(1);
@@ -313,7 +328,7 @@ function markerElement(provider: MapProvider, onSelect: (p: MapProvider) => void
     // under the figure instead, never two name plates at once.
     `<span class="intima-pin-topplate" style="position:relative;z-index:2;background:rgba(8,8,12,0.72);color:#fff;font-size:10px;font-weight:600;line-height:1;` +
     `padding:4px 7px;border-radius:9999px;white-space:nowrap;backdrop-filter:blur(4px);margin-bottom:3px">` +
-    `${firstName}${recency ? ` <span style="color:rgba(255,255,255,.65);font-weight:500">· ${recency}</span>` : ''}</span>` +
+    `${plateInner(provider)}</span>` +
     // The standing figure: a tall capsule of her photo planted on
     // the ground point, gently bobbing like a Snap Map character.
     `<div style="position:relative;z-index:1;animation:pin-bob 2.8s ease-in-out ${delay}s infinite alternate">` +
@@ -1068,6 +1083,20 @@ export default function IntimaMap() {
   useEffect(() => {
     refreshPlates();
   }, [selectedPinId, filtered, mapReady]);
+
+  // Live presence: repaint pin plates the moment the online
+  // set changes, so a companion coming online lights up her
+  // pin without a data refetch or a camera move.
+  useEffect(() => {
+    return subscribeOnline(() => {
+      for (const [id, el] of pinElsRef.current) {
+        const provider = filteredRef.current.find((x) => x.id === id);
+        if (!provider) continue;
+        const plate = el.querySelector('.intima-pin-topplate');
+        if (plate) plate.innerHTML = plateInner(provider);
+      }
+    });
+  }, []);
 
   // Map settle: regroup the plates for the new zoom and refresh the
   // area name chip. Registered per map instance (retries swap it).

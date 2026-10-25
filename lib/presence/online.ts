@@ -6,7 +6,8 @@ import { useSyncExternalStore } from 'react'
  * seen by everyone in the channel within a second or two).
  * This is the exact layer WhatsApp-style "online" comes
  * from; profiles.last_seen_at remains the record of when
- * someone was last online once they have left.
+ * someone was last online once they have left, and the map
+ * recency buckets remain the coarse fallback for strangers.
  */
 let onlineIds: ReadonlySet<string> = new Set()
 const listeners = new Set<() => void>()
@@ -20,7 +21,12 @@ export function clearOnlineUserIds() {
   setOnlineUserIds([])
 }
 
-function subscribe(fn: () => void) {
+/** Imperative read for non-React surfaces (map pins). */
+export function isOnlineNow(userId: string | null | undefined): boolean {
+  return userId ? onlineIds.has(userId) : false
+}
+
+export function subscribeOnline(fn: () => void) {
   listeners.add(fn)
   return () => {
     listeners.delete(fn)
@@ -29,7 +35,7 @@ function subscribe(fn: () => void) {
 
 export function useIsOnline(userId: string | null | undefined): boolean {
   return useSyncExternalStore(
-    subscribe,
+    subscribeOnline,
     () => (userId ? onlineIds.has(userId) : false),
     () => false,
   )

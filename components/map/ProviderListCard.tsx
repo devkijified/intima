@@ -3,6 +3,7 @@
 import { BadgeCheck, Star, Zap, Crown, Plane } from '@/lib/icons';
 import { formatPrice } from '@/lib/utils/helpers';
 import { formatRecency } from '@/lib/utils/recency';
+import { useIsOnline } from '@/lib/presence/online';
 import { PhotoWatermark } from '@/components/media/PhotoWatermark';
 import type { MapProvider } from '@/lib/map/providers';
 
@@ -23,6 +24,7 @@ export function ProviderListCard({ provider, onSelect, travelNote }: ProviderLis
   const nameLine =
     provider.age !== null ? `${provider.displayName}, ${provider.age}` : provider.displayName;
   const recency = formatRecency(provider.lastActiveAt);
+  const online = useIsOnline(provider.id);
 
   return (
     <li className="cv-card">
@@ -94,12 +96,17 @@ export function ProviderListCard({ provider, onSelect, travelNote }: ProviderLis
               <Plane className="h-3 w-3" /> Can travel anywhere in Nigeria
             </p>
           ) : null}
-          {recency && (
+          {online ? (
+            <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-green-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+              Online now
+            </p>
+          ) : recency ? (
             <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-green-700">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
               {recency}
             </p>
-          )}
+          ) : null}
           {provider.rateShortTime !== null ? (
             <p className="mt-1.5 text-[15px] font-bold text-[#AC244D]">
               {formatPrice(provider.rateShortTime)}{' '}

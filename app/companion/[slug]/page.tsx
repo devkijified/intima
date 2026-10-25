@@ -17,6 +17,7 @@ import { VibeChips } from '@/components/services/VibeChips'
 import { SpecChips } from '@/components/services/SpecChips'
 import { cleanSpec, type SpecValues } from '@/lib/spec'
 import { formatRecency } from '@/lib/utils/recency'
+import { LiveRecency } from '@/components/presence/LiveRecency'
 import { formatCompactCount } from '@/lib/utils/helpers'
 import { getConnectionFeeNgn } from '@/lib/settings/platformSettings'
 import { useCall } from '@/components/calls/CallProvider'
@@ -907,7 +908,7 @@ export default function ModelDetailPage() {
               Available now
             </span>
           )}
-          {recency && <span className="text-neutral-500">{recency}</span>}
+          <LiveRecency providerId={provider.id} fallback={recency} />
           <span className="text-neutral-500">{provider.ratesNegotiable ? 'Negotiable' : 'Fixed rates'}</span>
           <HelpTip
             text={
