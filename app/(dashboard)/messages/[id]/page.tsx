@@ -11,7 +11,11 @@ import { Tooltip, HelpTip } from '@/components/ui/Tooltip'
 import { IntimaLoader } from '@/components/shared/IntimaLoader'
 import { formatCompactPrice, coinsWithNgn, ngnForCoins } from '@/lib/utils/helpers'
 import { serviceTypeLabel } from '@/lib/connections/serviceType'
-import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, X, Image as ImageIcon } from '@/lib/icons'
+import { ArrowLeft, Send, Sparkles, Phone, Lock, Timer, X, Image as ImageIcon, Smile, Mic, ReplyArrow, Edit, Copy, Trash2 } from '@/lib/icons'
+import Ticks from '@/components/chat/Ticks'
+import VoiceNote from '@/components/chat/VoiceNote'
+import EmojiPicker from '@/components/chat/EmojiPicker'
+import { REACTION_EMOJIS } from '@/lib/chat/emojis'
 import { useSheetDrag } from '@/lib/hooks/useSheetDrag'
 import { reencodeImage } from '@/lib/uploads/reencode'
 import { showToast } from '@/lib/toast'
@@ -22,6 +26,12 @@ import {
   useMediaUrl,
   MediaGalleryOverlay,
 } from '@/components/chat/MediaImage'
+
+interface ReplySnapshot {
+  body?: string
+  media_type?: string | null
+  sender_id?: string
+}
 
 interface Msg {
   id: string
@@ -35,6 +45,23 @@ interface Msg {
   expires_at?: string | null
   view_once?: boolean | null
   read_at?: string | null
+  delivered_at?: string | null
+  edited_at?: string | null
+  deleted_at?: string | null
+  reply_to_id?: string | null
+  reply_snapshot?: ReplySnapshot | null
+  media_duration_seconds?: number | null
+  /** Local only: an optimistic bubble whose insert is in flight. */
+  _pending?: boolean
+}
+
+const MSG_COLS =
+  'id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at, delivered_at, edited_at, deleted_at, reply_to_id, reply_snapshot, media_duration_seconds'
+
+interface ReactionRow {
+  message_id: string
+  user_id: string
+  emoji: string
 }
 
 interface Counterpart {
@@ -120,6 +147,45 @@ async function uploadChatMedia(file: File): Promise<{ path: string; previewUrl: 
   })
   if (error) throw error
   return { path, previewUrl: URL.createObjectURL(blob) }
+}
+
+async function uploadChatBlob(
+  blob: Blob,
+  ext: string,
+  contentType: string,
+): Promise<{ path: string; previewUrl: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('not signed in')
+  const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`
+  const { error } = await supabase.storage.from('chat-media').upload(path, blob, {
+    contentType,
+    upsert: false,
+  })
+  if (error) throw error
+  return { path, previewUrl: URL.createObjectURL(blob) }
+}
+
+/** The quote snapshot stored on a reply: enough to render the
+ * quote block even when the original sits outside the loaded
+ * window. The live original wins at render time when present. */
+function snapshotOf(m: Msg): ReplySnapshot {
+  return {
+    body: m.deleted_at ? '' : (m.body ?? '').slice(0, 140),
+    media_type: m.media_type ?? null,
+    sender_id: m.sender_id,
+  }
+}
+
+function quoteSnippet(m: { body?: string; media_type?: string | null; media_url?: string | null } | null | undefined): string {
+  if (!m) return 'Message'
+  if (m.media_type === 'audio') return 'Voice note'
+  if (m.media_type === 'image') return m.body && m.body !== 'Photo' ? m.body : 'Photo'
+  if (m.media_type === 'video') return m.body && m.body !== 'Video' ? m.body : 'Video'
+  if (m.media_url !== undefined && m.media_url && (!m.body || m.body === 'Locked media')) return 'Locked media'
+  return m.body?.trim() ? m.body : 'Message'
 }
 
 export default function ThreadPage() {
@@ -215,6 +281,31 @@ export default function ThreadPage() {
   // cards floating over the thread.
   const templatesSheet = useSheetDrag(() => setShowTemplates(false))
   const ppvSheet = useSheetDrag(() => setShowPpv(false))
+
+  // WhatsApp mechanics (migration 089): reactions, the message
+  // actions sheet, reply target, edit target, typing, voice notes.
+  const [reactions, setReactions] = useState<Record<string, ReactionRow[]>>({})
+  const [actionsFor, setActionsFor] = useState<Msg | null>(null)
+  const [actionsReactOpen, setActionsReactOpen] = useState(false)
+  const actionsSheet = useSheetDrag(() => { setActionsFor(null); setActionsReactOpen(false) })
+  const [replyTarget, setReplyTarget] = useState<Msg | null>(null)
+  const [editTarget, setEditTarget] = useState<Msg | null>(null)
+  const [showEmoji, setShowEmoji] = useState(false)
+  const [peerTyping, setPeerTyping] = useState(false)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const [recording, setRecording] = useState(false)
+  const [recordSecs, setRecordSecs] = useState(0)
+  const typingChannelRef = useRef<{ send: (args: Record<string, unknown>) => void } | null>(null)
+  const lastTypingSentRef = useRef(0)
+  const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recordChunksRef = useRef<Blob[]>([])
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const recordCancelledRef = useRef(false)
+  const recordStartedAtRef = useRef(0)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressClickUntilRef = useRef(0)
+  const swipeRef = useRef<Record<string, { x: number; y: number; dx: number }>>({})
 
   // Record that I viewed their media. Best effort: the primary key
   // makes repeats harmless, and duplicate errors are ignored.
@@ -406,7 +497,7 @@ export default function ThreadPage() {
 
       const { data: history } = await supabase
         .from('messages')
-        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at')
+        .select(MSG_COLS)
         .eq('connection_id', connectionId)
         .order('created_at', { ascending: true })
       const fresh = (history ?? []).filter((m: any) => !m.expires_at || new Date(m.expires_at).getTime() > Date.now())
@@ -436,14 +527,38 @@ export default function ThreadPage() {
           setMediaViews(views as { message_id: string; viewer_id: string }[])
         }
       }
-      // Mark their messages as read (best effort; read_at drives unread badges).
+      // Mark their messages as read (best effort; read_at drives
+      // unread badges), and stamp delivery in the same write: the
+      // thread being open means the messages both landed and were
+      // seen, so their sender's ticks can go straight to read.
+      const nowIso = new Date().toISOString()
       supabase
         .from('messages')
-        .update({ read_at: new Date().toISOString() })
+        .update({ read_at: nowIso, delivered_at: nowIso })
         .eq('connection_id', connectionId)
         .neq('sender_id', user.id)
         .is('read_at', null)
         .then(() => {})
+      supabase
+        .from('messages')
+        .update({ delivered_at: nowIso })
+        .eq('connection_id', connectionId)
+        .neq('sender_id', user.id)
+        .is('delivered_at', null)
+        .then(() => {})
+
+      // Reactions for the whole thread, grouped by message.
+      const { data: reactionRows } = await supabase
+        .from('message_reactions')
+        .select('message_id, user_id, emoji')
+        .eq('connection_id', connectionId)
+      if (live && reactionRows) {
+        const grouped: Record<string, ReactionRow[]> = {}
+        for (const r of reactionRows as ReactionRow[]) {
+          ;(grouped[r.message_id] ??= []).push(r)
+        }
+        setReactions(grouped)
+      }
 
       // Realtime: new messages in this thread, plus read flips so
       // the sender's Seen lands live.
@@ -466,9 +581,10 @@ export default function ThreadPage() {
               // a party update read_at on messages sent to them)
               // so the badges agree with what I am looking at.
               m.read_at = new Date().toISOString()
+              m.delivered_at = m.read_at
               supabase
                 .from('messages')
-                .update({ read_at: m.read_at })
+                .update({ read_at: m.read_at, delivered_at: m.delivered_at })
                 .eq('id', m.id)
                 .is('read_at', null)
                 .then(() => {})
@@ -483,16 +599,139 @@ export default function ThreadPage() {
             const m = payload.new as Msg
             if (live) {
               setMsgs((prev) =>
-                prev.map((x) => (x.id === m.id ? { ...x, read_at: m.read_at ?? x.read_at } : x))
+                prev.map((x) =>
+                  x.id === m.id
+                    ? {
+                        ...x,
+                        body: m.body ?? x.body,
+                        read_at: m.read_at ?? x.read_at,
+                        delivered_at: m.delivered_at ?? x.delivered_at,
+                        edited_at: m.edited_at ?? x.edited_at,
+                        deleted_at: m.deleted_at ?? x.deleted_at,
+                        unlocked_by: m.unlocked_by ?? x.unlocked_by,
+                      }
+                    : x,
+                ),
               )
             }
           }
         )
+        .on('broadcast', { event: 'typing' }, (payload) => {
+          const from = (payload as { payload?: { user?: string } })?.payload?.user
+          if (!from || from === user.id || !live) return
+          setPeerTyping(true)
+          if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current)
+          peerTypingTimerRef.current = setTimeout(() => setPeerTyping(false), 3200)
+        })
         .subscribe()
+      typingChannelRef.current = channel as unknown as { send: (args: Record<string, unknown>) => void }
       return () => { supabase.removeChannel(channel) }
     })()
     return () => { live = false }
   }, [connectionId, router])
+
+  // Reactions: refetch the thread's set (small at this scale) and
+  // keep it live off its own realtime channel.
+  const refreshReactions = async () => {
+    const { data } = await createClient()
+      .from('message_reactions')
+      .select('message_id, user_id, emoji')
+      .eq('connection_id', connectionId)
+    if (data) {
+      const grouped: Record<string, ReactionRow[]> = {}
+      for (const r of data as ReactionRow[]) {
+        ;(grouped[r.message_id] ??= []).push(r)
+      }
+      setReactions(grouped)
+    }
+  }
+  const refreshReactionsRef = useRef(refreshReactions)
+  refreshReactionsRef.current = refreshReactions
+
+  useEffect(() => {
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`reactions-${connectionId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions', filter: `connection_id=eq.${connectionId}` },
+        () => { void refreshReactionsRef.current() },
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [connectionId])
+
+  // Resolve signed URLs for private media that arrived after the
+  // first load (realtime inserts, voice notes included).
+  const resolvingRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const missing = msgs
+      .filter((m) => isPrivateMediaPath(m.media_url) && !signedUrls[m.id] && !resolvingRef.current.has(m.id))
+      .map((m) => m.id)
+    if (missing.length === 0) return
+    missing.forEach((id) => resolvingRef.current.add(id))
+    void resolveMediaUrls(missing).then((urls) => {
+      if (Object.keys(urls).length > 0) setSignedUrls((prev) => ({ ...prev, ...urls }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs])
+
+  const jumpToMessage = (id: string | null | undefined) => {
+    if (!id) return
+    const el = document.querySelector(`[data-msg-id="${id}"]`)
+    if (!el) {
+      showToast('That message is further up the thread.')
+      return
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightId(id)
+    setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 1500)
+  }
+
+  const reactTo = async (msg: Msg, emoji: string) => {
+    if (!me) return
+    const mine = (reactions[msg.id] ?? []).find((r) => r.user_id === me)
+    // Optimistic: the badge moves before the network answers.
+    setReactions((prev) => {
+      const list = (prev[msg.id] ?? []).filter((r) => r.user_id !== me)
+      if (!mine || mine.emoji !== emoji) list.push({ message_id: msg.id, user_id: me, emoji })
+      return { ...prev, [msg.id]: list }
+    })
+    const supabase = createClient()
+    if (mine && mine.emoji === emoji) {
+      await supabase.from('message_reactions').delete().eq('message_id', msg.id).eq('user_id', me)
+    } else {
+      await supabase
+        .from('message_reactions')
+        .upsert(
+          { message_id: msg.id, connection_id: connectionId, user_id: me, emoji },
+          { onConflict: 'message_id,user_id' },
+        )
+    }
+  }
+
+  const deleteForEveryone = async (msg: Msg) => {
+    setActionsFor(null)
+    const stamp = new Date().toISOString()
+    setMsgs((prev) => prev.map((x) => (x.id === msg.id ? { ...x, deleted_at: stamp } : x)))
+    const { error } = await createClient()
+      .from('messages')
+      .update({ deleted_at: stamp })
+      .eq('id', msg.id)
+      .eq('sender_id', me ?? '')
+    if (error) {
+      setMsgs((prev) => prev.map((x) => (x.id === msg.id ? { ...x, deleted_at: null } : x)))
+      showToast('Could not delete that message. Please try again.')
+    }
+  }
+
+  const startEdit = (msg: Msg) => {
+    setActionsFor(null)
+    setReplyTarget(null)
+    setEditTarget(msg)
+    setInput(msg.body)
+    setTimeout(() => inputRef.current?.focus(), 60)
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -519,28 +758,64 @@ export default function ThreadPage() {
   const send = async (body: string) => {
     const text = body.trim()
     if (!text || !me || sending || !active) return
-    setSending(true)
     const supabase = createClient()
+
+    // Edit mode: the composer is holding an existing message.
+    if (editTarget) {
+      const target = editTarget
+      setSending(true)
+      setMsgs((prev) =>
+        prev.map((x) => (x.id === target.id ? { ...x, body: text.slice(0, 1000), edited_at: new Date().toISOString() } : x)),
+      )
+      const { error } = await supabase
+        .from('messages')
+        .update({ body: text.slice(0, 1000), edited_at: new Date().toISOString() })
+        .eq('id', target.id)
+        .eq('sender_id', me)
+      setSending(false)
+      if (error) {
+        showToast('Could not save that edit. Please try again.')
+        return
+      }
+      setEditTarget(null)
+      setInput('')
+      return
+    }
+
+    setSending(true)
+    // WhatsApp feel: the bubble appears at once with a clock tick,
+    // then the insert result swaps in and the tick becomes a tick.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const quote = replyTarget
+    const temp: Msg = {
+      id: tempId,
+      sender_id: me,
+      body: text.slice(0, 1000),
+      created_at: new Date().toISOString(),
+      reply_to_id: quote?.id ?? null,
+      reply_snapshot: quote ? snapshotOf(quote) : null,
+      _pending: true,
+    }
+    setMsgs((prev) => [...prev, temp])
+    setInput('')
+    setReplyTarget(null)
+    setShowTemplates(false)
     const { data: row, error } = await supabase.from('messages').insert({
       connection_id: connectionId,
       sender_id: me,
       body: text.slice(0, 1000),
+      ...(quote ? { reply_to_id: quote.id, reply_snapshot: snapshotOf(quote) } : {}),
       ...(disappearing ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() } : {}),
-    }).select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at').single()
+    }).select(MSG_COLS).single()
     setSending(false)
-    if (!error) {
-      // Show the message immediately from the insert result. Relying on
-      // the realtime echo alone made sends look lost (the echo can lag
-      // or miss), which invited duplicate retries. The realtime handler
-      // dedupes by id, so appending here is safe.
-      if (row) {
-        const m = row as Msg
-        setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
-      }
-      setInput('')
-      setShowTemplates(false)
-      // Push the other side (best effort): a message nobody hears about
-      // until they happen to open the app is a message half delivered.
+    if (!error && row) {
+      const m = row as Msg
+      setMsgs((prev) => {
+        const without = prev.filter((x) => x.id !== tempId)
+        return without.some((x) => x.id === m.id) ? without : [...without, m]
+      })
+      // Push the other side (best effort): a message nobody hears
+      // about until they open the app is a message half delivered.
       if (other?.id) {
         void fetch('/api/push/notify', {
           method: 'POST',
@@ -554,6 +829,110 @@ export default function ThreadPage() {
           }),
         }).catch(() => {})
       }
+    } else {
+      setMsgs((prev) => prev.filter((x) => x.id !== tempId))
+      setInput(text)
+      if (quote) setReplyTarget(quote)
+      showToast('That message did not send. Please try again.')
+    }
+  }
+
+  // Voice notes: record in the composer, upload the blob into the
+  // same private bucket as photos, insert as media_type 'audio'.
+  const startRecording = async () => {
+    if (!active || recording) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+        .find((t) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) ?? ''
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+      recordChunksRef.current = []
+      recordCancelledRef.current = false
+      rec.ondataavailable = (e) => { if (e.data.size > 0) recordChunksRef.current.push(e.data) }
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop())
+        if (recordTimerRef.current) clearInterval(recordTimerRef.current)
+        setRecording(false)
+        const secs = Math.max(1, Math.round((Date.now() - recordStartedAtRef.current) / 1000))
+        if (recordCancelledRef.current) return
+        const type = rec.mimeType || 'audio/webm'
+        const blob = new Blob(recordChunksRef.current, { type })
+        void sendVoiceNote(blob, type, secs)
+      }
+      recorderRef.current = rec
+      recordStartedAtRef.current = Date.now()
+      setRecordSecs(0)
+      setRecording(true)
+      recordTimerRef.current = setInterval(() => {
+        setRecordSecs(Math.floor((Date.now() - recordStartedAtRef.current) / 1000))
+      }, 500)
+      rec.start(250)
+    } catch {
+      showToast('Microphone access was blocked. Allow the microphone to send a voice note.')
+    }
+  }
+
+  const stopRecording = (cancel: boolean) => {
+    recordCancelledRef.current = cancel
+    recorderRef.current?.stop()
+  }
+
+  const sendVoiceNote = async (blob: Blob, mimeType: string, secs: number) => {
+    if (!me || !active) return
+    const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm'
+    setUploading(true)
+    try {
+      const { path, previewUrl } = await uploadChatBlob(blob, ext, mimeType)
+      const quote = replyTarget
+      const { data: row, error } = await createClient()
+        .from('messages')
+        .insert({
+          connection_id: connectionId,
+          sender_id: me,
+          body: 'Voice note',
+          media_url: path,
+          media_type: 'audio',
+          media_duration_seconds: secs,
+          ...(quote ? { reply_to_id: quote.id, reply_snapshot: snapshotOf(quote) } : {}),
+          ...(disappearing ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() } : {}),
+        })
+        .select(MSG_COLS)
+        .single()
+      if (!error && row) {
+        const m = row as Msg
+        setSignedUrls((prev) => ({ ...prev, [m.id]: previewUrl }))
+        setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+        setReplyTarget(null)
+        if (other?.id) {
+          void fetch('/api/push/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_ids: [other.id],
+              type: 'booking_message',
+              title: 'New voice note',
+              body: 'You received a voice note in your chat.',
+              link: `/messages/${connectionId}`,
+            }),
+          }).catch(() => {})
+        }
+      } else {
+        showToast('That voice note did not send. Please try again.')
+      }
+    } catch {
+      showToast('Voice note upload failed. Please try again.')
+    }
+    setUploading(false)
+  }
+
+  const broadcastTyping = () => {
+    const now = Date.now()
+    if (now - lastTypingSentRef.current < 2500) return
+    lastTypingSentRef.current = now
+    try {
+      typingChannelRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user: me } })
+    } catch {
+      /* typing is decoration; never let it break sending */
     }
   }
 
@@ -581,7 +960,7 @@ export default function ThreadPage() {
             ? { expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() }
             : {}),
         })
-        .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at')
+        .select(MSG_COLS)
         .single()
       if (!error && row) {
         const m = row as Msg
@@ -652,7 +1031,7 @@ export default function ThreadPage() {
         ppv_price_coins: price,
         view_once: ppvViewOnce,
       })
-      .select('id, sender_id, body, created_at, media_url, media_type, ppv_price_coins, unlocked_by, view_once, read_at')
+      .select(MSG_COLS)
       .single()
     setSendingMedia(false)
     if (!error) {
@@ -723,10 +1102,12 @@ export default function ThreadPage() {
             {other?.display_name ?? 'Member'}
             {otherIsFan && <FanBadge className="ml-1.5" />}
           </p>
-          <p className={`text-xs ${!loading && (lastActiveLabel === 'Active now' || (!lastActiveLabel && active)) ? 'text-emerald-600' : 'text-neutral-400'}`}>
+          <p className={`text-xs ${!loading && (peerTyping || lastActiveLabel === 'Active now' || (!lastActiveLabel && active)) ? 'text-emerald-600' : 'text-neutral-400'}`}>
             {loading
               ? 'Loading…'
-              : lastActiveLabel ?? (active ? 'Connection active' : 'Connection not active')}
+              : peerTyping
+                ? 'typing…'
+                : lastActiveLabel ?? (active ? 'Connection active' : 'Connection not active')}
             {otherRating && (
               <span className="text-neutral-500"> · ★ {otherRating.avg} ({otherRating.count} review{otherRating.count === 1 ? '' : 's'})</span>
             )}
@@ -819,6 +1200,7 @@ export default function ThreadPage() {
             {msgs.map((m, i) => {
               const mine = m.sender_id === me
               const showDay = i === 0 || dayKey(msgs[i - 1].created_at) !== dayKey(m.created_at)
+              const isDeleted = !!m.deleted_at
               // Read state is read_at (policy 085 made marking
               // possible at last); media views still count for
               // legacy rows that predate receipts.
@@ -827,17 +1209,45 @@ export default function ThreadPage() {
                 (!!m.read_at ||
                   (!!m.media_url &&
                     mediaViews.some((v) => v.message_id === m.id && v.viewer_id !== me)))
-              // A media message with no real caption hugs its
-              // media, WhatsApp style: a thin frame, no padded
-              // card around the photo.
+              const tickState = m._pending
+                ? 'sending'
+                : seen
+                  ? 'read'
+                  : m.delivered_at
+                    ? 'delivered'
+                    : 'sent'
               const mediaOnly =
                 !!m.media_url &&
+                m.media_type !== 'audio' &&
                 (!m.body.trim() ||
                   m.body === 'Locked media' ||
                   m.body === 'Photo' ||
                   m.body === 'Video')
+              const msgReactions = reactions[m.id] ?? []
+              const reactionCounts = Object.values(
+                msgReactions.reduce<Record<string, { emoji: string; count: number; mine: boolean }>>((acc, r) => {
+                  const cur = acc[r.emoji] ?? { emoji: r.emoji, count: 0, mine: false }
+                  cur.count += 1
+                  if (r.user_id === me) cur.mine = true
+                  acc[r.emoji] = cur
+                  return acc
+                }, {}),
+              )
+              const original = m.reply_to_id ? msgs.find((x) => x.id === m.reply_to_id) : undefined
+              const quoteLabel = isDeleted
+                ? null
+                : m.reply_to_id || m.reply_snapshot
+                  ? original
+                    ? original.deleted_at
+                      ? 'Original message deleted'
+                      : quoteSnippet(original)
+                    : m.reply_snapshot
+                      ? quoteSnippet(m.reply_snapshot)
+                      : 'Message'
+                  : null
+              const quoteSenderId = original?.sender_id ?? m.reply_snapshot?.sender_id
               return (
-                <Fragment key={m.id}>
+                <div key={m.id} data-msg-id={m.id} className="relative">
                   {showDay && (
                     <div className="flex justify-center py-1.5">
                       <span className="rounded-lg bg-white/90 px-2.5 py-1 text-[11px] font-medium text-neutral-500 shadow-sm">
@@ -845,42 +1255,163 @@ export default function ThreadPage() {
                       </span>
                     </div>
                   )}
-                  <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <span
+                    data-swipe-badge
+                    aria-hidden
+                    className="pointer-events-none absolute left-0.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-primary opacity-0 shadow"
+                  >
+                    <ReplyArrow className="h-4 w-4" />
+                  </span>
+                  <div
+                    className={`flex ${mine ? 'justify-end' : 'justify-start'} ${reactionCounts.length > 0 ? 'pb-2.5' : ''}`}
+                    style={{ touchAction: 'pan-y' }}
+                    onPointerDown={(e) => {
+                      swipeRef.current[m.id] = { x: e.clientX, y: e.clientY, dx: 0 }
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+                      if (!isDeleted && !m._pending) {
+                        longPressTimerRef.current = setTimeout(() => {
+                          suppressClickUntilRef.current = Date.now() + 600
+                          setActionsFor(m)
+                        }, 480)
+                      }
+                    }}
+                    onPointerMove={(e) => {
+                      const st = swipeRef.current[m.id]
+                      if (!st) return
+                      const dx = e.clientX - st.x
+                      const dy = e.clientY - st.y
+                      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+                      }
+                      if (dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+                        st.dx = Math.min(dx, 64)
+                        e.currentTarget.style.transform = `translateX(${st.dx}px)`
+                        const badge = e.currentTarget.parentElement?.querySelector('[data-swipe-badge]') as HTMLElement | null
+                        if (badge) badge.style.opacity = String(Math.min(1, st.dx / 52))
+                      }
+                    }}
+                    onPointerUp={(e) => {
+                      const st = swipeRef.current[m.id]
+                      delete swipeRef.current[m.id]
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+                      e.currentTarget.style.transform = ''
+                      const badge = e.currentTarget.parentElement?.querySelector('[data-swipe-badge]') as HTMLElement | null
+                      if (badge) badge.style.opacity = '0'
+                      if (st && st.dx > 52 && !isDeleted && !m._pending) {
+                        setReplyTarget(m)
+                        setEditTarget(null)
+                        setTimeout(() => inputRef.current?.focus(), 60)
+                      }
+                    }}
+                    onPointerCancel={(e) => {
+                      delete swipeRef.current[m.id]
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+                      e.currentTarget.style.transform = ''
+                    }}
+                    onClickCapture={(e) => {
+                      if (Date.now() < suppressClickUntilRef.current) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }
+                    }}
+                  >
                     <div
                       className={
-                        mediaOnly
-                          ? `w-[78%] max-w-[290px] overflow-hidden rounded-xl p-[3px] shadow-sm ${
-                              mine ? 'rounded-tr-sm bg-primary text-white' : 'rounded-tl-sm bg-white text-charcoal'
+                        isDeleted
+                          ? `max-w-[82%] rounded-xl px-3 py-2 text-[15px] italic shadow-sm ${
+                              mine ? 'rounded-tr-sm bg-primary/50 text-white/85' : 'rounded-tl-sm bg-white/80 text-neutral-400'
                             }`
-                          : `max-w-[82%] rounded-xl px-2.5 pb-1.5 pt-2 text-[15px] leading-relaxed shadow-sm ${
-                              mine
-                                ? 'rounded-tr-sm bg-primary text-white'
-                                : 'rounded-tl-sm bg-white text-charcoal'
-                            }`
+                          : mediaOnly
+                            ? `relative w-[78%] max-w-[290px] overflow-hidden rounded-xl p-[3px] shadow-sm ${
+                                mine ? 'rounded-tr-sm bg-primary text-white' : 'rounded-tl-sm bg-white text-charcoal'
+                              } ${highlightId === m.id ? 'ring-2 ring-gold' : ''}`
+                            : `relative max-w-[82%] rounded-xl px-2.5 pb-1.5 pt-2 text-[15px] leading-relaxed shadow-sm ${
+                                mine
+                                  ? 'rounded-tr-sm bg-primary text-white'
+                                  : 'rounded-tl-sm bg-white text-charcoal'
+                              } ${highlightId === m.id ? 'ring-2 ring-gold' : ''}`
                       }
                     >
-                      {!mediaOnly && m.body.trim() && m.body !== 'Locked media' ? (
-                        <p className="whitespace-pre-wrap px-1">{m.body}</p>
-                      ) : null}
-                      {m.media_url && (
-                        <div className={mediaOnly ? '' : 'mt-2'}>
-                          <PpvMedia
-                            msg={m}
-                            me={me}
-                            hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
-                            onOpen={openMediaViewer}
-                            onViewed={recordMediaView}
-                            signedUrl={signedUrls[m.id]}
-                          />
+                      {isDeleted ? (
+                        <p className="px-1">This message was deleted</p>
+                      ) : (
+                        <>
+                          {quoteLabel !== null && (
+                            <button
+                              type="button"
+                              onClick={() => jumpToMessage(m.reply_to_id)}
+                              className={`mb-1.5 block w-full rounded-lg border-l-4 border-gold px-2 py-1.5 text-left ${
+                                mine ? 'bg-black/15' : 'bg-black/[0.04]'
+                              }`}
+                            >
+                              <span className={`block text-xs font-bold ${mine ? 'text-gold' : 'text-primary'}`}>
+                                {quoteSenderId === me ? 'You' : (other?.display_name ?? 'Them')}
+                              </span>
+                              <span className={`block truncate text-[13px] ${mine ? 'text-white/80' : 'text-neutral-500'}`}>
+                                {quoteLabel}
+                              </span>
+                            </button>
+                          )}
+                          {!mediaOnly && m.body.trim() && m.body !== 'Locked media' && m.media_type !== 'audio' ? (
+                            <p className="whitespace-pre-wrap px-1">{m.body}</p>
+                          ) : null}
+                          {m.media_url && m.media_type === 'audio' ? (
+                            <VoiceNote
+                              src={signedUrls[m.id]}
+                              durationSeconds={m.media_duration_seconds}
+                              mine={mine}
+                              played={!!m.read_at}
+                              onPlayed={() => {
+                                if (mine || m.read_at) return
+                                const stamp = new Date().toISOString()
+                                setMsgs((prev) => prev.map((x) => (x.id === m.id ? { ...x, read_at: stamp, delivered_at: stamp } : x)))
+                                void createClient()
+                                  .from('messages')
+                                  .update({ read_at: stamp, delivered_at: stamp })
+                                  .eq('id', m.id)
+                                  .is('read_at', null)
+                                  .then(() => {})
+                              }}
+                            />
+                          ) : m.media_url ? (
+                            <div className={mediaOnly ? '' : 'mt-2'}>
+                              <PpvMedia
+                                msg={m}
+                                me={me}
+                                hasViewed={mediaViews.some((v) => v.message_id === m.id && v.viewer_id === me)}
+                                onOpen={openMediaViewer}
+                                onViewed={recordMediaView}
+                                signedUrl={signedUrls[m.id]}
+                              />
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                      <p className={`flex items-center justify-end gap-1 text-right text-[11px] leading-none ${mediaOnly && !isDeleted ? 'px-1.5 pb-1 pt-1' : 'mt-0.5 px-1'} ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
+                        {!isDeleted && m.edited_at && <span className="italic">Edited</span>}
+                        <span>{fmtTime(m.created_at)}</span>
+                        {mine && <Ticks state={tickState} onColor />}
+                      </p>
+                      {reactionCounts.length > 0 && !isDeleted && (
+                        <div className={`absolute -bottom-2.5 ${mine ? 'right-2' : 'left-2'} z-10 flex gap-1`}>
+                          {reactionCounts.map((r) => (
+                            <button
+                              key={r.emoji}
+                              type="button"
+                              onClick={() => void reactTo(m, r.emoji)}
+                              className={`flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 text-xs shadow ring-1 ${
+                                r.mine ? 'ring-gold' : 'ring-black/5'
+                              }`}
+                            >
+                              <span>{r.emoji}</span>
+                              {r.count > 1 && <span className="text-[10px] font-bold text-neutral-500">{r.count}</span>}
+                            </button>
+                          ))}
                         </div>
                       )}
-                      <p className={`text-right text-[11px] leading-none ${mediaOnly ? 'px-1.5 pb-1 pt-1' : 'mt-0.5 px-1'} ${mine ? 'text-white/70' : 'text-neutral-400'}`}>
-                        {fmtTime(m.created_at)}
-                        {seen && <span className="font-semibold text-sky-200"> · Seen</span>}
-                      </p>
                     </div>
                   </div>
-                </Fragment>
+                </div>
               )
             })}
             <div ref={bottomRef} />
@@ -1114,82 +1645,303 @@ export default function ThreadPage() {
 
       {/* Composer: the WhatsApp bar. One white typing pill with
           the actions inside it, and a round send button beside
-          it, floating on the chat background. */}
+          it, floating on the chat background. WhatsApp mechanics
+          on top: emoji panel, quote preview, edit banner, and a
+          mic button that becomes the send button once you type. */}
       <div className="shrink-0 px-3 pb-3 pt-1">
         {!loading && !active && (
           <p className="mx-auto mb-2 w-fit max-w-full rounded-full bg-amber-100 px-3.5 py-1.5 text-center text-xs font-medium text-amber-800">
             This connection is not active. Chat unlocks after payment.
           </p>
         )}
-        <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
-          <div className="flex min-w-0 flex-1 items-end rounded-[26px] bg-white px-1 py-1 shadow-sm ring-1 ring-black/[0.04]">
-            <button
-              onClick={() => setShowTemplates((v) => !v)}
-              disabled={!active}
-              aria-label="Message templates"
-              className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${
-                showTemplates ? 'bg-gold/20' : 'hover:bg-cream'
-              } disabled:opacity-40`}
-            >
-              <Sparkles className="h-5 w-5 text-gold" />
-            </button>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  void send(input)
-                }
+        {showEmoji && active && !recording && (
+          <div className="mx-auto mb-2 w-full max-w-3xl">
+            <EmojiPicker
+              onPick={(g) => {
+                setInput((prev) => (prev + g).slice(0, 1000))
+                broadcastTyping()
+                inputRef.current?.focus()
               }}
-              placeholder={active ? 'Message' : 'Chat locked'}
-              disabled={!active || sending}
-              maxLength={1000}
-              rows={1}
-              className="max-h-[120px] min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-base leading-snug text-charcoal outline-none placeholder:text-neutral-400 disabled:opacity-50 md:text-sm"
             />
+          </div>
+        )}
+        {editTarget && (
+          <div className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm ring-1 ring-black/[0.04]">
+            <Edit className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-primary">Editing message</p>
+              <p className="truncate text-[13px] text-neutral-500">{editTarget.body}</p>
+            </div>
             <button
-              onClick={() => setDisappearing((v) => !v)}
-              aria-label="Disappearing messages"
-              title="Disappearing messages (24h)"
-              className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'hover:bg-cream'} disabled:opacity-40`}
+              type="button"
+              aria-label="Cancel editing"
+              onClick={() => { setEditTarget(null); setInput('') }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cream text-neutral-500"
             >
-              <Timer className={`h-[18px] w-[18px] ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {replyTarget && !editTarget && (
+          <div className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-2 rounded-2xl border-l-4 border-gold bg-white px-3 py-2 shadow-sm ring-1 ring-black/[0.04]">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-primary">
+                {replyTarget.sender_id === me ? 'You' : (other?.display_name ?? 'Them')}
+              </p>
+              <p className="truncate text-[13px] text-neutral-500">
+                {replyTarget.deleted_at ? 'Original message deleted' : quoteSnippet(replyTarget)}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cancel reply"
+              onClick={() => setReplyTarget(null)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cream text-neutral-500"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {recording ? (
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-3 rounded-[26px] bg-white px-4 py-2 shadow-sm ring-1 ring-black/[0.04]">
+            <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-red-500" />
+            <span className="text-sm font-semibold tabular-nums text-charcoal">
+              {Math.floor(recordSecs / 60)}:{String(recordSecs % 60).padStart(2, '0')}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm text-neutral-500">Recording a voice note…</span>
+            <button
+              type="button"
+              onClick={() => stopRecording(true)}
+              aria-label="Cancel recording"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500"
+            >
+              <Trash2 className="h-5 w-5" />
             </button>
             <button
-              onClick={() => mediaFileRef.current?.click()}
-              disabled={!active || uploading}
-              aria-label="Attach a photo or video"
-              className="flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors hover:bg-cream disabled:opacity-40"
+              type="button"
+              onClick={() => stopRecording(false)}
+              aria-label="Send voice note"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-md"
             >
-              <ImageIcon className="h-5 w-5 text-neutral-500" />
+              <Send className="h-5 w-5" />
             </button>
-            {viewerIsProvider && active && (
+          </div>
+        ) : (
+          <div className="mx-auto flex w-full max-w-3xl items-end gap-2">
+            <div className="flex min-w-0 flex-1 items-end rounded-[26px] bg-white px-1 py-1 shadow-sm ring-1 ring-black/[0.04]">
               <button
-                onClick={() => setShowPpv((v) => !v)}
-                aria-label="Send locked media"
-                className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${showPpv ? 'bg-gold/25' : 'hover:bg-gold/10'}`}
+                onClick={() => setShowEmoji((v) => !v)}
+                disabled={!active}
+                aria-label="Emoji"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${
+                  showEmoji ? 'bg-gold/20' : 'hover:bg-cream'
+                } disabled:opacity-40`}
               >
-                <Lock className="h-[18px] w-[18px] text-gold" />
+                <Smile className="h-5 w-5 text-neutral-500" />
+              </button>
+              <button
+                onClick={() => setShowTemplates((v) => !v)}
+                disabled={!active}
+                aria-label="Message templates"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${
+                  showTemplates ? 'bg-gold/20' : 'hover:bg-cream'
+                } disabled:opacity-40`}
+              >
+                <Sparkles className="h-5 w-5 text-gold" />
+              </button>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value)
+                  if (e.target.value.trim()) broadcastTyping()
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void send(input)
+                  }
+                }}
+                placeholder={active ? 'Message' : 'Chat locked'}
+                disabled={!active || sending}
+                maxLength={1000}
+                rows={1}
+                className="max-h-[120px] min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-base leading-snug text-charcoal outline-none placeholder:text-neutral-400 disabled:opacity-50 md:text-sm"
+              />
+              <button
+                onClick={() => setDisappearing((v) => !v)}
+                aria-label="Disappearing messages"
+                title="Disappearing messages (24h)"
+                className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${disappearing ? 'bg-primary/15' : 'hover:bg-cream'} disabled:opacity-40`}
+              >
+                <Timer className={`h-[18px] w-[18px] ${disappearing ? 'text-primary' : 'text-neutral-500'}`} />
+              </button>
+              <button
+                onClick={() => mediaFileRef.current?.click()}
+                disabled={!active || uploading}
+                aria-label="Attach a photo or video"
+                className="flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors hover:bg-cream disabled:opacity-40"
+              >
+                <ImageIcon className="h-5 w-5 text-neutral-500" />
+              </button>
+              {viewerIsProvider && active && (
+                <button
+                  onClick={() => setShowPpv((v) => !v)}
+                  aria-label="Send locked media"
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full transition-colors ${showPpv ? 'bg-gold/25' : 'hover:bg-gold/10'}`}
+                >
+                  <Lock className="h-[18px] w-[18px] text-gold" />
+                </button>
+              )}
+            </div>
+            {input.trim() || editTarget ? (
+              <button
+                onClick={() => send(input)}
+                disabled={!active || sending || !input.trim()}
+                aria-label={editTarget ? 'Save edit' : 'Send'}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-md transition-opacity disabled:opacity-40"
+              >
+                <Send className="h-5 w-5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => void startRecording()}
+                disabled={!active || uploading}
+                aria-label="Record a voice note"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-md transition-opacity disabled:opacity-40"
+              >
+                <Mic className="h-5 w-5" />
               </button>
             )}
           </div>
-          <button
-            onClick={() => send(input)}
-            disabled={!active || sending || !input.trim()}
-            aria-label="Send"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-md transition-opacity disabled:opacity-40"
-          >
-            <Send className="h-5 w-5" />
-          </button>
-        </div>
+        )}
         {disappearing && active && (
           <p className="mt-1.5 text-center text-[11px] font-medium text-neutral-500">
             Disappearing messages on: what you send vanishes after 24 hours
           </p>
         )}
       </div>
+
+      {/* Message actions: long-press a bubble. The WhatsApp set:
+          react with the shortlist or any emoji, reply, copy, edit
+          inside 15 minutes, delete for everyone inside 48 hours. */}
+      {actionsFor && (
+        <div className="fixed inset-0 z-[60]">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onPointerDown={() => { setActionsFor(null); setActionsReactOpen(false) }}
+          />
+          <div
+            ref={actionsSheet.sheetRef}
+            className="absolute inset-x-0 bottom-0 flex max-h-[85%] flex-col rounded-t-3xl bg-white shadow-2xl"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div {...actionsSheet.handleProps} className="shrink-0 cursor-grab touch-none px-4 pb-1 pt-2.5 active:cursor-grabbing">
+              <div className="mx-auto h-1.5 w-11 rounded-full bg-neutral-300" />
+            </div>
+            {actionsReactOpen ? (
+              <div className="px-3 pb-2">
+                <EmojiPicker
+                  autoFocusSearch
+                  onPick={(g) => {
+                    void reactTo(actionsFor, g)
+                    setActionsFor(null)
+                    setActionsReactOpen(false)
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between px-4 pb-1 pt-1">
+                  <div className="flex gap-1">
+                    {REACTION_EMOJIS.map((g) => {
+                      const mineEmoji = (reactions[actionsFor.id] ?? []).find((r) => r.user_id === me)?.emoji
+                      return (
+                        <button
+                          key={g}
+                          type="button"
+                          aria-label={`React with ${g}`}
+                          onClick={() => {
+                            void reactTo(actionsFor, g)
+                            setActionsFor(null)
+                          }}
+                          className={`flex h-11 w-11 items-center justify-center rounded-full text-[25px] leading-none transition-transform active:scale-90 ${
+                            mineEmoji === g ? 'bg-gold/25 ring-1 ring-gold' : 'hover:bg-cream'
+                          }`}
+                        >
+                          {g}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="React with any emoji"
+                    onClick={() => setActionsReactOpen(true)}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-cream"
+                  >
+                    <Smile className="h-5 w-5 text-neutral-500" />
+                  </button>
+                </div>
+                <div className="divide-y divide-neutral-100 px-2 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyTarget(actionsFor)
+                      setEditTarget(null)
+                      setActionsFor(null)
+                      setTimeout(() => inputRef.current?.focus(), 60)
+                    }}
+                    className="flex min-h-[52px] w-full items-center gap-3 px-3 py-2.5 text-left text-[15px] text-charcoal transition-colors active:bg-cream"
+                  >
+                    <ReplyArrow className="h-5 w-5 text-neutral-500" /> Reply
+                  </button>
+                  {actionsFor.body.trim() &&
+                    !['Photo', 'Video', 'Voice note', 'Locked media'].includes(actionsFor.body.trim()) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const text = actionsFor.body
+                          setActionsFor(null)
+                          void navigator.clipboard
+                            ?.writeText(text)
+                            .then(() => showToast('Copied'))
+                            .catch(() => showToast('Could not copy'))
+                        }}
+                        className="flex min-h-[52px] w-full items-center gap-3 px-3 py-2.5 text-left text-[15px] text-charcoal transition-colors active:bg-cream"
+                      >
+                        <Copy className="h-5 w-5 text-neutral-500" /> Copy
+                      </button>
+                    )}
+                  {actionsFor.sender_id === me &&
+                    !actionsFor.media_type &&
+                    !(actionsFor.ppv_price_coins ?? 0) &&
+                    Date.now() - new Date(actionsFor.created_at).getTime() < 15 * 60_000 && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(actionsFor)}
+                        className="flex min-h-[52px] w-full items-center gap-3 px-3 py-2.5 text-left text-[15px] text-charcoal transition-colors active:bg-cream"
+                      >
+                        <Edit className="h-5 w-5 text-neutral-500" /> Edit
+                      </button>
+                    )}
+                  {actionsFor.sender_id === me &&
+                    Date.now() - new Date(actionsFor.created_at).getTime() < 48 * 3600_000 && (
+                      <button
+                        type="button"
+                        onClick={() => void deleteForEveryone(actionsFor)}
+                        className="flex min-h-[52px] w-full items-center gap-3 px-3 py-2.5 text-left text-[15px] font-medium text-red-600 transition-colors active:bg-red-50"
+                      >
+                        <Trash2 className="h-5 w-5" /> Delete for everyone
+                      </button>
+                    )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Media viewer overlay: the one place shared media opens big.
           PrintScreen or a window blur closes it (see effect above).

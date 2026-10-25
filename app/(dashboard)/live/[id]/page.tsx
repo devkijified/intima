@@ -19,7 +19,8 @@ import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, VideoQuality, V
 import { createClient } from '@/lib/supabase/client'
 import { scanForLeaks, leakWarning } from '@/lib/moderation/contactCheck'
 import { ChevronUp, Crown, Eye, Gift, Heart, Lock, Radio, Send, Settings, ShareForward, X,
-  PictureInPicture2, Smartphone } from '@/lib/icons'
+  PictureInPicture2, Smartphone, Smile } from '@/lib/icons'
+import EmojiPicker from '@/components/chat/EmojiPicker'
 import { formatCompactCount, ngnForCoins } from '@/lib/utils/helpers'
 
 /* ---------------------------------- types --------------------------------- */
@@ -146,6 +147,7 @@ export default function StreamRoomPage() {
   const [viewerCount, setViewerCount] = useState(1)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [draft, setDraft] = useState('')
+  const [showLiveEmoji, setShowLiveEmoji] = useState(false)
   const [likes, setLikes] = useState(0)
   const [hearts, setHearts] = useState<FloatingHeart[]>([])
   // Double-tap bursts: one big heart that pops at the exact
@@ -2539,8 +2541,20 @@ export default function StreamRoomPage() {
       )}
 
       {/* Bottom bar */}
+        {showLiveEmoji && (
+          <div className="absolute inset-x-3 bottom-full z-30 mb-2">
+            <EmojiPicker dark onPick={(g) => setDraft((prev) => (prev + g).slice(0, 200))} />
+          </div>
+        )}
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 lg:hidden">
         <div className="flex min-w-0 flex-1 items-center rounded-full bg-black/50 shadow-lg ring-1 ring-white/10 backdrop-blur-sm">
+          <button
+            onClick={() => setShowLiveEmoji((v) => !v)}
+            aria-label="Emoji"
+            className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/70"
+          >
+            <Smile className="h-5 w-5" />
+          </button>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -2774,8 +2788,20 @@ export default function StreamRoomPage() {
           </p>
         )}
 
-        <div className="flex items-center gap-2 border-t border-white/10 p-3">
+        <div className="relative flex items-center gap-2 border-t border-white/10 p-3">
+          {showLiveEmoji && (
+            <div className="absolute inset-x-3 bottom-full z-30 mb-2">
+              <EmojiPicker dark onPick={(g) => setDraft((prev) => (prev + g).slice(0, 200))} />
+            </div>
+          )}
           <div className="flex min-w-0 flex-1 items-center rounded-full bg-white/10">
+            <button
+              onClick={() => setShowLiveEmoji((v) => !v)}
+              aria-label="Emoji"
+              className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/70"
+            >
+              <Smile className="h-5 w-5" />
+            </button>
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

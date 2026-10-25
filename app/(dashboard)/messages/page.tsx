@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { MessageCircle } from '@/lib/icons'
+import Ticks, { tickStateFor } from '@/components/chat/Ticks'
 import { formatCompactCount } from '@/lib/utils/helpers'
 
 interface ThreadRow {
@@ -16,6 +17,9 @@ interface ThreadRow {
   lastBody: string | null
   lastAt: string | null
   unread: number
+  lastMine: boolean
+  lastDeleted: boolean
+  lastTick: 'sent' | 'delivered' | 'read' | null
 }
 
 function timeAgo(iso: string | null): string {
@@ -53,7 +57,7 @@ export default function MessagesPage() {
         .single()
       const { data: last } = await supabase
         .from('messages')
-        .select('body, created_at, sender_id')
+        .select('body, created_at, sender_id, read_at, delivered_at, deleted_at')
         .eq('connection_id', c.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -69,12 +73,28 @@ export default function MessagesPage() {
         counterpartId: otherId,
         name: prof?.display_name ?? 'Member',
         avatar: prof?.avatar_url ?? null,
-        lastBody: last?.body ?? null,
+        lastBody: last?.deleted_at ? 'This message was deleted' : (last?.body ?? null),
         lastAt: last?.created_at ?? c.created_at,
         unread: unreadCount ?? 0,
+        lastMine: !!last && last.sender_id === user.id,
+        lastDeleted: !!last?.deleted_at,
+        lastTick: last && last.sender_id === user.id && !last.deleted_at ? tickStateFor(last) : null,
       })
     }
     setThreads(rows); setLoading(false)
+    // Opening the messages list means their messages have reached
+    // this device: stamp delivered_at (not read; reading happens
+    // inside the thread) so the sender's ticks can show delivered.
+    const connIds = (conns ?? []).map((c) => c.id)
+    if (connIds.length > 0) {
+      supabase
+        .from('messages')
+        .update({ delivered_at: new Date().toISOString() })
+        .in('connection_id', connIds)
+        .neq('sender_id', user.id)
+        .is('delivered_at', null)
+        .then(() => {})
+    }
   }
 
   useEffect(() => {
@@ -141,8 +161,9 @@ export default function MessagesPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <p className={`truncate text-sm ${t.unread > 0 ? 'font-semibold text-charcoal' : 'text-neutral-500'}`}>
-                    {t.lastBody ?? 'Connection active. Say hello'}
+                  <p className={`flex min-w-0 items-center truncate text-sm ${t.unread > 0 ? 'font-semibold text-charcoal' : 'text-neutral-500'} ${t.lastDeleted ? 'italic' : ''}`}>
+                    {t.lastMine && t.lastTick && <Ticks state={t.lastTick} className="mr-1" />}
+                    <span className="truncate">{t.lastBody ?? 'Connection active. Say hello'}</span>
                   </p>
                   {t.unread > 0 && (
                     <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-white">

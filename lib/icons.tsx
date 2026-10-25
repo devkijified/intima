@@ -21,6 +21,7 @@ import {
   Category as SaxCategory,
   Chart as SaxChart,
   Clock as SaxClock,
+  EmojiHappy as SaxEmojiHappy,
   CloseCircle as SaxCloseCircle,
   CloseSquare as SaxCloseSquare,
   Coin as SaxCoin,
@@ -222,3 +223,30 @@ export const SwitchCamera = wrap(SaxRefresh)
 export const VideoOff = wrap(SaxVideo)
 export const Volume2 = wrap(SaxRadio)
 export const Zap = wrap(SaxMagicStar)
+
+export const Smile = wrap(SaxEmojiHappy)
+export const ReplyArrow = wrap(SaxArrowForward)
+
+/**
+ * WhatsApp delivery ticks. IconSax has no bare single or double
+ * check glyph (its ticks live inside circles and squares), so the
+ * pair is drawn here as plain strokes on the same 24-unit grid the
+ * wrapper icons use. Colour comes from the parent's text colour:
+ * neutral for sent and delivered, WhatsApp blue for read.
+ */
+export function TickSingle({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path d="M4 12.8l5.2 5.2L20 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function TickDouble({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 30 24" fill="none" className={className} aria-hidden>
+      <path d="M1.5 12.8l5.2 5.2L17.5 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11 17.6l1.4 1.4L23.2 8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
