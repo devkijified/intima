@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useIsOnline } from '@/lib/presence/online'
 import { CHAT_TEMPLATES, PROVIDER_QUICK_REPLIES } from '@/lib/chat/templates'
 import ConnectionCare from '@/components/connections/ConnectionCare'
 import { FanBadge } from '@/components/social/FanBadge'
@@ -1073,6 +1074,11 @@ export default function ThreadPage() {
   // Under the name: when they were last active, WhatsApp style.
   // Falls back to the connection state until their first stamp.
   const lastActiveLabel = other?.last_seen_at ? formatLastActive(other.last_seen_at) : null
+  // Live layer: the presence websocket knows the moment the
+  // counterpart is in the app, ahead of any stamp. "Active
+  // now" from here is exact; the stamp is for when they left.
+  const peerOnline = useIsOnline(other?.id ?? null)
+  const presenceLabel = peerOnline ? 'Active now' : lastActiveLabel
 
   return (
     // Full screen on mobile, WhatsApp style: the thread covers
@@ -1102,12 +1108,12 @@ export default function ThreadPage() {
             {other?.display_name ?? 'Member'}
             {otherIsFan && <FanBadge className="ml-1.5" />}
           </p>
-          <p className={`text-xs ${!loading && (peerTyping || lastActiveLabel === 'Active now' || (!lastActiveLabel && active)) ? 'text-emerald-600' : 'text-neutral-400'}`}>
+          <p className={`text-xs ${!loading && (peerTyping || presenceLabel === 'Active now' || (!presenceLabel && active)) ? 'text-emerald-600' : 'text-neutral-400'}`}>
             {loading
               ? 'Loading…'
               : peerTyping
                 ? 'typing…'
-                : lastActiveLabel ?? (active ? 'Connection active' : 'Connection not active')}
+                : presenceLabel ?? (active ? 'Connection active' : 'Connection not active')}
             {otherRating && (
               <span className="text-neutral-500"> · ★ {otherRating.avg} ({otherRating.count} review{otherRating.count === 1 ? '' : 's'})</span>
             )}
