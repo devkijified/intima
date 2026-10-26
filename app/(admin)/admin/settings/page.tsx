@@ -7,7 +7,7 @@ import { clearSettingsCache } from '@/lib/settings/platformSettings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { ShieldAlert, ShieldCheck, Save, Loader2 } from '@/lib/icons'
+import { ShieldAlert, ShieldCheck, Wallet, Save, Loader2 } from '@/lib/icons'
 import { HelpTip } from '@/components/ui/Tooltip'
 
 /** Plain-language warnings for the keys where a wrong value breaks
@@ -63,6 +63,12 @@ interface DiditModeState {
   liveConfigured: boolean
 }
 
+interface PaystackModeState {
+  mode: 'test' | 'live'
+  testConfigured: boolean
+  liveConfigured: boolean
+}
+
 export default function AdminSettingsPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [settings, setSettings] = useState<SettingRow[]>([])
@@ -71,6 +77,8 @@ export default function AdminSettingsPage() {
   const [notice, setNotice] = useState('')
   const [didit, setDidit] = useState<DiditModeState | null>(null)
   const [diditSaving, setDiditSaving] = useState(false)
+  const [paystack, setPaystack] = useState<PaystackModeState | null>(null)
+  const [paystackSaving, setPaystackSaving] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -100,9 +108,42 @@ export default function AdminSettingsPage() {
       } catch {
         // The switch card simply stays hidden if the read fails.
       }
+      try {
+        const res = await fetch('/api/admin/paystack-mode')
+        const modeData = (await res.json().catch(() => null)) as PaystackModeState | null
+        if (modeData && (modeData.mode === 'live' || modeData.mode === 'test')) {
+          setPaystack(modeData)
+        }
+      } catch {
+        // The switch card simply stays hidden if the read fails.
+      }
     }
     init()
   }, [supabase])
+
+  async function switchPaystackMode(mode: 'test' | 'live') {
+    if (!paystack || paystack.mode === mode || paystackSaving) return
+    setPaystackSaving(true)
+    setNotice('')
+    try {
+      const res = await fetch('/api/admin/paystack-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      })
+      if (!res.ok) throw new Error('save failed')
+      setPaystack((prev) => (prev ? { ...prev, mode } : prev))
+      setNotice(
+        mode === 'live'
+          ? 'Paystack is now LIVE. Payments use the live key and move real money.'
+          : 'Paystack is back in TEST MODE. Payments are simulated with the test key.'
+      )
+    } catch {
+      setNotice('The Paystack switch did not save. Please try again.')
+    } finally {
+      setPaystackSaving(false)
+    }
+  }
 
   async function switchDiditMode(mode: 'sandbox' | 'live') {
     if (!didit || didit.mode === mode || diditSaving) return
@@ -288,6 +329,76 @@ export default function AdminSettingsPage() {
                 : ''}
               {didit.mode === 'sandbox' && !didit.sandboxConfigured
                 ? ' Sandbox keys are not set, so the instant verification card is hidden.'
+                : ''}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {paystack && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1 text-base">
+              <Wallet className="w-5 h-5 mr-1 text-primary" />
+              Payments (Paystack)
+              <HelpTip
+                text="The Test / Live switch for money, the same one the Paystack dashboard has. Test mode uses the test secret key: checkouts work end to end but no real money moves. Live mode uses the live secret key: every charge, refund and payout is real. Flipping takes effect immediately, no redeploy, and a payment started before a flip still settles after it, because the webhook accepts both keys."
+                label="About the Paystack mode switch"
+              />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <div className="text-sm text-gray-500 sm:w-40 flex-shrink-0">
+                Current:{' '}
+                <span
+                  className={`inline-flex items-center gap-1.5 font-semibold ${
+                    paystack.mode === 'live' ? 'text-green-700' : 'text-amber-700'
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      paystack.mode === 'live' ? 'bg-green-600' : 'bg-amber-500'
+                    }`}
+                  />
+                  {paystack.mode === 'live' ? 'LIVE MODE' : 'TEST MODE'}
+                </span>
+              </div>
+              <div className="flex flex-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => switchPaystackMode('test')}
+                  disabled={paystackSaving || paystack.mode === 'test'}
+                  className={`min-h-[44px] flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                    paystack.mode === 'test'
+                      ? 'border-amber-500 bg-amber-100 text-amber-800'
+                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  } disabled:opacity-70`}
+                >
+                  Test mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchPaystackMode('live')}
+                  disabled={paystackSaving || paystack.mode === 'live'}
+                  className={`min-h-[44px] flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                    paystack.mode === 'live'
+                      ? 'border-green-600 bg-green-100 text-green-800'
+                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  } disabled:opacity-70`}
+                >
+                  {paystackSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Live mode'}
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 mt-3">
+              Test key: {paystack.testConfigured ? 'set' : 'missing'}. Live key:{' '}
+              {paystack.liveConfigured ? 'set' : 'missing'}.
+              {paystack.mode === 'live' && !paystack.liveConfigured
+                ? ' The live key is not set yet, so card payments stay off in live mode until it is added.'
+                : ''}
+              {paystack.mode === 'test' && !paystack.testConfigured
+                ? ' The test key is not set, so card payments are off.'
                 : ''}
             </p>
           </CardContent>

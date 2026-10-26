@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import {
-  paystackConfigured,
+  paystackConfiguredFor,
+  resolvePaystackConfig,
   initializeTransaction,
   isPaymentChannel,
   type PaymentChannel,
@@ -86,7 +87,9 @@ function normalizeIntakeAnswers(
  * Returns { authorizationUrl, reference }.
  */
 export async function POST(req: NextRequest) {
-  if (!paystackConfigured()) {
+  const svc = service();
+  const paystackConfig = await resolvePaystackConfig(svc);
+  if (!paystackConfiguredFor(paystackConfig)) {
     return NextResponse.json(
       { error: 'Card payments are not switched on yet.' },
       { status: 503 }
@@ -136,8 +139,6 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-
-  const svc = service();
 
   const { data: target } = await svc
     .from('profiles')
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest) {
           { display_name: 'Purpose', variable_name: 'purpose', value: 'Intima connection fee' },
         ],
       },
-    });
+    }, paystackConfig);
     return NextResponse.json({ authorizationUrl, reference });
   } catch (e) {
     await svc

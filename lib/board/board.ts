@@ -12,6 +12,7 @@ import {
   getRefundPct,
   listRefundsForTransaction,
   refundStateForGatewayStatus,
+  resolvePaystackConfig,
 } from '@/lib/payments/paystack';
 import { maybeGrantReferralReward } from '@/lib/payments/settleConnection';
 import { SERVICE_TYPE_LABELS, type ServiceType } from '@/lib/connections/serviceType';
@@ -268,13 +269,14 @@ export async function attemptRefundDetailed(
   // 15% for processing (see REFUND_PCT in lib/payments/paystack).
   const fee = await boardFeeNgn(svc);
   const paymentRef = request.payment_ref;
+  const paystackConfig = await resolvePaystackConfig(svc);
   // Adopt a refund that already exists at the gateway before
   // creating another: expiry, the cron sweep and an admin retry
   // can all reach this code for the same request, and Paystack
   // refuses a second refund once the total would pass the
   // original charge. An in-flight refund is a healthy pending,
   // not a failure to retry blindly.
-  const existing = await listRefundsForTransaction(paymentRef);
+  const existing = await listRefundsForTransaction(paymentRef, paystackConfig);
   const live = existing.find((r) => refundStateForGatewayStatus(r.status) !== 'failed');
   if (live) {
     const state = refundStateForGatewayStatus(live.status);
@@ -285,7 +287,7 @@ export async function attemptRefundDetailed(
     return { state, error: null };
   }
   try {
-    const result = await refundTransaction(paymentRef, refundAmountNgn(fee, await getRefundPct(svc)) * 100);
+    const result = await refundTransaction(paymentRef, refundAmountNgn(fee, await getRefundPct(svc)) * 100, paystackConfig);
     const state =
       result.status === 'success' ? 'refunded' : result.status === 'pending' ? 'pending' : 'failed';
     await svc
@@ -302,7 +304,7 @@ export async function attemptRefundDetailed(
     // one exists after all (a race, or the list read missed it):
     // adopt its state instead of recording a failure.
     if (/exceed/i.test(message)) {
-      const again = await listRefundsForTransaction(paymentRef);
+      const again = await listRefundsForTransaction(paymentRef, paystackConfig);
       const found = again.find((r) => refundStateForGatewayStatus(r.status) !== 'failed');
       if (found) {
         const state = refundStateForGatewayStatus(found.status);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import {
+  paystackConfigForMode,
   verifyWebhookSignature,
   settleCoinTopup,
   markCardPaymentPaid,
@@ -43,7 +44,13 @@ interface PaystackEvent {
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const signature = req.headers.get('x-paystack-signature');
-  if (!verifyWebhookSignature(rawBody, signature)) {
+  // Both key sets are tried: a charge created just before a
+  // Test / Live flip still settles, because its webhook arrives
+  // signed with the key that was active when the payment started.
+  const verified = [paystackConfigForMode('test'), paystackConfigForMode('live')].some(
+    (config) => !!config.secretKey && verifyWebhookSignature(rawBody, signature, config.secretKey)
+  );
+  if (!verified) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 

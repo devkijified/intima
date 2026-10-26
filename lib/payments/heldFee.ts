@@ -6,6 +6,7 @@ import {
   getRefundPct,
   listRefundsForTransaction,
   refundStateForGatewayStatus,
+  resolvePaystackConfig,
 } from '@/lib/payments/paystack';
 import { formatPrice } from '@/lib/utils/helpers';
 
@@ -330,7 +331,8 @@ export async function attemptFeeRefund(
   }
 
   // Card rail: adopt a live gateway refund before creating one.
-  const existing = await listRefundsForTransaction(fee.reference);
+  const paystackConfig = await resolvePaystackConfig(svc);
+  const existing = await listRefundsForTransaction(fee.reference, paystackConfig);
   const live = existing.find(
     (r) => refundStateForGatewayStatus(r.status) !== 'failed'
   );
@@ -346,7 +348,7 @@ export async function attemptFeeRefund(
   }
 
   try {
-    const result = await refundTransaction(fee.reference, refund * 100);
+    const result = await refundTransaction(fee.reference, refund * 100, paystackConfig);
     const state: FeeDisposition =
       result.status === 'success'
         ? 'refunded'
@@ -362,7 +364,7 @@ export async function attemptFeeRefund(
     // A refusal saying a refund already covers this charge means
     // one exists after all: adopt it instead of failing.
     if (/exceed/i.test(message)) {
-      const again = await listRefundsForTransaction(fee.reference);
+      const again = await listRefundsForTransaction(fee.reference, paystackConfig);
       const found = again.find(
         (r) => refundStateForGatewayStatus(r.status) !== 'failed'
       );

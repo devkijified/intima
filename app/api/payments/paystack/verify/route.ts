@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import {
-  paystackConfigured,
+  paystackConfiguredFor,
+  resolvePaystackConfig,
   verifyTransaction,
   markCardPaymentPaid,
 } from '@/lib/payments/paystack';
@@ -26,7 +27,8 @@ function service() {
  * sessionStorage surviving the redirect.
  */
 export async function GET(req: NextRequest) {
-  if (!paystackConfigured()) {
+  const paystackConfig = await resolvePaystackConfig(service());
+  if (!paystackConfiguredFor(paystackConfig)) {
     return NextResponse.json(
       { error: 'Card payments are not switched on yet.' },
       { status: 503 }
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ paid: true, alreadyPaid: true, ...publicRow(row) });
   }
 
-  const tx = await verifyTransaction(reference);
+  const tx = await verifyTransaction(reference, paystackConfig);
   if (tx.status !== 'success') {
     return NextResponse.json({ paid: false, status: tx.status });
   }

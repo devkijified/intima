@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { paystackConfigured, paystackTestMode } from './paystack';
+import { resolvePaystackConfig, type PaystackConfig } from './paystack';
 
 /**
  * Paystack Dedicated Virtual Accounts (DVA): a permanent personal
@@ -10,7 +10,7 @@ import { paystackConfigured, paystackTestMode } from './paystack';
  * the account number back to the user and credits coins at
  * 1 coin = ₦10 (see the integration snippet returned with this
  * module and settleDvaTopup below). Server-only: every call uses
- * PAYSTACK_SECRET_KEY.
+ * the active Paystack mode's secret key (Admin, Settings switch).
  *
  * Eligibility (Paystack docs, checked 2026-10-21): DVA is only
  * available to registered businesses in Nigeria/Ghana that completed
@@ -62,9 +62,9 @@ interface PaystackEnvelope<T> {
   data?: T;
 }
 
-function authHeaders() {
+function authHeaders(secretKey: string) {
   return {
-    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+    Authorization: `Bearer ${secretKey}`,
     'Content-Type': 'application/json',
   };
 }
@@ -88,16 +88,17 @@ function classifyError(message: string, httpStatus: number, context: string): Dv
 async function paystackRequest<T>(
   path: string,
   init: { method: 'GET' | 'POST'; body?: Record<string, unknown> },
-  context: string
+  context: string,
+  config: PaystackConfig
 ): Promise<T> {
-  if (!paystackConfigured()) {
-    throw new DvaNotEnabledError('PAYSTACK_SECRET_KEY is not set');
+  if (!config.secretKey) {
+    throw new DvaNotEnabledError('Paystack secret key is not set for the active mode');
   }
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method: init.method,
-      headers: authHeaders(),
+      headers: authHeaders(config.secretKey),
       body: init.body ? JSON.stringify(init.body) : undefined,
     });
   } catch (err) {
@@ -137,8 +138,8 @@ interface PaystackDedicatedAccount {
  * (Paystack's rule); live keys default to Paystack-Titan and can be
  * overridden with PAYSTACK_DVA_BANK (e.g. 'wema-bank').
  */
-function preferredBank(): string {
-  if (paystackTestMode()) return 'test-bank';
+function preferredBank(config: PaystackConfig): string {
+  if (config.secretKey.startsWith('sk_test_')) return 'test-bank';
   return process.env.PAYSTACK_DVA_BANK || 'titan-paystack';
 }
 
@@ -170,6 +171,8 @@ export async function getOrCreateUserDedicatedAccount(
     return stored as UserBankAccount;
   }
 
+  const config = await resolvePaystackConfig(svc);
+
   // Reuse the Paystack customer for this email if one exists; the
   // fetch response also carries an already-assigned dedicated
   // account, which heals rows lost on our side.
@@ -180,7 +183,8 @@ export async function getOrCreateUserDedicatedAccount(
     const found = await paystackRequest<PaystackCustomer>(
       `/customer/${encodeURIComponent(user.email)}`,
       { method: 'GET' },
-      'customer_fetch'
+      'customer_fetch',
+      config
     );
     customerCode = found.customer_code ?? customerCode;
     existing = found.dedicated_account ?? null;
@@ -202,7 +206,8 @@ export async function getOrCreateUserDedicatedAccount(
           ...(user.phone ? { phone: user.phone } : {}),
         },
       },
-      'customer_create'
+      'customer_create',
+      config
     );
     customerCode = created.customer_code ?? null;
     if (!customerCode) {
@@ -220,9 +225,10 @@ export async function getOrCreateUserDedicatedAccount(
       '/dedicated_account',
       {
         method: 'POST',
-        body: { customer: customerCode, preferred_bank: preferredBank() },
+        body: { customer: customerCode, preferred_bank: preferredBank(config) },
       },
-      'dedicated_account'
+      'dedicated_account',
+      config
     );
     accountNumber = assigned.account_number ?? null;
     accountName = assigned.account_name ?? null;

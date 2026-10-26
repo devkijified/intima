@@ -2,11 +2,21 @@ import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Paystack, plug-and-play: set PAYSTACK_SECRET_KEY in the environment
+ * Paystack, plug-and-play: set the secret key in the environment
  * and every card surface lights up (methods endpoint reports card:
  * true, the booking modal switches from Test mode to card checkout,
  * the coins page shows the Card tab). Remove the key and it all goes
  * dormant again. No code changes either way.
+ *
+ * Test / Live switch (the same pattern as Didit's): Paystack gives
+ * every business a test secret key and a live secret key. Both can
+ * live in env at once (PAYSTACK_LIVE_SECRET_KEY for live; the test
+ * set reads PAYSTACK_TEST_SECRET_KEY and falls back to the original
+ * PAYSTACK_SECRET_KEY), and the platform_settings key
+ * 'paystack_mode' says which one the app uses. The mode defaults
+ * to 'test' (fail closed: test keys cannot move real money) and is
+ * switched from Admin, Settings. Every money call resolves its
+ * config per request, so a flip needs no redeploy.
  *
  * Settlement safety: crediting is idempotent everywhere. Coins settle
  * through settleCoinTopup() (guarded by the coin_topups reference);
@@ -15,12 +25,52 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const API_BASE = 'https://api.paystack.co';
 
-export function paystackConfigured(): boolean {
-  return !!process.env.PAYSTACK_SECRET_KEY;
+export type PaystackMode = 'test' | 'live';
+
+export interface PaystackConfig {
+  mode: PaystackMode;
+  secretKey: string;
 }
 
-export function paystackTestMode(): boolean {
-  return (process.env.PAYSTACK_SECRET_KEY ?? '').startsWith('sk_test_');
+/** The key set for one mode, from env. The test set falls back to
+ * the original PAYSTACK_SECRET_KEY so deployments made before the
+ * mode switch keep working untouched. */
+export function paystackConfigForMode(mode: PaystackMode): PaystackConfig {
+  if (mode === 'live') {
+    return { mode, secretKey: process.env.PAYSTACK_LIVE_SECRET_KEY ?? '' };
+  }
+  return {
+    mode,
+    secretKey: process.env.PAYSTACK_TEST_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY || '',
+  };
+}
+
+type SettingsDb = { from: (table: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** Which mode the app is in, from platform_settings
+ * ('paystack_mode'). Anything but the exact string 'live' means
+ * test: test is the safe default while live keys are absent or
+ * unproven. */
+export async function getPaystackMode(db: SettingsDb): Promise<PaystackMode> {
+  try {
+    const { data } = await db
+      .from('platform_settings')
+      .select('value')
+      .eq('key', 'paystack_mode')
+      .maybeSingle();
+    return data?.value === 'live' ? 'live' : 'test';
+  } catch {
+    return 'test';
+  }
+}
+
+/** The active mode's config, resolved in one call. */
+export async function resolvePaystackConfig(db: SettingsDb): Promise<PaystackConfig> {
+  return paystackConfigForMode(await getPaystackMode(db));
+}
+
+export function paystackConfiguredFor(config: PaystackConfig): boolean {
+  return !!config.secretKey;
 }
 
 /**
@@ -39,9 +89,9 @@ export function isPaymentChannel(value: unknown): value is PaymentChannel {
   return value === 'card' || value === 'bank_transfer';
 }
 
-function authHeaders() {
+function authHeaders(secretKey: string) {
   return {
-    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+    Authorization: `Bearer ${secretKey}`,
     'Content-Type': 'application/json',
   };
 }
@@ -59,7 +109,7 @@ export async function initializeTransaction(opts: {
    * channels (the long-standing default behaviour).
    */
   channel?: PaymentChannel;
-}): Promise<{ authorizationUrl: string }> {
+}, config: PaystackConfig): Promise<{ authorizationUrl: string }> {
   const payload: Record<string, unknown> = {
     email: opts.email,
     amount: Math.round(opts.amountNgn * 100), // kobo
@@ -70,7 +120,7 @@ export async function initializeTransaction(opts: {
   if (opts.channel) payload.channels = [opts.channel];
   const res = await fetch(`${API_BASE}/transaction/initialize`, {
     method: 'POST',
-    headers: authHeaders(),
+    headers: authHeaders(config.secretKey),
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => null);
@@ -86,10 +136,13 @@ export interface VerifiedTransaction {
   metadata: Record<string, unknown>;
 }
 
-export async function verifyTransaction(reference: string): Promise<VerifiedTransaction> {
+export async function verifyTransaction(
+  reference: string,
+  config: PaystackConfig
+): Promise<VerifiedTransaction> {
   const res = await fetch(
     `${API_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
-    { headers: authHeaders() }
+    { headers: authHeaders(config.secretKey) }
   );
   const data = await res.json().catch(() => null);
   if (!res.ok || !data?.status) {
@@ -106,10 +159,13 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
  * Webhook signature: Paystack signs the raw request body with
  * HMAC-SHA512 keyed by the secret key. Header: x-paystack-signature.
  */
-export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
-  const secret = process.env.PAYSTACK_SECRET_KEY;
-  if (!secret || !signature) return false;
-  const expected = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string | null,
+  secretKey: string
+): boolean {
+  if (!secretKey || !signature) return false;
+  const expected = crypto.createHmac('sha512', secretKey).update(rawBody).digest('hex');
   const a = Buffer.from(expected, 'utf8');
   const b = Buffer.from(signature, 'utf8');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -186,11 +242,12 @@ export async function getRefundPct(
  */
 export async function refundTransaction(
   reference: string,
-  amountKobo?: number
+  amountKobo: number | undefined,
+  config: PaystackConfig
 ): Promise<{ status: 'success' | 'pending' | 'failed' }> {
   const res = await fetch(`${API_BASE}/refund`, {
     method: 'POST',
-    headers: authHeaders(),
+    headers: authHeaders(config.secretKey),
     body: JSON.stringify(
       amountKobo ? { transaction: reference, amount: amountKobo } : { transaction: reference }
     ),
@@ -228,16 +285,17 @@ interface PaystackRefundRow {
  * refund does not exist.
  */
 export async function listRefundsForTransaction(
-  reference: string
+  reference: string,
+  config: PaystackConfig
 ): Promise<PaystackRefundRow[]> {
   const txRes = await fetch(`${API_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
-    headers: authHeaders(),
+    headers: authHeaders(config.secretKey),
   });
   const tx = await txRes.json().catch(() => null);
   const txId = (tx?.data as { id?: number } | undefined)?.id;
   if (!txRes.ok || !txId) return [];
   const res = await fetch(`${API_BASE}/refund?transaction=${txId}&perPage=50`, {
-    headers: authHeaders(),
+    headers: authHeaders(config.secretKey),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok || !Array.isArray(data?.data)) return [];

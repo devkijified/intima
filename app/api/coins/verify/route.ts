@@ -14,15 +14,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing reference' }, { status: 400 });
     }
 
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (!secret) {
-      return NextResponse.json({ error: 'Payments not configured' }, { status: 503 });
-    }
-
     const service = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    const { resolvePaystackConfig } = await import('@/lib/payments/paystack');
+    const { secretKey: secret } = await resolvePaystackConfig(service);
+    if (!secret) {
+      return NextResponse.json({ error: 'Payments not configured' }, { status: 503 });
+    }
 
     // Idempotency: have we already credited this reference?
     const { data: existing } = await service

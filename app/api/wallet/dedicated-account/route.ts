@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { paystackConfigured } from '@/lib/payments/paystack';
+import { paystackConfiguredFor, resolvePaystackConfig } from '@/lib/payments/paystack';
 import {
   getOrCreateUserDedicatedAccount,
   DvaNotEnabledError,
@@ -32,7 +32,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
   }
 
-  if (!paystackConfigured()) {
+  const paystackConfig = await resolvePaystackConfig(service());
+  if (!paystackConfiguredFor(paystackConfig)) {
     return NextResponse.json({ enabled: false });
   }
 
